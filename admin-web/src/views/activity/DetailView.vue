@@ -104,7 +104,7 @@ onMounted(fetchDetail);
             <dt class="text-gray-400">开始时间</dt>
             <dd class="text-gray-700">{{ detail.startTime }}</dd>
           </div>
-          <div v-if="detail.endTime">
+          <div v-if="detail.endTime && !detail.endTime.startsWith('0000')">
             <dt class="text-gray-400">结束时间</dt>
             <dd class="text-gray-700">{{ detail.endTime }}</dd>
           </div>
