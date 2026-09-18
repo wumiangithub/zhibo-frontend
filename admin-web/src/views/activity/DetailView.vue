@@ -63,6 +63,10 @@ async function copyHost() {
   }
 }
 
+function copyWatchLink() {
+  copy(`http://localhost:5174/watch/${id}`, "观看链接已复制");
+}
+
 async function loadEmbed() {
   embedLoading.value = true;
   embedError.value = "";
@@ -140,6 +144,12 @@ onMounted(fetchDetail);
         <h3 class="mb-3 text-base font-semibold text-gray-800">运营操作</h3>
 
         <div class="flex flex-wrap items-center gap-3">
+          <RouterLink
+            :to="`/activities/${id}/stats`"
+            class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            统计
+          </RouterLink>
           <button
             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
             @click="openHost"
@@ -151,6 +161,12 @@ onMounted(fetchDetail);
             @click="copyHost"
           >
             复制开播链接
+          </button>
+          <button
+            class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            @click="copyWatchLink"
+          >
+            复制观看链接
           </button>
           <button
             v-if="detail.shareLink"

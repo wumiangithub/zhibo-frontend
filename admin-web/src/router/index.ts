@@ -20,6 +20,11 @@ const router = createRouter({
           component: () => import("@/views/activity/CreateView.vue"),
         },
         {
+          path: "activities/:id/stats",
+          name: "activity-stats",
+          component: () => import("@/views/stats/StatsView.vue"),
+        },
+        {
           path: "activities/:id",
           name: "activity-detail",
           component: () => import("@/views/activity/DetailView.vue"),

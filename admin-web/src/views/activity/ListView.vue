@@ -152,6 +152,12 @@ onMounted(fetchList);
               >
                 详情
               </RouterLink>
+              <RouterLink
+                :to="`/activities/${item.id}/stats`"
+                class="ml-3 text-blue-600 hover:underline"
+              >
+                统计
+              </RouterLink>
             </td>
           </tr>
         </tbody>

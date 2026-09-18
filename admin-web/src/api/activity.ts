@@ -79,3 +79,34 @@ export function getHostUrl(id: number) {
 export function getEmbedUrl(id: number) {
   return get<{ embedUrl: string }>(`/activities/${id}/embed`);
 }
+
+export interface StatsOverview {
+  id: number;
+  title: string;
+  state: number;
+  type: number;
+  pv: number;
+  onlineCount: number;
+}
+
+export interface TrendPoint {
+  time: string;
+  count: number;
+}
+
+export interface OnlineTrendData {
+  id: number;
+  startTime: string;
+  endTime: string;
+  points: TrendPoint[];
+}
+
+export function getStats(id: number) {
+  return get<StatsOverview>(`/activities/${id}/stats`);
+}
+
+export function getOnlineTrend(id: number, startTime: string, endTime: string) {
+  return get<OnlineTrendData>(`/activities/${id}/stats/online`, {
+    params: { startTime, endTime },
+  });
+}
