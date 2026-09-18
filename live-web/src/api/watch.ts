@@ -1,6 +1,7 @@
 import { get } from "./http";
 
 const GUEST_ID_KEY = "zhibo.guestId";
+const NICKNAME_KEY = "zhibo.nickname";
 
 export interface WatchData {
   id: number;
@@ -17,6 +18,19 @@ export interface WatchParams {
   nickname?: string;
 }
 
+export interface WatchActivityItem {
+  id: number;
+  title: string;
+  state: number;
+  startTime: string;
+  coverUrl?: string;
+}
+
+export interface WatchActivityListData {
+  total: number;
+  list: WatchActivityItem[];
+}
+
 export function getStoredGuestId(): string {
   return localStorage.getItem(GUEST_ID_KEY) ?? "";
 }
@@ -25,6 +39,18 @@ export function storeGuestId(guestId: string) {
   if (guestId) localStorage.setItem(GUEST_ID_KEY, guestId);
 }
 
+export function getStoredNickname(): string {
+  return localStorage.getItem(NICKNAME_KEY) ?? "";
+}
+
+export function storeNickname(nickname: string) {
+  if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
+}
+
 export function getWatch(id: number, params: WatchParams = {}) {
   return get<WatchData>(`/watch/${id}`, { params });
+}
+
+export function listWatchActivities(page = 0, pageSize = 20) {
+  return get<WatchActivityListData>("/watch/activities", { params: { page, pageSize } });
 }

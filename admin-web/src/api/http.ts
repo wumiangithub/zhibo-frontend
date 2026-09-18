@@ -41,4 +41,12 @@ export async function post<T>(url: string, data?: unknown, config?: AxiosRequest
   return instance.post(url, data, config) as unknown as Promise<T>;
 }
 
+export async function put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  return instance.put(url, data, config) as unknown as Promise<T>;
+}
+
+export async function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  return instance.delete(url, config) as unknown as Promise<T>;
+}
+
 export default instance;

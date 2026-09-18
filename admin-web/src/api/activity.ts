@@ -1,4 +1,4 @@
-import { get, post } from "./http";
+import { get, post, put, del } from "./http";
 
 export const TYPE_LABEL: Record<number, string> = {
   1: "音频",
@@ -109,4 +109,21 @@ export function getOnlineTrend(id: number, startTime: string, endTime: string) {
   return get<OnlineTrendData>(`/activities/${id}/stats/online`, {
     params: { startTime, endTime },
   });
+}
+
+export interface UpdateActivityPayload {
+  title?: string;
+  startTime?: string;
+}
+
+export function updateActivity(id: number, payload: UpdateActivityPayload) {
+  return put<{ id: number }>(`/activities/${id}`, payload);
+}
+
+export function endActivity(id: number) {
+  return post<{ id: number; state: number }>(`/activities/${id}/end`);
+}
+
+export function deleteActivity(id: number) {
+  return del<{ id: number }>(`/activities/${id}`);
 }
