@@ -15,13 +15,15 @@ export interface WatchData {
 
 export interface SdkInitPayload {
   scriptUrl: string;
-  jqueryUrl: string;
+  jqueryUrl?: string | null;
+  /** 本站 guestId 回显；3.9.1 init 不要传 account（与 email 互斥） */
   account: string;
   email: string;
   username: string;
-  roomid: string;
+  webinarId: string;
   appKey: string;
   signedAt: string;
+  signType?: number;
   sign: string;
 }
 

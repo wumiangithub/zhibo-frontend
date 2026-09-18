@@ -25,6 +25,9 @@ const nicknameInput = ref(getStoredNickname());
 const showNicknameForm = ref(!getStoredNickname());
 const nicknameSaving = ref(false);
 
+/** 3.9.1 实例；旧版全局 VHALL_SDK 不再使用 */
+let sdkInstance: VhallSdkInstance | null = null;
+
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) {
@@ -39,40 +42,22 @@ function loadScript(src: string): Promise<void> {
   });
 }
 
-function bindSdkEvents() {
-  const sdk = window.VHALL_SDK;
-  if (!sdk?.on) return;
-  sdk.on("ready", () => {
+function formatSdkError(msg: unknown): string {
+  if (typeof msg === "string") {
     try {
-      const info = sdk.getRoominfo?.() as { type?: number } | undefined;
-      if (info?.type === 2) {
-        roomHint.value = "活动未开播（预约中），开播后此处出画面";
-      } else if (info?.type === 3) {
-        roomHint.value = "活动已结束";
-      } else {
-        roomHint.value = "";
-      }
+      const parsed = JSON.parse(msg) as { msg?: string };
+      return parsed.msg || msg;
     } catch {
-      roomHint.value = "";
+      return msg;
     }
-  });
-  sdk.on("error", (msg: unknown) => {
-    let text = "SDK 错误";
-    if (typeof msg === "string") {
-      try {
-        const parsed = JSON.parse(msg) as { msg?: string };
-        text = parsed.msg || msg;
-      } catch {
-        text = msg;
-      }
-    } else if (msg && typeof msg === "object" && "msg" in msg) {
-      text = String((msg as { msg?: string }).msg || JSON.stringify(msg));
-    } else if (msg != null) {
-      text = JSON.stringify(msg);
-    }
-    sdkFailed.value = true;
-    error.value = text;
-  });
+  }
+  if (msg && typeof msg === "object" && "msg" in msg) {
+    return String((msg as { msg?: string }).msg || JSON.stringify(msg));
+  }
+  if (msg != null) {
+    return JSON.stringify(msg);
+  }
+  return "SDK 错误";
 }
 
 async function load() {
@@ -83,6 +68,14 @@ async function load() {
   sdkFailed.value = false;
   useFallback.value = false;
   data.value = null;
+  if (sdkInstance?.destroy) {
+    try {
+      sdkInstance.destroy();
+    } catch {
+      /* ignore */
+    }
+    sdkInstance = null;
+  }
   try {
     const guestId = getStoredGuestId();
     const nickname = getStoredNickname() || undefined;
@@ -93,28 +86,37 @@ async function load() {
     storeGuestId(res.guestId);
     data.value = res;
 
-    // 先结束 loading，让 #player 进 DOM，再 init（否则 videoContent 挂不到容器）
+    // 先结束 loading，让 #player / #docWrap 进 DOM
     loading.value = false;
     await nextTick();
 
-    await loadScript(res.sdk.jqueryUrl);
+    if (res.sdk.jqueryUrl) {
+      await loadScript(res.sdk.jqueryUrl);
+    }
     await loadScript(res.sdk.scriptUrl);
 
-    if (!window.VHALL_SDK) {
-      throw new Error("SDK 加载异常，未找到 VHALL_SDK");
+    if (!window.VhallSDK) {
+      throw new Error("SDK 加载异常，未找到 VhallSDK（需 3.9.1）");
     }
 
-    bindSdkEvents();
-    window.VHALL_SDK.init({
-      account: res.sdk.account,
-      email: res.sdk.email,
-      username: res.sdk.username,
-      roomid: res.sdk.roomid,
+    // 3.9.1：只用 email，不要同时传 account
+    sdkInstance = new window.VhallSDK({
       app_key: res.sdk.appKey,
       signedat: res.sdk.signedAt,
+      webinar_id: res.sdk.webinarId,
+      email: res.sdk.email,
+      username: res.sdk.username,
       sign: res.sdk.sign,
+      sign_type: res.sdk.signType ?? 0,
       videoContent: "#player",
+      docContent: "#docWrap",
     });
+
+    sdkInstance.$on("error", (msg: unknown) => {
+      sdkFailed.value = true;
+      error.value = formatSdkError(msg);
+    });
+
     sdkReady.value = true;
   } catch (e) {
     sdkFailed.value = true;
@@ -150,9 +152,14 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  if (sdkReady.value && window.VHALL_SDK?.destroy) {
-    window.VHALL_SDK.destroy();
+  if (sdkInstance?.destroy) {
+    try {
+      sdkInstance.destroy();
+    } catch {
+      /* ignore */
+    }
   }
+  sdkInstance = null;
 });
 </script>
 
@@ -258,7 +265,12 @@ onBeforeUnmount(() => {
           </p>
           <div
             id="player"
-            class="h-full w-full flex-1 bg-black"
+            class="min-h-0 w-full flex-1 bg-black"
+          />
+          <!-- 3.9.1 文档要求 docContent 必填；无文档时占位即可 -->
+          <div
+            id="docWrap"
+            class="hidden"
           />
         </div>
       </template>
