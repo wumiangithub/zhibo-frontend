@@ -54,6 +54,15 @@ async function openHost() {
   }
 }
 
+async function copyHost() {
+  try {
+    const { hostUrl } = await getHostUrl(id);
+    await copy(hostUrl, "开播链接已复制，可粘贴到有摄像头的电脑打开");
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "获取开播链接失败";
+  }
+}
+
 async function loadEmbed() {
   embedLoading.value = true;
   embedError.value = "";
@@ -136,6 +145,12 @@ onMounted(fetchDetail);
             @click="openHost"
           >
             主持人开播（新窗口）
+          </button>
+          <button
+            class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+            @click="copyHost"
+          >
+            复制开播链接
           </button>
           <button
             v-if="detail.shareLink"
