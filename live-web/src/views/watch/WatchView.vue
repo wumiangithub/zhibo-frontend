@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import {
   getWatchSdk,
@@ -19,13 +19,14 @@ const data = ref<WatchSdkData | null>(null);
 const sdkReady = ref(false);
 const sdkFailed = ref(false);
 const useFallback = ref(false);
-const roomHint = ref("");
 
 const nicknameInput = ref(getStoredNickname());
 const showNicknameForm = ref(!getStoredNickname());
 const nicknameSaving = ref(false);
 
-/** 3.9.1 实例；旧版全局 VHALL_SDK 不再使用 */
+const countdown = ref("");
+let countdownTimer: ReturnType<typeof setInterval> | null = null;
+
 let sdkInstance: VhallSdkInstance | null = null;
 
 function loadScript(src: string): Promise<void> {
@@ -60,14 +61,90 @@ function formatSdkError(msg: unknown): string {
   return "SDK 错误";
 }
 
+function startCountdown(startTime: string) {
+  stopCountdown();
+  const target = new Date(startTime.replace(" ", "T")).getTime();
+
+  function update() {
+    const now = Date.now();
+    const diff = target - now;
+    if (diff <= 0) {
+      countdown.value = "即将开播";
+      stopCountdown();
+      return;
+    }
+    const hours = Math.floor(diff / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    if (hours > 0) {
+      countdown.value = `${hours}时${minutes}分${seconds}秒`;
+    } else if (minutes > 0) {
+      countdown.value = `${minutes}分${seconds}秒`;
+    } else {
+      countdown.value = `${seconds}秒`;
+    }
+  }
+
+  update();
+  countdownTimer = setInterval(update, 1000);
+}
+
+function stopCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+}
+
+const isLive = computed(() => data.value?.state === 1);
+const isPreview = computed(() => data.value?.state === 2);
+const isEnded = computed(() => data.value?.state === 3);
+const isReplay = computed(() => data.value?.state === 4 || data.value?.state === 5);
+
+async function initSdk() {
+  if (!data.value) return;
+  const res = data.value;
+
+  loading.value = false;
+  await nextTick();
+
+  if (res.sdk.jqueryUrl) {
+    await loadScript(res.sdk.jqueryUrl);
+  }
+  await loadScript(res.sdk.scriptUrl);
+
+  if (!window.VhallSDK) {
+    throw new Error("SDK 加载异常，未找到 VhallSDK（需 3.9.1）");
+  }
+
+  sdkInstance = new window.VhallSDK({
+    app_key: res.sdk.appKey,
+    signedat: res.sdk.signedAt,
+    webinar_id: res.sdk.webinarId,
+    email: res.sdk.email,
+    username: res.sdk.username,
+    sign: res.sdk.sign,
+    sign_type: res.sdk.signType ?? 0,
+    videoContent: "#player",
+    docContent: "#docWrap",
+  });
+
+  sdkInstance.$on("error", (msg: unknown) => {
+    sdkFailed.value = true;
+    error.value = formatSdkError(msg);
+  });
+
+  sdkReady.value = true;
+}
+
 async function load() {
   loading.value = true;
   error.value = "";
-  roomHint.value = "";
   sdkReady.value = false;
   sdkFailed.value = false;
   useFallback.value = false;
   data.value = null;
+  stopCountdown();
   if (sdkInstance?.destroy) {
     try {
       sdkInstance.destroy();
@@ -86,38 +163,14 @@ async function load() {
     storeGuestId(res.guestId);
     data.value = res;
 
-    // 先结束 loading，让 #player / #docWrap 进 DOM
-    loading.value = false;
-    await nextTick();
-
-    if (res.sdk.jqueryUrl) {
-      await loadScript(res.sdk.jqueryUrl);
+    if (res.state === 2 && res.startTime) {
+      startCountdown(res.startTime);
+      loading.value = false;
+    } else if (res.state === 1) {
+      await initSdk();
+    } else {
+      loading.value = false;
     }
-    await loadScript(res.sdk.scriptUrl);
-
-    if (!window.VhallSDK) {
-      throw new Error("SDK 加载异常，未找到 VhallSDK（需 3.9.1）");
-    }
-
-    // 3.9.1：只用 email，不要同时传 account
-    sdkInstance = new window.VhallSDK({
-      app_key: res.sdk.appKey,
-      signedat: res.sdk.signedAt,
-      webinar_id: res.sdk.webinarId,
-      email: res.sdk.email,
-      username: res.sdk.username,
-      sign: res.sdk.sign,
-      sign_type: res.sdk.signType ?? 0,
-      videoContent: "#player",
-      docContent: "#docWrap",
-    });
-
-    sdkInstance.$on("error", (msg: unknown) => {
-      sdkFailed.value = true;
-      error.value = formatSdkError(msg);
-    });
-
-    sdkReady.value = true;
   } catch (e) {
     sdkFailed.value = true;
     error.value = e instanceof Error ? e.message : "加载失败";
@@ -145,6 +198,14 @@ function changeNickname() {
   showNicknameForm.value = true;
 }
 
+watch(() => data.value?.state, (newState) => {
+  if (newState === 2 && data.value?.startTime) {
+    startCountdown(data.value.startTime);
+  } else {
+    stopCountdown();
+  }
+});
+
 onMounted(() => {
   if (!showNicknameForm.value) {
     load();
@@ -152,6 +213,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  stopCountdown();
   if (sdkInstance?.destroy) {
     try {
       sdkInstance.destroy();
@@ -254,20 +316,35 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-          v-else-if="data"
+          v-else-if="data && isPreview"
+          class="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center"
+        >
+          <p class="text-lg font-semibold text-amber-400">距离开播还有</p>
+          <p class="text-3xl font-mono font-bold text-white">{{ countdown }}</p>
+          <p class="text-sm text-gray-400">
+            开始时间：{{ data.startTime }}
+          </p>
+        </div>
+
+        <div
+          v-else-if="data && (isEnded || isReplay)"
+          class="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center"
+        >
+          <p class="text-lg font-semibold text-gray-400">直播已结束</p>
+          <p class="text-sm text-gray-500">
+            直播时间：{{ data.startTime }}
+            <template v-if="data.endTime"> ～ {{ data.endTime }}</template>
+          </p>
+        </div>
+
+        <div
+          v-else-if="data && isLive"
           class="relative flex flex-1 flex-col"
         >
-          <p
-            v-if="roomHint"
-            class="absolute left-0 right-0 top-2 z-10 px-4 text-center text-xs text-amber-300"
-          >
-            {{ roomHint }}
-          </p>
           <div
             id="player"
             class="min-h-0 w-full flex-1 bg-black"
           />
-          <!-- 3.9.1 文档要求 docContent 必填；无文档时占位即可 -->
           <div
             id="docWrap"
             class="hidden"

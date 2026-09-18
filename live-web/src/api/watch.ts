@@ -34,6 +34,8 @@ export interface WatchSdkData {
   type: number;
   nickname: string;
   guestId: string;
+  startTime?: string;
+  endTime?: string;
   sdk: SdkInitPayload;
   embedUrl: string;
 }
