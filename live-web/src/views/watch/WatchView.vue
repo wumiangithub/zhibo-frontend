@@ -29,6 +29,78 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null;
 
 let sdkInstance: VhallSdkInstance | null = null;
 
+/** 直播中时轮询状态（兜底）；正常应靠 SDK `live_over` 立刻切结束页 */
+let statePollTimer: ReturnType<typeof setInterval> | null = null;
+
+async function switchToEndedFromLive() {
+  stopStatePoll();
+  stopPlayPoll();
+  needsTapToPlay.value = false;
+  if (sdkInstance?.destroy) {
+    try {
+      sdkInstance.destroy();
+    } catch {
+      /* ignore */
+    }
+    sdkInstance = null;
+  }
+  sdkReady.value = false;
+  try {
+    const guestId = getStoredGuestId();
+    const nickname = getStoredNickname() || undefined;
+    const params: Record<string, string> = {};
+    if (guestId) params.guestId = guestId;
+    if (nickname) params.nickname = nickname;
+    const res = await getWatchSdk(id, params);
+    // 微吼状态可能略慢一拍；先强制进结束 UI，时间字段用最新接口
+    data.value = {
+      ...res,
+      state: res.state === 1 ? 3 : res.state,
+    };
+  } catch {
+    if (data.value) {
+      data.value = { ...data.value, state: 3 };
+    }
+  }
+}
+
+function startStatePoll() {
+  stopStatePoll();
+  // 仅兜底：SDK 事件丢了才靠这个；间隔不必太勤
+  statePollTimer = setInterval(async () => {
+    try {
+      const guestId = getStoredGuestId();
+      const nickname = getStoredNickname() || undefined;
+      const params: Record<string, string> = {};
+      if (guestId) params.guestId = guestId;
+      if (nickname) params.nickname = nickname;
+      const res = await getWatchSdk(id, params);
+      if (res.state !== 1 && res.state !== data.value?.state) {
+        data.value = res;
+        stopStatePoll();
+        stopPlayPoll();
+        if (sdkInstance?.destroy) {
+          try {
+            sdkInstance.destroy();
+          } catch {
+            /* ignore */
+          }
+          sdkInstance = null;
+        }
+      }
+    } catch {
+      /* 静默失败，下次轮询再试 */
+    }
+  }, 60000);
+}
+
+function stopStatePoll() {
+  if (statePollTimer) {
+    clearInterval(statePollTimer);
+    statePollTimer = null;
+  }
+}
+
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (document.querySelector(`script[src="${src}"]`)) {
@@ -199,6 +271,19 @@ async function initSdk() {
     error.value = formatSdkError(msg);
   });
 
+  // 官方：H5 活动直播结束 → live_over（见 Apifox 全局事件）
+  // streamOver 为旧 Flash 事件，一并听作兜底
+  const onLiveEnded = () => {
+    void switchToEndedFromLive();
+  };
+  sdkInstance.$on("live_over", onLiveEnded);
+  sdkInstance.$on("streamOver", onLiveEnded);
+
+  // 自动播放失败时直接出「点击收听/播放」（比轮询更准）
+  sdkInstance.$on("vhallplay_AUTOPLAY_FAILED", () => {
+    needsTapToPlay.value = true;
+  });
+
   sdkReady.value = true;
   // 脚本加载异步，进房后 media.play 往往不在用户手势链上 → 语音直播会静音/暂停
   startPlayPoll();
@@ -241,6 +326,7 @@ async function load() {
       loading.value = false;
     } else if (res.state === 1) {
       await initSdk();
+      startStatePoll();
     } else {
       loading.value = false;
     }
@@ -287,6 +373,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopCountdown();
+  stopStatePoll();
   stopPlayPoll();
   if (sdkInstance?.destroy) {
     try {
@@ -391,24 +478,67 @@ onBeforeUnmount(() => {
 
         <div
           v-else-if="data && isPreview"
-          class="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center"
+          class="relative flex flex-1 flex-col"
         >
-          <p class="text-lg font-semibold text-amber-400">距离开播还有</p>
-          <p class="text-3xl font-mono font-bold text-white">{{ countdown }}</p>
-          <p class="text-sm text-gray-400">
-            开始时间：{{ data.startTime }}
-          </p>
+          <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 text-center">
+            <p class="text-lg font-semibold text-amber-400">距离开播还有</p>
+            <p class="text-3xl font-mono font-bold text-white">{{ countdown }}</p>
+            <p class="text-sm text-gray-400">
+              开始时间：{{ data.startTime }}
+            </p>
+          </div>
+
+          <div
+            id="player"
+            class="min-h-0 w-full flex-1 opacity-0"
+          />
+          <div
+            id="docWrap"
+            class="hidden"
+          />
         </div>
 
         <div
           v-else-if="data && (isEnded || isReplay)"
-          class="flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center"
+          class="relative flex flex-1 flex-col"
         >
-          <p class="text-lg font-semibold text-gray-400">直播已结束</p>
-          <p class="text-sm text-gray-500">
-            直播时间：{{ data.startTime }}
-            <template v-if="data.endTime"> ～ {{ data.endTime }}</template>
-          </p>
+          <div class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 text-center">
+            <div class="flex flex-col items-center gap-2">
+              <span class="inline-flex items-center gap-2 rounded-full bg-gray-700/50 px-3 py-1 text-xs font-medium text-gray-400">
+                <span class="h-2 w-2 rounded-full bg-gray-500"></span>
+                直播已结束
+              </span>
+              <h2 class="mt-2 text-xl font-semibold text-white">{{ data.title }}</h2>
+            </div>
+
+            <div class="mt-4 rounded-lg bg-gray-800/50 px-6 py-4">
+              <p class="text-sm text-gray-400">
+                直播时间
+              </p>
+              <p class="mt-1 text-base font-medium text-gray-200">
+                {{ data.startTime }}
+              </p>
+              <template v-if="data.endTime">
+                <p class="text-xs text-gray-500">至</p>
+                <p class="text-base font-medium text-gray-200">
+                  {{ data.endTime }}
+                </p>
+              </template>
+            </div>
+
+            <p class="text-xs text-gray-500">
+              感谢观看
+            </p>
+          </div>
+
+          <div
+            id="player"
+            class="min-h-0 w-full flex-1 opacity-0"
+          />
+          <div
+            id="docWrap"
+            class="hidden"
+          />
         </div>
 
         <div
@@ -428,9 +558,32 @@ onBeforeUnmount(() => {
               {{ isAudioLive ? '浏览器限制自动出声，点一下即可听见直播' : '浏览器限制自动播放，点一下开始观看' }}
             </span>
           </button>
+
+          <div
+            v-if="isAudioLive"
+            class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6"
+          >
+            <div class="flex flex-col items-center gap-2">
+              <span class="inline-flex items-center gap-2 rounded-full bg-red-600/20 px-3 py-1 text-xs font-medium text-red-400">
+                <span class="h-2 w-2 animate-pulse rounded-full bg-red-500"></span>
+                直播中
+              </span>
+              <h2 class="mt-2 text-xl font-semibold text-white">{{ data.title }}</h2>
+            </div>
+
+            <div class="flex items-end gap-1">
+              <span v-for="i in 5" :key="i" class="w-1.5 rounded-full bg-green-500" :style="{ height: `${20 + Math.random() * 40}px`, animation: `audioWave 1s ease-in-out ${i * 0.1}s infinite alternate` }"></span>
+            </div>
+
+            <p class="text-sm text-gray-400">
+              正在播放音频直播
+            </p>
+          </div>
+
           <div
             id="player"
-            class="min-h-0 w-full flex-1 bg-black"
+            class="min-h-0 w-full flex-1"
+            :class="{ 'opacity-0': isAudioLive }"
           />
           <div
             id="docWrap"
@@ -441,3 +594,14 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+@keyframes audioWave {
+  0% {
+    transform: scaleY(0.5);
+  }
+  100% {
+    transform: scaleY(1);
+  }
+}
+</style>
