@@ -285,7 +285,6 @@ async function load() {
       loading.value = false;
     } else if (res.state === 1) {
       await initSdk();
-      startStatePoll();
     } else {
       loading.value = false;
     }
