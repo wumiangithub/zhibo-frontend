@@ -29,11 +29,7 @@ let countdownTimer: ReturnType<typeof setInterval> | null = null;
 
 let sdkInstance: VhallSdkInstance | null = null;
 
-/** 直播中时轮询状态（兜底）；正常应靠 SDK `live_over` 立刻切结束页 */
-let statePollTimer: ReturnType<typeof setInterval> | null = null;
-
 async function switchToEndedFromLive() {
-  stopStatePoll();
   stopPlayPoll();
   needsTapToPlay.value = false;
   if (sdkInstance?.destroy) {
@@ -61,43 +57,6 @@ async function switchToEndedFromLive() {
     if (data.value) {
       data.value = { ...data.value, state: 3 };
     }
-  }
-}
-
-function startStatePoll() {
-  stopStatePoll();
-  // 仅兜底：SDK 事件丢了才靠这个；间隔不必太勤
-  statePollTimer = setInterval(async () => {
-    try {
-      const guestId = getStoredGuestId();
-      const nickname = getStoredNickname() || undefined;
-      const params: Record<string, string> = {};
-      if (guestId) params.guestId = guestId;
-      if (nickname) params.nickname = nickname;
-      const res = await getWatchSdk(id, params);
-      if (res.state !== 1 && res.state !== data.value?.state) {
-        data.value = res;
-        stopStatePoll();
-        stopPlayPoll();
-        if (sdkInstance?.destroy) {
-          try {
-            sdkInstance.destroy();
-          } catch {
-            /* ignore */
-          }
-          sdkInstance = null;
-        }
-      }
-    } catch {
-      /* 静默失败，下次轮询再试 */
-    }
-  }, 60000);
-}
-
-function stopStatePoll() {
-  if (statePollTimer) {
-    clearInterval(statePollTimer);
-    statePollTimer = null;
   }
 }
 
@@ -373,7 +332,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopCountdown();
-  stopStatePoll();
   stopPlayPoll();
   if (sdkInstance?.destroy) {
     try {
