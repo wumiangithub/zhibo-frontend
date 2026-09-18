@@ -13,6 +13,29 @@ export interface WatchData {
   embedUrl: string;
 }
 
+export interface SdkInitPayload {
+  scriptUrl: string;
+  jqueryUrl: string;
+  account: string;
+  email: string;
+  username: string;
+  roomid: string;
+  appKey: string;
+  signedAt: string;
+  sign: string;
+}
+
+export interface WatchSdkData {
+  id: number;
+  title: string;
+  state: number;
+  type: number;
+  nickname: string;
+  guestId: string;
+  sdk: SdkInitPayload;
+  embedUrl: string;
+}
+
 export interface WatchParams {
   guestId?: string;
   nickname?: string;
@@ -49,6 +72,10 @@ export function storeNickname(nickname: string) {
 
 export function getWatch(id: number, params: WatchParams = {}) {
   return get<WatchData>(`/watch/${id}`, { params });
+}
+
+export function getWatchSdk(id: number, params: WatchParams = {}) {
+  return get<WatchSdkData>(`/watch/${id}/sdk`, { params });
 }
 
 export function listWatchActivities(page = 0, pageSize = 20) {
