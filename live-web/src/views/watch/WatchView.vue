@@ -100,12 +100,77 @@ const isLive = computed(() => data.value?.state === 1);
 const isPreview = computed(() => data.value?.state === 2);
 const isEnded = computed(() => data.value?.state === 3);
 const isReplay = computed(() => data.value?.state === 4 || data.value?.state === 5);
+/** type=1 音频直播：浏览器常因自动播放策略把音轨挂起 */
+const isAudioLive = computed(() => data.value?.type === 1);
+
+const needsTapToPlay = ref(false);
+let playPollTimer: ReturnType<typeof setInterval> | null = null;
+
+function findPlayerMedia(): HTMLMediaElement | null {
+  return (
+    document.querySelector<HTMLMediaElement>("#player video") ||
+    document.querySelector<HTMLMediaElement>("#player audio") ||
+    document.querySelector<HTMLMediaElement>("#player-vhall-video")
+  );
+}
+
+function stopPlayPoll() {
+  if (playPollTimer) {
+    clearInterval(playPollTimer);
+    playPollTimer = null;
+  }
+}
+
+function startPlayPoll() {
+  stopPlayPoll();
+  let tries = 0;
+  playPollTimer = setInterval(() => {
+    tries += 1;
+    const media = findPlayerMedia();
+    if (media) {
+      // readyState>=2 有数据但仍 paused → 多半被自动播放策略拦住
+      if (media.paused && media.readyState >= 2) {
+        needsTapToPlay.value = true;
+        stopPlayPoll();
+        return;
+      }
+      if (!media.paused) {
+        needsTapToPlay.value = false;
+        stopPlayPoll();
+        return;
+      }
+    }
+    if (tries >= 40) {
+      // 约 20s 仍无播放，仍提示点击（语音直播尤其需要）
+      needsTapToPlay.value = true;
+      stopPlayPoll();
+    }
+  }, 500);
+}
+
+async function resumePlayback() {
+  const media = findPlayerMedia();
+  if (!media) {
+    needsTapToPlay.value = true;
+    return;
+  }
+  try {
+    media.muted = false;
+    media.volume = Math.max(media.volume, 0.5);
+    await media.play();
+    needsTapToPlay.value = false;
+  } catch (e) {
+    needsTapToPlay.value = true;
+    error.value = e instanceof Error ? e.message : "无法自动播放，请再点一次「点击收听」";
+  }
+}
 
 async function initSdk() {
   if (!data.value) return;
   const res = data.value;
 
   loading.value = false;
+  needsTapToPlay.value = false;
   await nextTick();
 
   if (res.sdk.jqueryUrl) {
@@ -135,6 +200,14 @@ async function initSdk() {
   });
 
   sdkReady.value = true;
+  // 脚本加载异步，进房后 media.play 往往不在用户手势链上 → 语音直播会静音/暂停
+  startPlayPoll();
+  // 尽早尝试一次（部分浏览器仍可能允许）
+  setTimeout(() => {
+    void resumePlayback().catch(() => {
+      needsTapToPlay.value = true;
+    });
+  }, 800);
 }
 
 async function load() {
@@ -214,6 +287,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopCountdown();
+  stopPlayPoll();
   if (sdkInstance?.destroy) {
     try {
       sdkInstance.destroy();
@@ -341,6 +415,19 @@ onBeforeUnmount(() => {
           v-else-if="data && isLive"
           class="relative flex flex-1 flex-col"
         >
+          <button
+            v-if="needsTapToPlay"
+            type="button"
+            class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-2 bg-black/70 px-4 text-center"
+            @click="resumePlayback"
+          >
+            <span class="rounded-md bg-green-600 px-5 py-2.5 text-sm font-medium hover:bg-green-700">
+              {{ isAudioLive ? '点击收听' : '点击播放' }}
+            </span>
+            <span class="text-xs text-gray-300">
+              {{ isAudioLive ? '浏览器限制自动出声，点一下即可听见直播' : '浏览器限制自动播放，点一下开始观看' }}
+            </span>
+          </button>
           <div
             id="player"
             class="min-h-0 w-full flex-1 bg-black"
