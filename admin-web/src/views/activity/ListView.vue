@@ -148,13 +148,13 @@ onMounted(fetchList);
             <td class="px-4 py-3">
               <RouterLink
                 :to="`/activities/${item.id}`"
-                class="text-blue-600 hover:underline"
+                class="text-blue-600"
               >
                 详情
               </RouterLink>
               <RouterLink
                 :to="`/activities/${item.id}/stats`"
-                class="ml-3 text-blue-600 hover:underline"
+                class="ml-3 text-blue-600"
               >
                 统计
               </RouterLink>

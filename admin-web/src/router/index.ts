@@ -8,7 +8,16 @@ const router = createRouter({
       path: "/",
       component: DefaultLayout,
       children: [
-        { path: "", redirect: "/activities" },
+        {
+          path: "",
+          name: "dashboard",
+          component: () => import("@/views/dashboard/DashboardView.vue"),
+        },
+        {
+          path: "live",
+          name: "live-manage",
+          component: () => import("@/views/live/LiveManageView.vue"),
+        },
         {
           path: "activities",
           name: "activity-list",
