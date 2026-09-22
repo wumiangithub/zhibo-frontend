@@ -21,7 +21,7 @@ import { useChat } from "@/composables/useChat";
 import { useRoomStats } from "@/composables/useRoomStats";
 import { usePlayerControls } from "@/composables/usePlayerControls";
 import { useAnnouncement } from "@/composables/useAnnouncement";
-import { formatSdkError, loadScript } from "@/utils/sdk";
+import { formatSdkError, isHardFatalSdkError, isRetryableSdkError, loadScript } from "@/utils/sdk";
 
 const route = useRoute();
 const id = Number(route.params.id);
@@ -40,6 +40,10 @@ const showLiveStartPopup = ref(false);
 
 let sdkInstance: VhallSdkInstance | null = null;
 const getSdk = () => sdkInstance;
+/** 20005/20006 自动重拉次数；每次用户主动 load() 清零 */
+let sdkRetryCount = 0;
+const SDK_MAX_RETRIES = 2;
+let sdkRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
 const { countdown, start: startCountdown, stop: stopCountdown } = useCountdown();
 const barrage = useBarrage(getSdk);
@@ -91,6 +95,12 @@ function showGiftPlaceholder() {
 }
 
 function destroySdk() {
+  chat.cancelHistoryLoad();
+  stats.cancelRoomId?.();
+  if (sdkRetryTimer) {
+    clearTimeout(sdkRetryTimer);
+    sdkRetryTimer = null;
+  }
   if (sdkInstance?.destroy) {
     try {
       sdkInstance.destroy();
@@ -99,6 +109,34 @@ function destroySdk() {
     }
   }
   sdkInstance = null;
+}
+
+/** 20005/20006：销毁后重新拉签名再 init（不整页 loading，避免闪一下昵称区） */
+async function retrySdkInit(reason: string) {
+  if (sdkRetryCount >= SDK_MAX_RETRIES) {
+    player.markMediaFailed(`${reason}（已自动重试 ${SDK_MAX_RETRIES} 次仍失败）`);
+    sdkFailed.value = true;
+    return;
+  }
+  sdkRetryCount += 1;
+  console.warn(`SDK 可重试错误，自动重拉签名 ${sdkRetryCount}/${SDK_MAX_RETRIES}:`, reason);
+  player.resetPlayback();
+  player.waitingForMedia = true;
+  destroySdk();
+  try {
+    const res = await getWatchSdk(id, buildWatchParams());
+    storeGuestId(res.guestId);
+    data.value = res;
+    // 若接口已明确结束，直接切结束页，别再 init
+    if (res.state === 3 || res.state === 4 || res.state === 5) {
+      loading.value = false;
+      return;
+    }
+    await initSdk();
+  } catch (e) {
+    player.markMediaFailed(e instanceof Error ? e.message : "重试加载失败");
+    sdkFailed.value = true;
+  }
 }
 
 async function switchToEndedFromLive() {
@@ -147,9 +185,28 @@ async function initSdk() {
     docContent: "#docWrap",
   });
 
-  // SDK 运行时错误（如 20005）可能是临时连接问题，不显示错误页面，只记录日志让 SDK 自行恢复
+  // 硬失败立刻提示；20005/20006 联调常为瞬时，自动重拉签名再 init
   sdkInstance.$on("error", (msg: unknown) => {
-    console.warn("SDK 运行时错误:", formatSdkError(msg));
+    const text = formatSdkError(msg);
+    console.warn("SDK 运行时错误:", text, msg);
+    if (isHardFatalSdkError(msg)) {
+      player.markMediaFailed(text);
+      sdkFailed.value = true;
+      return;
+    }
+    if (isRetryableSdkError(msg)) {
+      // 本站仍显示直播中时更值得重试；已结束就别空转
+      if (data.value?.state === 1 || data.value?.state === 2) {
+        if (sdkRetryTimer) return;
+        sdkRetryTimer = setTimeout(() => {
+          sdkRetryTimer = null;
+          void retrySdkInit(text);
+        }, 600);
+        return;
+      }
+      player.markMediaFailed(text);
+      sdkFailed.value = true;
+    }
   });
 
   // 官方：H5 活动直播结束 → live_over（见 Apifox 全局事件）；streamOver 为旧 Flash 事件，一并听作兜底
@@ -178,8 +235,7 @@ async function initSdk() {
   stats.scheduleRoomId();
   // 控制栏由 SDK 异步生成，等播放器就绪后改写下拉文案并标初始选中态
   player.scheduleQualityLabels();
-  // 进房默认不播放：直接出「点击播放」遮罩，等用户点击（手势链内）才 resumePlayback 出声
-  player.needsTapToPlay = true;
+  // 等 SDK 建好 <video> 后再出「点击播放」；过早点会丢掉手势导致 play() 被浏览器静默拦截
   player.startPlayPoll();
 }
 
@@ -197,6 +253,7 @@ async function load() {
   error.value = "";
   sdkFailed.value = false;
   useFallback.value = false;
+  sdkRetryCount = 0;
   data.value = null;
   stopCountdown();
   destroySdk();
@@ -384,8 +441,11 @@ onBeforeUnmount(destroySdk);
               :stats="stats"
               :title="data.title"
               :is-audio-live="isAudioLive"
+              :can-fallback="!!data.embedUrl"
               @share="shareWatch"
               @gift="showGiftPlaceholder"
+              @retry="load"
+              @fallback="switchToFallback"
             />
 
             <!-- 互动区域（PC） -->

@@ -11,9 +11,10 @@ defineProps<{
   title: string;
   /** type=1 音频直播：浏览器常因自动播放策略把音轨挂起 */
   isAudioLive: boolean;
+  canFallback?: boolean;
 }>();
 
-const emit = defineEmits<{ share: []; gift: [] }>();
+const emit = defineEmits<{ share: []; gift: []; retry: []; fallback: [] }>();
 </script>
 
 <template>
@@ -31,6 +32,41 @@ const emit = defineEmits<{ share: []; gift: [] }>();
         {{ isAudioLive ? '浏览器限制自动出声，点一下即可听见直播' : '浏览器限制自动播放，点一下开始观看' }}
       </span>
     </button>
+
+    <div
+      v-else-if="player.waitingForMedia"
+      class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-2 bg-black/70 px-4 text-center"
+    >
+      <span class="text-sm text-gray-200">播放器加载中…</span>
+      <span class="text-xs text-gray-400">就绪后会出现「点击播放」</span>
+    </div>
+
+    <div
+      v-else-if="player.mediaFailed"
+      class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/70 px-4 text-center"
+    >
+      <span class="text-sm text-red-300">{{ player.failReason || '播放器加载失败' }}</span>
+      <span class="text-xs text-gray-400">
+        若直播确实在播，多半是微吼 SDK 瞬时抖动（20005），可点刷新或改用嵌入页
+      </span>
+      <div class="flex flex-wrap items-center justify-center gap-2">
+        <button
+          type="button"
+          class="rounded-md border border-gray-600 bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700"
+          @click="emit('retry')"
+        >
+          刷新重试
+        </button>
+        <button
+          v-if="canFallback"
+          type="button"
+          class="rounded-md border border-gray-600 bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700"
+          @click="emit('fallback')"
+        >
+          切换嵌入模式
+        </button>
+      </div>
+    </div>
 
     <div
       v-if="isAudioLive"

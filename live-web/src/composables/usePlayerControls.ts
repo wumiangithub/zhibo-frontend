@@ -16,6 +16,7 @@ function findPlayerMedia(): HTMLMediaElement | null {
 
 /**
  * 播放器交互补丁：
+ * - 等 `<video>` 出现后再出「点击播放」；过早点击会因 await 丢掉用户手势，浏览器静默拦 play()
  * - 进房默认不播放，等用户手势；被自动播放策略拦住时出「点击播放」遮罩
  * - SDK 全屏按钮在无 fullscreen 权限的环境里静默失败，用 fixed 铺满视口兜底
  * - 清晰度下拉文案按 canPlayDefinitions 码值改写，并自己维护选中态
@@ -25,6 +26,12 @@ export function usePlayerControls(options: PlayerControlsOptions) {
 
   const player = reactive({
     needsTapToPlay: false,
+    /** SDK 还没建好 video/audio，遮罩显示「加载中」而不是「点击播放」 */
+    waitingForMedia: false,
+    /** 轮询超时仍无媒体节点 */
+    mediaFailed: false,
+    /** 失败原因（如 SDK 20005），给遮罩展示 */
+    failReason: "",
     /** SDK 的全屏被拒绝时的 CSS 兜底 */
     pseudoFullscreen: false,
     /** SDK 控制栏 DOM，异步生成；Teleport 把互动按钮挂进去 */
@@ -161,8 +168,27 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     }
   }
 
+  function showTapOverlay() {
+    player.waitingForMedia = false;
+    player.mediaFailed = false;
+    player.failReason = "";
+    player.needsTapToPlay = true;
+  }
+
+  /** SDK 致命错误或超时：立刻出失败遮罩，不再干等 */
+  function markMediaFailed(reason = "播放器加载失败") {
+    stopPlayPoll();
+    player.waitingForMedia = false;
+    player.needsTapToPlay = false;
+    player.mediaFailed = true;
+    player.failReason = reason;
+  }
+
   function startPlayPoll() {
     stopPlayPoll();
+    player.waitingForMedia = true;
+    player.mediaFailed = false;
+    player.needsTapToPlay = false;
     let tries = 0;
     playPollTimer = setInterval(() => {
       tries += 1;
@@ -171,25 +197,31 @@ export function usePlayerControls(options: PlayerControlsOptions) {
         // 进房默认不播放：用户没点过之前，SDK 若自行起播（通常静音）也暂停并保留遮罩
         if (!playRequested) {
           if (!media.paused) media.pause();
-          player.needsTapToPlay = true;
+          showTapOverlay();
           stopPlayPoll();
           return;
         }
         // readyState>=2 有数据但仍 paused → 多半被自动播放策略拦住
         if (media.paused && media.readyState >= 2) {
-          player.needsTapToPlay = true;
+          showTapOverlay();
           stopPlayPoll();
           return;
         }
         if (!media.paused) {
+          player.waitingForMedia = false;
+          player.mediaFailed = false;
           player.needsTapToPlay = false;
           stopPlayPoll();
           return;
         }
       }
       if (tries >= 40) {
-        // 约 20s 仍无播放，仍提示点击（语音直播尤其需要）
-        player.needsTapToPlay = true;
+        // 约 20s 仍无 <video>：不是自动播放问题，提示加载失败
+        if (!findPlayerMedia()) {
+          markMediaFailed("播放器长时间未就绪");
+        } else {
+          showTapOverlay();
+        }
         stopPlayPoll();
       }
     }, 500);
@@ -197,29 +229,28 @@ export function usePlayerControls(options: PlayerControlsOptions) {
 
   async function resumePlayback() {
     if (playInProgress) return;
+    const media = findPlayerMedia();
+    // 媒体还没建好：绝不能 await 等待后再 play()——会丢掉用户手势，浏览器静默 NotAllowedError
+    if (!media) {
+      player.waitingForMedia = true;
+      player.needsTapToPlay = false;
+      player.mediaFailed = false;
+      if (!playPollTimer) startPlayPoll();
+      return;
+    }
+
     playInProgress = true;
     playRequested = true;
     try {
-      let media = findPlayerMedia();
-      // 播放器由 SDK 异步创建，点得太早 media 还不存在；等它出现再播，避免“点了没反应”
-      for (let i = 0; i < 20 && !media; i++) {
-        await new Promise((resolve) => window.setTimeout(resolve, 300));
-        media = findPlayerMedia();
-      }
-      if (!media) {
-        player.needsTapToPlay = true;
-        return;
-      }
-      // 源还在加载时 play() 会被随后的 load 打断（AbortError），等有了源再播
-      for (let i = 0; i < 30 && media.readyState === 0 && !media.currentSrc; i++) {
-        await new Promise((resolve) => window.setTimeout(resolve, 100));
-      }
       media.muted = false;
       media.volume = Math.max(media.volume, 0.5);
+      // 必须在手势调用栈里同步发起 play()，中间不能先 await
       await media.play();
       player.needsTapToPlay = false;
+      player.waitingForMedia = false;
+      player.mediaFailed = false;
     } catch (e) {
-      player.needsTapToPlay = true;
+      showTapOverlay();
       // 自动播放被策略拦截、或 play 被换源打断都是可重试的常态，只出“点击播放”遮罩，不弹错误横幅
       const benign =
         e instanceof DOMException
@@ -235,7 +266,11 @@ export function usePlayerControls(options: PlayerControlsOptions) {
 
   /** SDK 明确告知自动播放失败，比轮询更准 */
   function notifyAutoplayFailed() {
-    player.needsTapToPlay = true;
+    if (findPlayerMedia()) showTapOverlay();
+    else {
+      player.waitingForMedia = true;
+      player.needsTapToPlay = false;
+    }
   }
 
   /** 重建播放器（如切到结束态）前复位手势状态 */
@@ -243,6 +278,9 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     stopPlayPoll();
     playRequested = false;
     player.needsTapToPlay = false;
+    player.waitingForMedia = false;
+    player.mediaFailed = false;
+    player.failReason = "";
   }
 
   onMounted(() => {
@@ -263,6 +301,7 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     stopPlayPoll,
     resetPlayback,
     notifyAutoplayFailed,
+    markMediaFailed,
     handlePlayerClick,
     syncControllerEl,
     scheduleQualityLabels,

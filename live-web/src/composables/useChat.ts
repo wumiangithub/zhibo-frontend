@@ -48,6 +48,9 @@ export function useChat(options: ChatOptions) {
     verifyInput: "",
   });
 
+  let historyTimer: number | undefined;
+  let historyDisposed = false;
+
   let listEl: HTMLElement | null = null;
 
   /** 列表元素由模板 ref 函数挂进来；切 tab 回来会重新挂载，顺带滚到底 */
@@ -155,6 +158,15 @@ export function useChat(options: ChatOptions) {
     }
   }
 
+  /** SDK 进房异步；login 未完成时拉历史会空/拒，用 interact_token 作就绪信号 */
+  function hasSdkRoomReady(): boolean {
+    const w = window as unknown as {
+      vhsdklInfo?: { interact_token?: string };
+      interact_token?: string;
+    };
+    return !!(w.vhsdklInfo?.interact_token || w.interact_token);
+  }
+
   async function loadChatHistory() {
     const sdk = getSdk();
     if (!sdk) return;
@@ -169,7 +181,51 @@ export function useChat(options: ChatOptions) {
       scrollChatToBottom();
     } catch (e) {
       console.warn("加载聊天历史失败", e);
+      throw e;
     }
+  }
+
+  /**
+   * 等 SDK login/进房完成再拉历史；新机网络慢时立刻拉会踩 10s login 超时窗口。
+   * onReady：历史成功后再跑（公告等同属 JSONP，须串行）。
+   */
+  function scheduleLoadHistory(onReady?: () => void | Promise<void>, tries = 0) {
+    if (historyDisposed) return;
+    const finish = () => {
+      void loadChatHistory()
+        .then(async () => {
+          if (historyDisposed) return;
+          await onReady?.();
+        })
+        .catch(() => {
+          // 就绪后仍失败再补拉（login 边缘态 / 瞬时断连）
+          if (historyDisposed) return;
+          if (tries >= 18) {
+            void onReady?.();
+            return;
+          }
+          historyTimer = window.setTimeout(() => scheduleLoadHistory(onReady, tries + 1), 1500);
+        });
+    };
+    if (hasSdkRoomReady() || tries >= 15) {
+      finish();
+      return;
+    }
+    historyTimer = window.setTimeout(() => scheduleLoadHistory(onReady, tries + 1), 1000);
+  }
+
+  function cancelHistoryLoad() {
+    historyDisposed = true;
+    if (historyTimer != null) {
+      window.clearTimeout(historyTimer);
+      historyTimer = undefined;
+    }
+  }
+
+  /** destroySdk 后再进房时重置，允许重新 schedule */
+  function resetHistoryLoad() {
+    cancelHistoryLoad();
+    historyDisposed = false;
   }
 
   function setMuted(muted: boolean) {
@@ -185,6 +241,9 @@ export function useChat(options: ChatOptions) {
     handleChatMessage,
     handleChatDelete,
     loadChatHistory,
+    scheduleLoadHistory,
+    cancelHistoryLoad,
+    resetHistoryLoad,
     setMuted,
   });
 }

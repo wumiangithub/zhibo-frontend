@@ -46,7 +46,7 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
 
   async function loadLikeCount() {
     const sdk = getSdk();
-    if (!sdk || !roomId) return;
+    if (!sdk || !roomId || !sdk.interactTools?.getRoomLike) return;
     try {
       const res = await sdk.interactTools.getRoomLike(roomId);
       // SDK 把整个响应 {code, data} resolve 出来，总数在 data.total
@@ -70,7 +70,7 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
 
   function handleLike() {
     const sdk = getSdk();
-    if (!sdk || !roomId) return;
+    if (!sdk || !roomId || !sdk.interactTools?.praise?.userLike) return;
     try {
       // SDK 实现读 room_id，文档写 roomid，两个都传保险
       sdk.interactTools.praise.userLike({ roomid: roomId, room_id: roomId, num: 1 });
