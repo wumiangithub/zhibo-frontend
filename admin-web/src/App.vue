@@ -7,6 +7,14 @@ import { RouterView } from "vue-router";
 </template>
 
 <style>
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
 a {
   text-decoration: none;
 }

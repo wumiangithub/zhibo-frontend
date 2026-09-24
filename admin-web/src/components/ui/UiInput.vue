@@ -68,12 +68,12 @@ const model = defineModel<string>({ default: "" });
 }
 
 .ui-field__input:hover:not(:disabled) {
-  border-color: #2f54eb;
+  border-color: var(--color-primary);
 }
 
 .ui-field__input:focus {
-  border-color: #2f54eb;
-  box-shadow: 0 0 0 2px rgba(47, 84, 235, 0.12);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-shadow);
 }
 
 .ui-field__input:disabled {

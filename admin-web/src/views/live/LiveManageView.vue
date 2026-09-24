@@ -103,7 +103,7 @@ function shell(label: string) {
 }
 
 function goCreate() {
-  void router.push("/activities/create");
+  void router.push("/live/create");
 }
 
 async function goLive(id: number) {
@@ -234,7 +234,7 @@ onMounted(fetchList);
               <input
                 type="checkbox"
                 :checked="selectPage"
-                class="align-middle accent-[#2f54eb]"
+                class="align-middle accent-[var(--color-primary)]"
                 @change="toggleSelectPage"
               >
             </th>
@@ -275,7 +275,7 @@ onMounted(fetchList);
               <input
                 type="checkbox"
                 :checked="selected.includes(item.id)"
-                class="align-middle accent-[#2f54eb]"
+                class="align-middle accent-[var(--color-primary)]"
                 @change="toggleRow(item.id)"
               >
             </td>
@@ -324,14 +324,14 @@ onMounted(fetchList);
                   去直播
                 </UiButton>
                 <RouterLink
-                  :to="`/activities/${item.id}/stats`"
-                  class="text-[13px] text-[#2f54eb] hover:underline"
+                  :to="{ path: `/live/${item.id}`, query: { tab: 'data' } }"
+                  class="text-[13px] text-[var(--color-primary)] hover:underline"
                 >
                   数据
                 </RouterLink>
                 <RouterLink
-                  :to="`/activities/${item.id}`"
-                  class="text-[13px] text-[#2f54eb] hover:underline"
+                  :to="`/live/${item.id}`"
+                  class="text-[13px] text-[var(--color-primary)] hover:underline"
                 >
                   管理
                 </RouterLink>
@@ -343,7 +343,7 @@ onMounted(fetchList);
                 </UiButton>
                 <button
                   type="button"
-                  class="border-0 bg-transparent p-0 text-[#999] outline-none hover:text-[#2f54eb]"
+                  class="border-0 bg-transparent p-0 text-[#999] outline-none hover:text-[var(--color-primary)]"
                   @click="shell('更多')"
                 >
                   ···

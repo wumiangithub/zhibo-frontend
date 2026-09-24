@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /** 「选中本页」：灰框按钮 + 左侧 checkbox，贴合参考图 */
 const checked = defineModel<boolean>("checked", { default: false });
 
@@ -46,15 +46,15 @@ function onToggle() {
 }
 
 .ui-check-btn:hover {
-  border-color: #2f54eb;
-  color: #2f54eb;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .ui-check-btn__box {
   width: 14px;
   height: 14px;
   margin: 0;
-  accent-color: #2f54eb;
+  accent-color: var(--color-primary);
   pointer-events: none;
 }
 </style>

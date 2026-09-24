@@ -38,9 +38,10 @@ const workbenchSideNav = [
 
 /** 直播模块侧栏：无图标，贴近截图 */
 const liveSideNav = [
-  { key: "create", label: "新建直播", to: "/activities/create" },
+  { key: "create", label: "新建直播", to: "/live/create" },
   { key: "manage", label: "直播管理", to: "/live" },
   { key: "data", label: "直播数据" },
+  { key: "console", label: "直播中控台" },
   { key: "download", label: "软件下载" },
   { key: "settings", label: "通用设置" },
 ] as const;
@@ -49,12 +50,9 @@ const isLiveModule = computed(() => {
   const name = route.name;
   return (
     name === "live-manage" ||
-    name === "activity-list" ||
-    name === "activity-create" ||
-    name === "activity-detail" ||
-    name === "activity-stats" ||
-    route.path.startsWith("/live") ||
-    route.path.startsWith("/activities")
+    name === "live-create" ||
+    name === "live-detail" ||
+    route.path.startsWith("/live")
   );
 });
 
@@ -66,12 +64,11 @@ const activeTop = computed(() => {
 
 const activeSide = computed(() => {
   if (isLiveModule.value) {
-    if (route.name === "activity-create") return "create";
-    if (route.name === "live-manage" || route.path === "/live" || route.name === "activity-list") {
+    if (route.name === "live-create") return "create";
+    // 列表 / 详情均高亮「直播管理」
+    if (route.name === "live-manage" || route.name === "live-detail" || route.path === "/live") {
       return "manage";
     }
-    // 详情 / 统计仍归在「直播管理」下高亮
-    if (route.name === "activity-detail" || route.name === "activity-stats") return "manage";
     return "";
   }
   return route.name === "dashboard" || route.path === "/" ? "overview" : "";
@@ -96,7 +93,7 @@ function goHome() {
 </script>
 
 <template>
-  <div class="flex h-dvh flex-col bg-[#f5f6f8] text-[#333] antialiased">
+  <div class="flex h-dvh flex-col overflow-hidden bg-[#f5f6f8] text-[#333] antialiased">
     <header class="z-20 flex h-[52px] flex-none items-center border-b border-[#ebebeb] bg-white px-5">
       <button
         type="button"
@@ -108,7 +105,7 @@ function goHome() {
         >
           钱坤
         </span>
-        <span class="text-[15px] font-semibold text-[#1a1a1a] transition-colors group-hover:text-[#2f54eb]">
+        <span class="text-[15px] font-semibold text-[#1a1a1a] transition-colors group-hover:text-[var(--color-primary)]">
           钱坤云直播平台
         </span>
       </button>
@@ -140,7 +137,7 @@ function goHome() {
       <div class="ml-3 flex flex-none items-center gap-2">
         <button
           type="button"
-          class="flex h-8 w-8 items-center justify-center rounded border-0 bg-transparent text-[#666] outline-none transition-colors hover:bg-[#f0f0f0] hover:text-[#2f54eb]"
+          class="flex h-8 w-8 items-center justify-center rounded border-0 bg-transparent text-[#666] outline-none transition-colors hover:bg-[#f0f0f0] hover:text-[var(--color-primary)]"
           title="搜索"
           @click="onShellClick('搜索')"
         >
@@ -314,14 +311,14 @@ function goHome() {
 }
 
 .top-nav-item:hover {
-  color: #2f54eb;
-  background: #f0f5ff;
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
   text-decoration: none;
 }
 
 .top-nav-item.is-active {
-  color: #2f54eb;
-  background: #e8f0ff;
+  color: var(--color-primary);
+  background: var(--color-primary-bg-active);
   font-weight: 600;
   text-decoration: none;
 }
@@ -348,13 +345,13 @@ function goHome() {
 .side-nav-item:focus,
 .side-nav-item:active {
   text-decoration: none;
-  background: #eef2ff;
-  color: #2f54eb;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .side-nav-item.is-active {
-  background: #e8f0ff;
-  color: #2f54eb;
+  background: var(--color-primary-bg-active);
+  color: var(--color-primary);
   font-weight: 600;
   text-decoration: none;
 }
@@ -362,7 +359,7 @@ function goHome() {
 /* 直播模块选中：左侧蓝条，贴近参考图 */
 .side-aside.is-live-module .side-nav-item.is-active {
   border-radius: 0 0.375rem 0.375rem 0;
-  border-left: 3px solid #2f54eb;
+  border-left: 3px solid var(--color-primary);
   padding-left: calc(0.75rem - 3px);
 }
 
@@ -389,8 +386,8 @@ function goHome() {
 }
 
 .side-fav-btn:hover {
-  background: #e8f0ff;
-  color: #2f54eb;
+  background: var(--color-primary-bg-active);
+  color: var(--color-primary);
 }
 
 header a {

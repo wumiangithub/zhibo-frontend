@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 withDefaults(
   defineProps<{
     /** primary 实心蓝；outline 蓝框蓝字；default 灰框；link 纯文字链 */
@@ -68,25 +68,25 @@ withDefaults(
 }
 
 .ui-btn.is-primary {
-  border-color: #2f54eb;
-  background: #2f54eb;
+  border-color: var(--color-primary);
+  background: var(--color-primary);
   color: #fff;
 }
 
 .ui-btn.is-primary:hover:not(:disabled) {
-  border-color: #1d39c4;
-  background: #1d39c4;
+  border-color: var(--color-primary-hover);
+  background: var(--color-primary-hover);
 }
 
 /* 参考图：筛选 / 批量创建 — 白底蓝框蓝字 */
 .ui-btn.is-outline {
-  border-color: #2f54eb;
+  border-color: var(--color-primary);
   background: #fff;
-  color: #2f54eb;
+  color: var(--color-primary);
 }
 
 .ui-btn.is-outline:hover:not(:disabled) {
-  background: #f0f5ff;
+  background: var(--color-primary-bg);
 }
 
 /* 参考图：导出 / 上架 / 下架 / 删除 / 更多操作 */
@@ -97,8 +97,8 @@ withDefaults(
 }
 
 .ui-btn.is-default:hover:not(:disabled) {
-  border-color: #2f54eb;
-  color: #2f54eb;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .ui-btn.is-link {
@@ -106,7 +106,7 @@ withDefaults(
   padding: 0;
   border: 0;
   background: transparent;
-  color: #2f54eb;
+  color: var(--color-primary);
 }
 
 .ui-btn.is-link:hover:not(:disabled) {

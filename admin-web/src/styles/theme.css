@@ -1,0 +1,66 @@
+﻿/**
+ * 主题色 / 设计 token
+ * 切换主题：在 <html> 上设 data-theme="default" | "xxx"
+ * 约定见 docs/设计规范.md
+ *
+ * Element Plus：用官方 CSS 变量换肤（见 https://element-plus.org/zh-CN/guide/theming ）
+ * 改 --color-primary 后，--el-color-primary* 通过 color-mix 自动派生，无需覆盖组件 class。
+ */
+
+:root,
+html[data-theme="default"] {
+  /* —— 品牌主色 —— */
+  --color-primary: #2f54eb;
+  --color-primary-hover: #1d39c4;
+  --color-primary-active: #1d39c4;
+  --color-primary-light: #69b1ff;
+  --color-primary-bg: #f0f5ff;
+  --color-primary-bg-active: #e8f0ff;
+  --color-primary-border: #d6e0ff;
+  --color-primary-shadow: rgba(47, 84, 235, 0.12);
+
+  /* —— 中性色 —— */
+  --color-text: #333333;
+  --color-text-secondary: #666666;
+  --color-text-placeholder: #999999;
+  --color-text-disabled: #bfbfbf;
+  --color-border: #e4e7ed;
+  --color-border-light: #f0f0f0;
+  --color-bg-page: #f5f6f8;
+  --color-bg-card: #ffffff;
+  --color-bg-muted: #fafafa;
+  --color-bg-aside: #fafbfc;
+
+  /* —— 功能色 —— */
+  --color-danger: #f5222d;
+  --color-success: #52c41a;
+  --color-warning: #faad14;
+
+  /* —— Element Plus 主色（官方 CSS Variables 主题） —— */
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-3: color-mix(in srgb, var(--color-primary) 70%, #fff);
+  --el-color-primary-light-5: color-mix(in srgb, var(--color-primary) 50%, #fff);
+  --el-color-primary-light-7: color-mix(in srgb, var(--color-primary) 30%, #fff);
+  --el-color-primary-light-8: color-mix(in srgb, var(--color-primary) 20%, #fff);
+  --el-color-primary-light-9: color-mix(in srgb, var(--color-primary) 10%, #fff);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--color-primary) 80%, #000);
+}
+
+/* 预留：换肤示例（改 data-theme 即可；EP 派生色跟着 --color-primary 变）
+html[data-theme="green"] {
+  --color-primary: #00b96b;
+  --color-primary-hover: #009a58;
+  --color-primary-active: #009a58;
+  --color-primary-light: #5cdba0;
+  --color-primary-bg: #f0fff6;
+  --color-primary-bg-active: #d9f7e8;
+  --color-primary-border: #b7eb8f;
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-3: color-mix(in srgb, var(--color-primary) 70%, #fff);
+  --el-color-primary-light-5: color-mix(in srgb, var(--color-primary) 50%, #fff);
+  --el-color-primary-light-7: color-mix(in srgb, var(--color-primary) 30%, #fff);
+  --el-color-primary-light-8: color-mix(in srgb, var(--color-primary) 20%, #fff);
+  --el-color-primary-light-9: color-mix(in srgb, var(--color-primary) 10%, #fff);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--color-primary) 80%, #000);
+}
+*/

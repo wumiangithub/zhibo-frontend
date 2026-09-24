@@ -52,14 +52,14 @@ function onMockAction(label: string) {
           <h2 class="text-[16px] font-semibold text-[#1a1a1a]">近期直播</h2>
           <RouterLink
             to="/live"
-            class="border-0 bg-transparent text-[13px] text-[#999] outline-none transition-colors hover:text-[#2f54eb]"
+            class="border-0 bg-transparent text-[13px] text-[#999] outline-none transition-colors hover:text-[var(--color-primary)]"
           >
             全部直播 &gt;
           </RouterLink>
         </div>
         <RouterLink
-          to="/activities/create"
-          class="inline-flex items-center gap-1 rounded border-0 bg-[#2f54eb] px-3.5 py-1.5 text-[13px] font-medium text-white outline-none transition-colors hover:bg-[#1d39c4]"
+          to="/live/create"
+          class="inline-flex items-center gap-1 rounded border-0 bg-[var(--color-primary)] px-3.5 py-1.5 text-[13px] font-medium text-white outline-none transition-colors hover:bg-[var(--color-primary-hover)]"
         >
           <span class="text-[15px] leading-none">+</span>
           新建直播
@@ -81,7 +81,7 @@ function onMockAction(label: string) {
               </span>
               <button
                 type="button"
-                class="rounded border border-[#d6e0ff] bg-white px-2.5 py-0.5 text-[12px] text-[#2f54eb] outline-none transition-colors hover:border-[#2f54eb] hover:bg-[#f0f5ff]"
+                class="rounded border border-[var(--color-primary-border)] bg-white px-2.5 py-0.5 text-[12px] text-[var(--color-primary)] outline-none transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-bg)]"
                 @click="onMockAction('直播管理')"
               >
                 直播管理
@@ -92,8 +92,8 @@ function onMockAction(label: string) {
           <div class="flex flex-1 flex-col items-center justify-center gap-2 py-10 text-[13px] text-[#bfbfbf]">
             <span>暂无更多直播</span>
             <RouterLink
-              to="/activities/create"
-              class="border-0 bg-transparent text-[13px] text-[#2f54eb] outline-none"
+              to="/live/create"
+              class="border-0 bg-transparent text-[13px] text-[var(--color-primary)] outline-none"
             >
               新建直播
             </RouterLink>
@@ -110,7 +110,7 @@ function onMockAction(label: string) {
               </div>
               <button
                 type="button"
-                class="flex-none rounded border border-[#e8e8e8] bg-white px-2.5 py-1 text-[12px] text-[#666] outline-none transition-colors hover:border-[#2f54eb] hover:text-[#2f54eb]"
+                class="flex-none rounded border border-[#e8e8e8] bg-white px-2.5 py-1 text-[12px] text-[#666] outline-none transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
                 @click="onMockAction('用户管理')"
               >
                 去查看
@@ -123,7 +123,7 @@ function onMockAction(label: string) {
               </div>
               <button
                 type="button"
-                class="flex-none rounded border border-[#e8e8e8] bg-white px-2.5 py-1 text-[12px] text-[#666] outline-none transition-colors hover:border-[#2f54eb] hover:text-[#2f54eb]"
+                class="flex-none rounded border border-[#e8e8e8] bg-white px-2.5 py-1 text-[12px] text-[#666] outline-none transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
                 @click="onMockAction('直播数据')"
               >
                 去查看
@@ -157,7 +157,7 @@ function onMockAction(label: string) {
         <h2 class="text-[16px] font-semibold text-[#1a1a1a]">经营数据</h2>
         <button
           type="button"
-          class="border-0 bg-transparent p-0.5 text-[#bfbfbf] outline-none hover:text-[#2f54eb]"
+          class="border-0 bg-transparent p-0.5 text-[#bfbfbf] outline-none hover:text-[var(--color-primary)]"
           title="刷新"
           @click="onMockAction('刷新经营数据')"
         >
@@ -189,7 +189,7 @@ function onMockAction(label: string) {
             <button
               v-if="item.tip"
               type="button"
-              class="border-0 bg-transparent p-0 text-[#d9d9d9] outline-none hover:text-[#2f54eb]"
+              class="border-0 bg-transparent p-0 text-[#d9d9d9] outline-none hover:text-[var(--color-primary)]"
               @click="onMockAction(item.label + '说明')"
             >
               <svg
@@ -212,7 +212,7 @@ function onMockAction(label: string) {
             <button
               v-if="item.action"
               type="button"
-              class="border-0 bg-transparent p-0 text-[13px] text-[#2f54eb] outline-none"
+              class="border-0 bg-transparent p-0 text-[13px] text-[var(--color-primary)] outline-none"
               @click="onMockAction(item.action)"
             >
               {{ item.action }}
