@@ -4,11 +4,12 @@ import {
   getStats,
   getOnlineTrend,
   STATE_LABEL,
+  type ActivityId,
   type StatsOverview,
   type TrendPoint,
 } from "@/api/activity";
 
-const props = defineProps<{ activityId: number }>();
+const props = defineProps<{ activityId: ActivityId }>();
 
 const overview = ref<StatsOverview | null>(null);
 const overviewError = ref("");

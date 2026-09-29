@@ -1,9 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter, RouterLink } from "vue-router";
-import { getActivity, getHostUrl, STATE_LABEL, type ActivityDetail } from "@/api/activity";
+import { onBeforeRouteLeave, useRoute, useRouter, RouterLink } from "vue-router";
+import {
+  getActivity,
+  getHostUrl,
+  PROVIDER_LABEL,
+  STATE_LABEL,
+  type ActivityDetail,
+  type ActivityId,
+  type LiveProvider,
+} from "@/api/activity";
 import { useToast } from "@/composables/useToast";
 import UiButton from "@/components/ui/UiButton.vue";
+import ShareDialog from "@/components/share/ShareDialog.vue";
 import BasicSettingsTab from "./detail/BasicSettingsTab.vue";
 import BroadcastSettingsTab from "./detail/BroadcastSettingsTab.vue";
 import OperationSettingsTab from "./detail/OperationSettingsTab.vue";
@@ -17,11 +26,13 @@ const route = useRoute();
 const router = useRouter();
 const { toast } = useToast();
 
-const id = computed(() => Number(route.params.id));
+const id = computed<ActivityId>(() => String(route.params.id));
 const loading = ref(true);
 const error = ref("");
 const detail = ref<ActivityDetail | null>(null);
 const pageError = ref("");
+const basicTabRef = ref<InstanceType<typeof BasicSettingsTab> | null>(null);
+const shareVisible = ref(false);
 
 const sideNav = [
   { key: "basic" as const, label: "基本设置" },
@@ -58,12 +69,31 @@ const timeRange = computed(() => {
   return end ? `${start} 至 ${end}` : start;
 });
 
-function setTab(key: TabKey) {
+const providerLabel = computed(() => {
+  const p = detail.value?.provider as LiveProvider | undefined;
+  if (!p) return "";
+  return PROVIDER_LABEL[p] ?? p;
+});
+
+async function confirmLeaveBasicIfNeeded(): Promise<boolean> {
+  if (activeTab.value !== "basic") return true;
+  const tab = basicTabRef.value as
+    | { isDirty: () => boolean; confirmLeave: () => Promise<boolean> }
+    | null;
+  if (!tab?.isDirty?.()) return true;
+  return tab.confirmLeave();
+}
+
+async function setTab(key: TabKey) {
+  if (key === activeTab.value) return;
+  if (!(await confirmLeaveBasicIfNeeded())) return;
   void router.replace({
     path: route.path,
     query: key === "broadcast" ? {} : { tab: key },
   });
 }
+
+onBeforeRouteLeave(async () => confirmLeaveBasicIfNeeded());
 
 async function fetchDetail() {
   loading.value = true;
@@ -87,12 +117,7 @@ async function goLive() {
 }
 
 async function shareWatch() {
-  try {
-    await navigator.clipboard.writeText(`http://localhost:5174/watch/${id.value}`);
-    toast("观看链接已复制");
-  } catch {
-    toast("复制失败");
-  }
+  shareVisible.value = true;
 }
 
 onMounted(fetchDetail);
@@ -143,6 +168,11 @@ watch(id, fetchDetail);
           </div>
           <div class="hero-info">
             <h1 class="hero-title">{{ detail.title }}</h1>
+            <p class="hero-meta">
+              <span v-if="providerLabel">服务商：{{ providerLabel }}</span>
+              <span v-if="providerLabel">·</span>
+              <span>ID：{{ detail.id }}</span>
+            </p>
             <p class="hero-time">直播时间：{{ timeRange }}</p>
             <div class="hero-links">
               <UiButton
@@ -212,6 +242,7 @@ watch(id, fetchDetail);
         <div class="panel">
           <BasicSettingsTab
             v-if="activeTab === 'basic'"
+            ref="basicTabRef"
             :activity-id="id"
             :detail="detail"
             @refreshed="fetchDetail"
@@ -234,6 +265,12 @@ watch(id, fetchDetail);
         </div>
       </div>
     </template>
+
+    <ShareDialog
+      v-model="shareVisible"
+      :title="detail?.title ?? ''"
+      :watch-url="`http://localhost:5174/watch/${id}`"
+    />
   </div>
 </template>
 
@@ -327,6 +364,14 @@ watch(id, fetchDetail);
   font-size: 18px;
   font-weight: 600;
   color: var(--color-text);
+}
+.hero-meta {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--color-text-placeholder);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 .hero-time {
   margin: 6px 0 10px;

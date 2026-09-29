@@ -11,6 +11,7 @@ defineProps<{ form: LiveFormState }>();
   <FormRow label="详情封面:">
     <ImageUploader
       v-model="form.detailCover"
+      aspect="16:9"
       hint="750*422px 或 16:9"
     />
   </FormRow>
@@ -25,6 +26,7 @@ defineProps<{ form: LiveFormState }>();
         <ImageUploader
           v-if="form.warmupType === 'image'"
           v-model="form.warmupImage"
+          aspect="9:16"
           hint="750*1334px 或 9:16"
           view-example
         />
@@ -39,6 +41,7 @@ defineProps<{ form: LiveFormState }>();
   <FormRow label="直播宣传封面:">
     <ImageUploader
       v-model="form.promoCover"
+      aspect="25:8"
       hint="750*240px 或 25:8"
       view-example
     />

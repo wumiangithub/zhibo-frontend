@@ -8,11 +8,12 @@ import {
   endActivity,
   deleteActivity,
   type ActivityDetail,
+  type ActivityId,
 } from "@/api/activity";
 import UiButton from "@/components/ui/UiButton.vue";
 
 const props = defineProps<{
-  activityId: number;
+  activityId: ActivityId;
   detail: ActivityDetail;
 }>();
 

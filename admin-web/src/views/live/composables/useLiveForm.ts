@@ -1,4 +1,5 @@
 import { reactive, ref } from "vue";
+import type { LiveProvider } from "@/api/activity";
 
 export type LiveMode = "video" | "recorded" | "voice";
 export type ViewerStyle = "traditional" | "immersive";
@@ -10,6 +11,7 @@ export interface PlaybackPeriod {
 }
 
 export interface LiveFormState {
+  provider: LiveProvider;
   mode: LiveMode;
   viewerStyle: ViewerStyle;
   ultraLowLatency: boolean;
@@ -20,6 +22,12 @@ export interface LiveFormState {
   startTime: string;
   endDate: string;
   endTime: string;
+  /** type=4 录播时必填（微吼 recordId） */
+  recordId: string;
+  /** 选中资源展示名 */
+  recordLabel: string;
+  /** 选择来源：素材视频 / 微吼直播回放 */
+  recordSource: "" | "video" | "live";
   detailCover: string;
   warmupType: "image" | "video";
   warmupImage: string;
@@ -47,8 +55,15 @@ export interface LiveFormState {
   agreed: boolean;
 }
 
+export const MODE_TO_TYPE: Record<LiveMode, number> = {
+  video: 2,
+  voice: 1,
+  recorded: 4,
+};
+
 export function useLiveForm() {
   const form = reactive<LiveFormState>({
+    provider: "vhall",
     mode: "video",
     viewerStyle: "traditional",
     ultraLowLatency: true,
@@ -56,9 +71,12 @@ export function useLiveForm() {
     name: "",
     intro: "",
     startDate: "",
-    startTime: "10:00",
+    startTime: "",
     endDate: "",
     endTime: "",
+    recordId: "",
+    recordLabel: "",
+    recordSource: "",
     detailCover: "",
     warmupType: "image",
     warmupImage: "",
@@ -88,7 +106,15 @@ export function useLiveForm() {
   const submitting = ref(false);
 
   function validate(): string | null {
-    if (!form.name.trim()) return "请填写直播名称";
+    if (!form.provider) return "请选择直播服务商";
+    const title = form.name.trim();
+    if (!title) return "请填写直播名称";
+    if (title.length > 64) return "直播名称不能超过 64 字";
+    const intro = form.intro.trim();
+    if (form.provider === "vhall" && form.mode === "recorded" && !intro) {
+      return "微吼录播请填写直播简介";
+    }
+    if (intro.length > 256) return "直播简介不能超过 256 字";
     if (!form.startDate) return "请选择开始日期";
     if (!form.startTime) return "请选择开始时间";
     if (form.endDate && form.endTime) {
@@ -100,20 +126,8 @@ export function useLiveForm() {
     } else if (!form.endDate && form.endTime) {
       return "请选择结束日期";
     }
-    if (form.playbackEnabled && form.playbackValidity === "period") {
-      for (let i = 0; i < form.playbackPeriods.length; i++) {
-        const p = form.playbackPeriods[i];
-        const start =
-          p.start ||
-          (i === 0 && form.endDate && form.endTime
-            ? `${form.endDate} ${form.endTime.length === 5 ? `${form.endTime}:00` : form.endTime}`
-            : "");
-        if (!start) return `请选择第 ${i + 1} 个回放时段的开始时间`;
-        if (!p.end) return `请选择第 ${i + 1} 个回放时段的结束时间`;
-        if (new Date(p.end).getTime() <= new Date(start).getTime()) {
-          return `第 ${i + 1} 个回放时段：结束时间必须大于开始时间`;
-        }
-      }
+    if (form.mode === "recorded" && form.provider === "vhall" && !form.recordId.trim()) {
+      return "录播模式请选择视频或直播回放资源";
     }
     if (!form.agreed) return "请先阅读并同意《直播运营规范》";
     return null;

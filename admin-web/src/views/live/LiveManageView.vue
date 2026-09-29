@@ -4,12 +4,15 @@ import { RouterLink, useRouter } from "vue-router";
 import {
   getHostUrl,
   listActivities,
+  PROVIDER_LABEL,
   TYPE_LABEL,
   type ActivityListItem,
+  type LiveProvider,
 } from "@/api/activity";
 import UiButton from "@/components/ui/UiButton.vue";
 import UiCheckButton from "@/components/ui/UiCheckButton.vue";
 import UiInput from "@/components/ui/UiInput.vue";
+import ShareDialog from "@/components/share/ShareDialog.vue";
 import { useToast } from "@/composables/useToast";
 
 const router = useRouter();
@@ -19,8 +22,18 @@ const loading = ref(false);
 const error = ref("");
 const list = ref<ActivityListItem[]>([]);
 const total = ref(0);
-const selected = ref<number[]>([]);
+const selected = ref<string[]>([]);
 const selectPage = ref(false);
+
+const shareVisible = ref(false);
+const shareTitle = ref("");
+const shareWatchUrl = ref("");
+
+function openShare(item: ActivityListItem) {
+  shareTitle.value = item.title;
+  shareWatchUrl.value = `http://localhost:5174/watch/${item.id}`;
+  shareVisible.value = true;
+}
 
 const query = reactive({
   keyword: "",
@@ -36,8 +49,10 @@ function shelfLabel(state: number) {
   return { text: "已上架", on: true };
 }
 
-function roomStyle(type: number) {
-  return type === 1 ? "传统直播间" : "沉浸直播间";
+function roomStyle(item: ActivityListItem) {
+  if (item.viewerStyle === "immersive") return "沉浸直播间";
+  if (item.viewerStyle === "traditional") return "传统直播间";
+  return item.type === 1 ? "传统直播间" : "沉浸直播间";
 }
 
 function typeLabel(type: number) {
@@ -45,7 +60,19 @@ function typeLabel(type: number) {
   if (t === "视频") return "视频直播";
   if (t === "音频") return "音频直播";
   if (t === "互动") return "互动直播";
+  if (t === "录播") return "录播直播";
   return t ?? String(type);
+}
+
+/** 列表展示到分，去掉秒 */
+function formatStartTime(raw?: string) {
+  if (!raw) return "—";
+  return raw.length >= 16 ? raw.slice(0, 16) : raw;
+}
+
+function providerLabel(p?: LiveProvider) {
+  if (!p) return "--";
+  return PROVIDER_LABEL[p] ?? p;
 }
 
 async function fetchList() {
@@ -91,7 +118,7 @@ function toggleSelectPage() {
   onSelectPageChange();
 }
 
-function toggleRow(id: number) {
+function toggleRow(id: string) {
   const i = selected.value.indexOf(id);
   if (i >= 0) selected.value.splice(i, 1);
   else selected.value.push(id);
@@ -106,7 +133,7 @@ function goCreate() {
   void router.push("/live/create");
 }
 
-async function goLive(id: number) {
+async function goLive(id: string) {
   try {
     const { hostUrl } = await getHostUrl(id);
     window.open(hostUrl, "_blank", "noopener");
@@ -239,6 +266,7 @@ onMounted(fetchList);
               >
             </th>
             <th class="px-3 py-3 font-normal">直播名称</th>
+            <th class="px-3 py-3 font-normal">服务商</th>
             <th class="px-3 py-3 font-normal">直播类型</th>
             <th class="px-3 py-3 font-normal">观看端样式</th>
             <th class="px-3 py-3 font-normal">订阅量</th>
@@ -251,7 +279,7 @@ onMounted(fetchList);
         <tbody>
           <tr v-if="loading">
             <td
-              colspan="9"
+              colspan="10"
               class="px-3 py-16 text-center text-[#bfbfbf]"
             >
               加载中…
@@ -259,7 +287,7 @@ onMounted(fetchList);
           </tr>
           <tr v-else-if="list.length === 0">
             <td
-              colspan="9"
+              colspan="10"
               class="px-3 py-16 text-center text-[#bfbfbf]"
             >
               暂无直播
@@ -301,8 +329,9 @@ onMounted(fetchList);
                 </div>
               </div>
             </td>
+            <td class="px-3 py-3 text-[#666]">{{ providerLabel(item.provider) }}</td>
             <td class="px-3 py-3 text-[#666]">{{ typeLabel(item.type) }}</td>
-            <td class="px-3 py-3 text-[#666]">{{ roomStyle(item.type) }}</td>
+            <td class="px-3 py-3 text-[#666]">{{ roomStyle(item) }}</td>
             <td class="px-3 py-3 text-[#666]">--</td>
             <td class="px-3 py-3 text-[#666]">¥0</td>
             <td class="px-3 py-3">
@@ -314,7 +343,7 @@ onMounted(fetchList);
                 {{ shelfLabel(item.state).text }}
               </span>
             </td>
-            <td class="px-3 py-3 text-[#666]">{{ item.startTime }}</td>
+            <td class="px-3 py-3 text-[#666]">{{ formatStartTime(item.startTime) }}</td>
             <td class="px-3 py-3">
               <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <UiButton
@@ -337,7 +366,7 @@ onMounted(fetchList);
                 </RouterLink>
                 <UiButton
                   variant="link"
-                  @click="shell('分享')"
+                  @click="openShare(item)"
                 >
                   分享
                 </UiButton>
@@ -375,5 +404,11 @@ onMounted(fetchList);
         </UiButton>
       </div>
     </div>
+
+    <ShareDialog
+      v-model="shareVisible"
+      :title="shareTitle"
+      :watch-url="shareWatchUrl"
+    />
   </div>
 </template>

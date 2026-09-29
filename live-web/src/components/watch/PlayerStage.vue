@@ -80,8 +80,13 @@ const emit = defineEmits<{ share: []; gift: []; retry: []; fallback: [] }>();
         <h2 class="mt-2 text-xl font-semibold text-white">{{ title }}</h2>
       </div>
 
-      <div class="flex items-end gap-1">
-        <span v-for="i in 5" :key="i" class="w-1.5 rounded-full bg-green-500" :style="{ height: `${20 + Math.random() * 40}px`, animation: `audioWave 1s ease-in-out ${i * 0.1}s infinite alternate` }"></span>
+      <div class="audio-eq" aria-hidden="true">
+        <span
+          v-for="i in 5"
+          :key="i"
+          class="audio-eq__bar"
+          :style="{ animationDelay: `${(i - 1) * 0.12}s` }"
+        />
       </div>
 
       <p class="text-sm text-gray-400">
@@ -322,11 +327,51 @@ const emit = defineEmits<{ share: []; gift: []; retry: []; fallback: [] }>();
 }
 
 @keyframes audioWave {
-  0% {
-    transform: scaleY(0.5);
-  }
+  0%,
   100% {
+    transform: scaleY(0.35);
+  }
+  50% {
     transform: scaleY(1);
   }
+}
+
+.audio-eq {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  height: 56px;
+}
+
+.audio-eq__bar {
+  display: block;
+  width: 6px;
+  height: 48px;
+  border-radius: 999px;
+  background: #22c55e;
+  transform-origin: bottom center;
+  animation: audioWave 0.9s ease-in-out infinite;
+}
+
+.audio-eq__bar:nth-child(1) {
+  height: 28px;
+  animation-duration: 0.75s;
+}
+.audio-eq__bar:nth-child(2) {
+  height: 48px;
+  animation-duration: 1.05s;
+}
+.audio-eq__bar:nth-child(3) {
+  height: 36px;
+  animation-duration: 0.85s;
+}
+.audio-eq__bar:nth-child(4) {
+  height: 52px;
+  animation-duration: 1.15s;
+}
+.audio-eq__bar:nth-child(5) {
+  height: 32px;
+  animation-duration: 0.95s;
 }
 </style>

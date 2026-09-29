@@ -1,16 +1,18 @@
+import type { LiveProvider } from "@/live/types";
 import { get } from "./http";
 
 const GUEST_ID_KEY = "zhibo.guestId";
 const NICKNAME_KEY = "zhibo.nickname";
 
 export interface WatchData {
-  id: number;
+  id: string;
   title: string;
   state: number;
   type: number;
   nickname: string;
   guestId: string;
   embedUrl: string;
+  provider?: LiveProvider;
 }
 
 export interface SdkInitPayload {
@@ -28,7 +30,7 @@ export interface SdkInitPayload {
 }
 
 export interface WatchSdkData {
-  id: number;
+  id: string;
   title: string;
   state: number;
   type: number;
@@ -36,6 +38,8 @@ export interface WatchSdkData {
   guestId: string;
   startTime?: string;
   endTime?: string;
+  /** 直播服务商；缺省按微吼处理 */
+  provider?: LiveProvider;
   sdk: SdkInitPayload;
   embedUrl: string;
 }
@@ -46,7 +50,7 @@ export interface WatchParams {
 }
 
 export interface WatchActivityItem {
-  id: number;
+  id: string;
   title: string;
   state: number;
   startTime: string;
@@ -74,11 +78,11 @@ export function storeNickname(nickname: string) {
   if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
 }
 
-export function getWatch(id: number, params: WatchParams = {}) {
+export function getWatch(id: string, params: WatchParams = {}) {
   return get<WatchData>(`/watch/${id}`, { params });
 }
 
-export function getWatchSdk(id: number, params: WatchParams = {}) {
+export function getWatchSdk(id: string, params: WatchParams = {}) {
   return get<WatchSdkData>(`/watch/${id}/sdk`, { params });
 }
 

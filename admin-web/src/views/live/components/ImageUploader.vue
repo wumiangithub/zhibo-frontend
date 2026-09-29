@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { ElImageViewer, ElMessage } from "element-plus";
+import { uploadImage } from "@/api/activity";
+import ImageCropDialog, { type CropAspect } from "./ImageCropDialog.vue";
 
 const props = defineProps<{
   modelValue: string;
+  /** 固定裁剪比例；不传则不裁剪，直接上传 */
+  aspect?: CropAspect;
   /** 推荐尺寸文案，如 "750*422px 或 16:9" */
   hint?: string;
   /** 上传按钮文案 */
@@ -22,13 +26,69 @@ const url = computed({
 });
 
 const previewVisible = ref(false);
+const uploading = ref(false);
+const cropVisible = ref(false);
+const cropSrc = ref("");
+/** 选图后的本地 ObjectURL，关闭裁剪时释放 */
+let pendingObjectUrl = "";
 
-function onFile(e: Event) {
+function revokePending() {
+  if (pendingObjectUrl) {
+    URL.revokeObjectURL(pendingObjectUrl);
+    pendingObjectUrl = "";
+  }
+  cropSrc.value = "";
+}
+
+onBeforeUnmount(revokePending);
+
+function openCropWithFile(file: File) {
+  revokePending();
+  pendingObjectUrl = URL.createObjectURL(file);
+  cropSrc.value = pendingObjectUrl;
+  cropVisible.value = true;
+}
+
+async function onFile(e: Event) {
   const target = e.target as HTMLInputElement;
   const file = target.files?.[0];
+  target.value = "";
   if (!file) return;
-  // Mock：用本地预览
-  url.value = URL.createObjectURL(file);
+  if (!file.type.startsWith("image/")) {
+    ElMessage.warning("请选择图片文件");
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.warning("图片需小于 5M");
+    return;
+  }
+  if (props.aspect) {
+    openCropWithFile(file);
+    return;
+  }
+  await doUpload(file);
+}
+
+async function doUpload(file: File) {
+  uploading.value = true;
+  try {
+    url.value = await uploadImage(file);
+    ElMessage.success("上传成功");
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : "上传失败");
+  } finally {
+    uploading.value = false;
+  }
+}
+
+async function onCropConfirm(file: File) {
+  revokePending();
+  await doUpload(file);
+}
+
+function onCropVisible(v: boolean) {
+  cropVisible.value = v;
+  if (!v) revokePending();
 }
 
 function remove() {
@@ -40,8 +100,19 @@ function openPreview() {
   previewVisible.value = true;
 }
 
+/** 已上传图再裁：重新选图（素材中心落地前的过渡；远端 URL 常有 CORS 无法直接入 canvas） */
 function onCrop() {
-  ElMessage.info("裁剪功能暂未开放");
+  if (!props.aspect) {
+    ElMessage.info("当前图片无需裁剪");
+    return;
+  }
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+  input.onchange = (ev) => {
+    void onFile(ev);
+  };
+  input.click();
 }
 </script>
 
@@ -74,7 +145,9 @@ function onCrop() {
             d="M4 16l4.5-4.5a2 2 0 012.8 0L20 18M4 6h16v12H4z"
           />
         </svg>
-        <span class="mt-1 text-[12px] text-[#999]">{{ text ?? "上传图片" }}</span>
+        <span class="mt-1 text-[12px] text-[#999]">
+          {{ uploading ? "上传中…" : text ?? "上传图片" }}
+        </span>
       </div>
       <div
         v-if="url"
@@ -87,6 +160,7 @@ function onCrop() {
           @click.stop="openPreview"
         >预览</button>
         <button
+          v-if="aspect"
           type="button"
           class="img-up__act"
           title="裁剪"
@@ -114,11 +188,13 @@ function onCrop() {
       <label
         v-else
         class="img-up__pick"
+        :class="{ 'is-busy': uploading }"
       >
         <input
           type="file"
           accept="image/*"
           class="hidden"
+          :disabled="uploading"
           @change="onFile"
         >
       </label>
@@ -139,6 +215,15 @@ function onCrop() {
       :url-list="[url]"
       teleported
       @close="previewVisible = false"
+    />
+
+    <ImageCropDialog
+      v-if="aspect"
+      :visible="cropVisible"
+      :src="cropSrc"
+      :aspect="aspect"
+      @update:visible="onCropVisible"
+      @confirm="onCropConfirm"
     />
   </div>
 </template>
@@ -180,6 +265,10 @@ function onCrop() {
   position: absolute;
   inset: 0;
   cursor: pointer;
+}
+.img-up__pick.is-busy {
+  cursor: wait;
+  pointer-events: none;
 }
 .img-up__mask {
   position: absolute;

@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { ElCheckbox, ElButton, ElMessage, ElIcon } from "element-plus";
 import { ArrowRight } from "@element-plus/icons-vue";
-import { useLiveForm } from "./composables/useLiveForm";
-import { createActivity } from "@/api/activity";
+import { createActivity, type CreateActivityPayload } from "@/api/activity";
+import { useLeaveConfirm } from "@/composables/useLeaveConfirm";
+import { MODE_TO_TYPE, useLiveForm } from "./composables/useLiveForm";
 import BasicInfoSection from "./sections/BasicInfoSection.vue";
 import CoverSection from "./sections/CoverSection.vue";
 import DetailSection from "./sections/DetailSection.vue";
@@ -15,16 +17,45 @@ import ProductSection from "./sections/ProductSection.vue";
 
 const router = useRouter();
 const { form, submitting, validate } = useLiveForm();
+const leave = useLeaveConfirm();
+const { takeSnapshot } = leave.trackForm(form);
 
-/** 前端 mode → 后端 type：视频=2 / 语音=1 / 录播=4(点播，后端待支持) */
-const MODE_TO_TYPE: Record<string, number> = {
-  video: 2,
-  voice: 1,
-  recorded: 4,
-};
+onMounted(() => {
+  takeSnapshot();
+});
 
-function onCancel() {
+async function onCancel() {
+  if (!(await leave.confirmLeave())) return;
+  leave.allowNextNavigation();
   void router.push("/live");
+}
+
+function buildPayload(): CreateActivityPayload {
+  const payload: CreateActivityPayload = {
+    provider: form.provider,
+    title: form.name.trim(),
+    startTime: `${form.startDate} ${form.startTime}:00`,
+    type: MODE_TO_TYPE[form.mode],
+    viewerStyle: form.viewerStyle,
+    ultraLowLatency: form.ultraLowLatency,
+    virtualAvatar: form.virtualAvatar,
+  };
+  const intro = form.intro.trim();
+  if (intro) payload.introduction = intro;
+  if (form.endDate && form.endTime) {
+    payload.endTime = `${form.endDate} ${form.endTime}:00`;
+  }
+  if (form.mode === "recorded" && form.recordId.trim()) {
+    payload.recordId = form.recordId.trim();
+  }
+  if (form.detailCover) payload.coverUrl = form.detailCover;
+  if (form.warmupType === "image" && form.warmupImage) {
+    payload.warmupType = "image";
+    payload.warmupUrl = form.warmupImage;
+  }
+  if (form.promoCover) payload.promoCoverUrl = form.promoCover;
+  if (form.detailHtml?.trim()) payload.detailHtml = form.detailHtml;
+  return payload;
 }
 
 async function onSave() {
@@ -35,13 +66,9 @@ async function onSave() {
   }
   submitting.value = true;
   try {
-    // 当前后端只接收 title / startTime / type；其余字段等后端扩字段后再补
-    const data = await createActivity({
-      title: form.name.trim(),
-      startTime: `${form.startDate} ${form.startTime}:00`,
-      type: MODE_TO_TYPE[form.mode] ?? 2,
-    });
+    const data = await createActivity(buildPayload());
     ElMessage.success("创建成功");
+    leave.allowNextNavigation();
     void router.push(`/live/${data.id}`);
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : "创建失败");
@@ -63,16 +90,19 @@ async function onSave() {
         <BasicInfoSection :form="form" />
         <CoverSection :form="form" />
         <DetailSection :form="form" />
+        <div class="placeholder-tip">以下区块本迭代暂不保存，请勿依赖其提交</div>
         <RoleSection :form="form" />
         <PlaybackSection :form="form" />
         <OwnerSection :form="form" />
       </div>
 
       <div class="card">
+        <p class="placeholder-tip">所属课程本迭代暂不保存</p>
         <CourseSection :form="form" />
       </div>
 
       <div class="card">
+        <p class="placeholder-tip">商品信息本迭代暂不保存</p>
         <ProductSection :form="form" />
       </div>
     </div>
@@ -88,7 +118,9 @@ async function onSave() {
           type="primary"
           :loading="submitting"
           @click="onSave"
-        >保存</ElButton>
+        >
+          保存
+        </ElButton>
       </div>
     </div>
   </div>
@@ -121,6 +153,15 @@ async function onSave() {
   border-radius: 8px;
   padding: 20px 24px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.placeholder-tip {
+  margin: 8px 0 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  font-size: 12px;
+  color: #ad6800;
 }
 .live-create__footer {
   position: fixed;

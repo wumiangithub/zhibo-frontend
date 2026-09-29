@@ -21,10 +21,12 @@ import { useChat } from "@/composables/useChat";
 import { useRoomStats } from "@/composables/useRoomStats";
 import { usePlayerControls } from "@/composables/usePlayerControls";
 import { useAnnouncement } from "@/composables/useAnnouncement";
-import { formatSdkError, isHardFatalSdkError, isRetryableSdkError, loadScript } from "@/utils/sdk";
+import { createWatchAdapter } from "@/live/createWatchAdapter";
+import type { WatchAdapter } from "@/live/WatchAdapter";
+import { formatSdkError } from "@/utils/sdk";
 
 const route = useRoute();
-const id = Number(route.params.id);
+const id = String(route.params.id);
 
 const loading = ref(true);
 const error = ref("");
@@ -38,8 +40,8 @@ const nicknameSaving = ref(false);
 const activeTab = ref<"chat" | "intro" | "barrage">("chat");
 const showLiveStartPopup = ref(false);
 
-let sdkInstance: VhallSdkInstance | null = null;
-const getSdk = () => sdkInstance;
+let adapter: WatchAdapter | null = null;
+const getSdk = () => adapter?.getSdk() ?? null;
 /** 20005/20006 自动重拉次数；每次用户主动 load() 清零 */
 let sdkRetryCount = 0;
 const SDK_MAX_RETRIES = 2;
@@ -101,14 +103,8 @@ function destroySdk() {
     clearTimeout(sdkRetryTimer);
     sdkRetryTimer = null;
   }
-  if (sdkInstance?.destroy) {
-    try {
-      sdkInstance.destroy();
-    } catch {
-      /* ignore */
-    }
-  }
-  sdkInstance = null;
+  adapter?.destroy();
+  adapter = null;
 }
 
 /** 20005/20006：销毁后重新拉签名再 init（不整页 loading，避免闪一下昵称区） */
@@ -158,85 +154,56 @@ async function switchToEndedFromLive() {
 
 async function initSdk() {
   if (!data.value) return;
-  const res = data.value;
 
   loading.value = false;
   player.resetPlayback();
   await nextTick();
 
-  if (res.sdk.jqueryUrl) {
-    await loadScript(res.sdk.jqueryUrl);
+  try {
+    adapter = createWatchAdapter(data.value.provider ?? "vhall");
+    await adapter.init(data.value, {
+      onError: (msg) => {
+        player.markMediaFailed(formatSdkError(msg));
+        sdkFailed.value = true;
+      },
+      onRetryableError: (text) => {
+        // 本站仍显示直播中/预告时更值得重试；已结束就别空转
+        if (data.value?.state === 1 || data.value?.state === 2) {
+          if (sdkRetryTimer) return;
+          sdkRetryTimer = setTimeout(() => {
+            sdkRetryTimer = null;
+            void retrySdkInit(text);
+          }, 600);
+          return;
+        }
+        player.markMediaFailed(text);
+        sdkFailed.value = true;
+      },
+      onLiveEnded: () => {
+        void switchToEndedFromLive();
+      },
+      onAutoplayFailed: () => player.notifyAutoplayFailed(),
+      onLiveStart: handleLiveStart,
+      onChatMsg: chat.handleChatMessage,
+      onChatDelete: chat.handleChatDelete,
+      onDisableChat: () => chat.setMuted(true),
+      onPermitChat: () => chat.setMuted(false),
+      onAnnouncement: notice.handleAnnouncement,
+      onOnlinePopulation: stats.handleOnlinePopulation,
+      onPraiseTotal: stats.handlePraiseTotal,
+      afterInit: () => {
+        // SDK 的 JSONP 回调名按毫秒时间戳生成，并发调用会同名互踩，必须串行加载
+        void chat.loadChatHistory().then(() => notice.loadHistory());
+        stats.scheduleRoomId();
+        player.scheduleQualityLabels();
+        player.startPlayPoll();
+      },
+    });
+  } catch (e) {
+    adapter?.destroy();
+    adapter = null;
+    throw e;
   }
-  await loadScript(res.sdk.scriptUrl);
-
-  if (!window.VhallSDK) {
-    throw new Error("SDK 加载异常，未找到 VhallSDK（需 3.9.1）");
-  }
-
-  sdkInstance = new window.VhallSDK({
-    app_key: res.sdk.appKey,
-    signedat: res.sdk.signedAt,
-    webinar_id: res.sdk.webinarId,
-    email: res.sdk.email,
-    username: res.sdk.username,
-    sign: res.sdk.sign,
-    sign_type: res.sdk.signType ?? 0,
-    videoContent: "#player",
-    docContent: "#docWrap",
-  });
-
-  // 硬失败立刻提示；20005/20006 联调常为瞬时，自动重拉签名再 init
-  sdkInstance.$on("error", (msg: unknown) => {
-    const text = formatSdkError(msg);
-    console.warn("SDK 运行时错误:", text, msg);
-    if (isHardFatalSdkError(msg)) {
-      player.markMediaFailed(text);
-      sdkFailed.value = true;
-      return;
-    }
-    if (isRetryableSdkError(msg)) {
-      // 本站仍显示直播中时更值得重试；已结束就别空转
-      if (data.value?.state === 1 || data.value?.state === 2) {
-        if (sdkRetryTimer) return;
-        sdkRetryTimer = setTimeout(() => {
-          sdkRetryTimer = null;
-          void retrySdkInit(text);
-        }, 600);
-        return;
-      }
-      player.markMediaFailed(text);
-      sdkFailed.value = true;
-    }
-  });
-
-  // 官方：H5 活动直播结束 → live_over（见 Apifox 全局事件）；streamOver 为旧 Flash 事件，一并听作兜底
-  const onLiveEnded = () => {
-    void switchToEndedFromLive();
-  };
-  sdkInstance.$on("live_over", onLiveEnded);
-  sdkInstance.$on("streamOver", onLiveEnded);
-
-  // 自动播放失败时直接出「点击收听/播放」（比轮询更准）
-  sdkInstance.$on("vhallplay_AUTOPLAY_FAILED", () => player.notifyAutoplayFailed());
-
-  sdkInstance.$on("chatMsg", chat.handleChatMessage);
-  sdkInstance.$on("chatDelete", chat.handleChatDelete);
-  sdkInstance.$on("disableChat", () => chat.setMuted(true));
-  sdkInstance.$on("permitChat", () => chat.setMuted(false));
-  sdkInstance.$on("room_announcement", notice.handleAnnouncement);
-  sdkInstance.$on("live_start", handleLiveStart);
-  sdkInstance.$on("onlinePopulation", stats.handleOnlinePopulation);
-  sdkInstance.$on("EVENT_PRAISE_TOTAL", stats.handlePraiseTotal);
-
-  // SDK 的 JSONP 回调名按毫秒时间戳生成，并发调用会同名互踩，
-  // 导致先发起的请求 Promise 永不 settle，必须串行加载
-  void chat.loadChatHistory().then(() => notice.loadHistory());
-
-  stats.scheduleRoomId();
-  // 控制栏由 SDK 异步生成，等播放器就绪后改写下拉文案并标初始选中态
-  player.scheduleQualityLabels();
-  // 等 SDK 建好 <video> 后再出「点击播放」；过早点会丢掉手势导致 play() 被浏览器静默拦截
-  player.startPlayPoll();
 }
 
 function buildWatchParams(): Record<string, string> {

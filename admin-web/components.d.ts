@@ -14,6 +14,7 @@ declare module 'vue' {
     ElRadioButton: typeof import('element-plus/es')['ElRadioButton']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    ShareDialog: typeof import('./src/components/share/ShareDialog.vue')['default']
     SideIcon: typeof import('./src/components/SideIcon.vue')['default']
     UiButton: typeof import('./src/components/ui/UiButton.vue')['default']
     UiCheckButton: typeof import('./src/components/ui/UiCheckButton.vue')['default']

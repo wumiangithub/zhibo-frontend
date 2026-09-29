@@ -43,9 +43,9 @@ async function fetchList() {
 }
 
 function go() {
-  const n = Number(id.value);
-  if (Number.isInteger(n) && n > 0) {
-    router.push(`/watch/${n}`);
+  const trimmed = id.value.trim();
+  if (trimmed) {
+    router.push(`/watch/${trimmed}`);
   }
 }
 
@@ -60,15 +60,14 @@ onMounted(fetchList);
   <div class="min-h-dvh bg-gray-900 p-6 text-white">
     <div class="mx-auto max-w-2xl">
       <h1 class="text-xl font-bold text-green-400">直播观看端</h1>
-      <p class="mt-1 text-sm text-gray-400">选择活动进入观看页，或手动输入活动 ID</p>
+      <p class="mt-1 text-sm text-gray-400">选择活动进入观看页，或手动输入活动 UUID</p>
 
       <div class="mt-4 flex items-center gap-2">
         <input
           v-model="id"
-          type="number"
-          min="1"
-          placeholder="活动 ID"
-          class="w-40 rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
+          type="text"
+          placeholder="活动 UUID"
+          class="min-w-0 flex-1 rounded-md border border-gray-600 bg-gray-800 px-3 py-2 text-sm focus:border-green-500 focus:outline-none"
           @keyup.enter="go"
         />
         <button

@@ -4,7 +4,10 @@ import immerseStyleImg from "@/assets/images/live/immerse-style.jpg";
 
 defineProps<{
   name: string;
+  intro?: string;
   startTime: string;
+  /** 详情封面，有则盖在播放器区 */
+  coverUrl?: string;
   /** video | recorded | voice */
   mode?: "video" | "recorded" | "voice";
   /** traditional | immersive */
@@ -30,10 +33,16 @@ defineProps<{
       <template v-else>
         <div
           class="phone-preview__cover"
-          :class="{ 'is-voice': mode === 'voice' }"
+          :class="{ 'is-voice': mode === 'voice' && !coverUrl, 'has-cover': !!coverUrl }"
         >
           <img
-            v-if="mode === 'voice'"
+            v-if="coverUrl"
+            class="phone-preview__cover-img"
+            :src="coverUrl"
+            alt="封面"
+          >
+          <img
+            v-else-if="mode === 'voice'"
             class="phone-preview__voice-img"
             :src="voiceStyleImg"
             alt="语音直播"
@@ -53,9 +62,12 @@ defineProps<{
           <span class="phone-preview__tab is-active">介绍</span>
         </div>
         <div class="phone-preview__body">
-          <p class="phone-preview__time">{{ startTime || "2026-09-23 10:00" }} 开始</p>
+          <p class="phone-preview__time">{{ startTime || "开始时间" }} 开始</p>
           <p class="phone-preview__name">{{ name || "直播名称" }}</p>
-          <p class="phone-preview__intro">直播简介将在此处展示</p>
+          <p
+            class="phone-preview__intro"
+            :class="{ 'is-placeholder': !intro }"
+          >{{ intro || "直播简介将在此处展示" }}</p>
         </div>
       </template>
 
@@ -112,6 +124,11 @@ defineProps<{
   background: #1a1a1a;
   padding: 0;
 }
+.phone-preview__cover.has-cover {
+  background: #000;
+  padding: 0;
+}
+.phone-preview__cover-img,
 .phone-preview__voice-img {
   width: 100%;
   height: 100%;
@@ -148,8 +165,15 @@ defineProps<{
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 6px;
+  word-break: break-word;
 }
 .phone-preview__intro {
+  color: #666;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.phone-preview__intro.is-placeholder {
   color: #999;
 }
 .phone-preview__watermark {

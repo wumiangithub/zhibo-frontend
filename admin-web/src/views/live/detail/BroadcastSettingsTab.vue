@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { getHostUrl } from "@/api/activity";
+import { getHostUrl, type ActivityId } from "@/api/activity";
 import { useToast } from "@/composables/useToast";
 import UiButton from "@/components/ui/UiButton.vue";
 
-const props = defineProps<{ activityId: number }>();
+const props = defineProps<{ activityId: ActivityId }>();
 const emit = defineEmits<{ error: [msg: string] }>();
 
 const { toast } = useToast();
@@ -79,10 +79,9 @@ async function openHost() {
               <div class="host-card__actions">
                 <UiButton
                   variant="primary"
-                  :disabled="opening"
-                  @click="openHost"
+                  @click="toast('「客户端开播」暂未开放')"
                 >
-                  {{ opening ? "打开中…" : "客户端开播" }}
+                  客户端开播
                 </UiButton>
                 <UiButton
                   variant="link"
@@ -114,6 +113,23 @@ async function openHost() {
               >
                 钱坤云直播小程序
               </UiButton>
+            </div>
+          </div>
+
+          <div class="host-card">
+            <div class="host-card__icon is-web">Web</div>
+            <div class="host-card__body">
+              <p class="host-card__name">网页开播</p>
+              <p class="host-card__desc">浏览器直接打开主持人控制台，无需安装客户端</p>
+              <div class="host-card__actions">
+                <UiButton
+                  variant="primary"
+                  :disabled="opening"
+                  @click="openHost"
+                >
+                  {{ opening ? "打开中…" : "网页开播" }}
+                </UiButton>
+              </div>
             </div>
           </div>
         </div>
@@ -189,6 +205,10 @@ async function openHost() {
 .host-card__icon.is-app {
   background: #f6ffed;
   color: var(--color-success);
+}
+.host-card__icon.is-web {
+  background: #fff7e6;
+  color: #d48806;
 }
 .host-card__name {
   margin: 0;
