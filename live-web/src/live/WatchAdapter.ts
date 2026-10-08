@@ -6,13 +6,15 @@ export interface WatchAdapterHandlers {
   onLiveEnded: () => void;
   onAutoplayFailed: () => void;
   onLiveStart: () => void;
-  onChatMsg: (msg: unknown) => void;
+  onChatMsg: (msg: VhallChatMsgMessage) => void;
   onChatDelete: (msg: unknown) => void;
   onDisableChat: () => void;
   onPermitChat: () => void;
   onAnnouncement: (msg: unknown) => void;
   onOnlinePopulation: (msg: unknown) => void;
   onPraiseTotal: (msg: unknown) => void;
+  onUserOnline: (msg: VhallUserPresenceMessage) => void;
+  onUserOffline: (msg: VhallUserPresenceMessage) => void;
   /** 用于 chat.loadHistory / stats.scheduleRoomId / player polls */
   afterInit: () => void;
 }

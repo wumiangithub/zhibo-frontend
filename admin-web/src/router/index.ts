@@ -30,6 +30,18 @@ const router = createRouter({
         },
       ],
     },
+    /** 直播中控台列表：侧栏新窗口打开，独立壳，不套 DefaultLayout */
+    {
+      path: "/live-console",
+      component: () => import("@/layouts/LiveConsoleLayout.vue"),
+      children: [
+        {
+          path: "",
+          name: "live-console-list",
+          component: () => import("@/views/live/LiveConsoleListView.vue"),
+        },
+      ],
+    },
   ],
 });
 

@@ -37,4 +37,8 @@ export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<
   return instance.get(url, config) as unknown as Promise<T>;
 }
 
+export async function post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  return instance.post(url, data, config) as unknown as Promise<T>;
+}
+
 export default instance;

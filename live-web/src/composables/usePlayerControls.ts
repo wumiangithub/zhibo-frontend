@@ -18,6 +18,7 @@ function findPlayerMedia(): HTMLMediaElement | null {
  * 播放器交互补丁：
  * - 等 `<video>` 出现后再出「点击播放」；过早点击会因 await 丢掉用户手势，浏览器静默拦 play()
  * - 进房默认不播放，等用户手势；被自动播放策略拦住时出「点击播放」遮罩
+ * - 直播中微吼常不提供暂停，学员/助理用自建暂停/继续（直操作 media）
  * - SDK 全屏按钮在无 fullscreen 权限的环境里静默失败，用 fixed 铺满视口兜底
  * - 清晰度下拉文案按 canPlayDefinitions 码值改写，并自己维护选中态
  */
@@ -32,6 +33,8 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     mediaFailed: false,
     /** 失败原因（如 SDK 20005），给遮罩展示 */
     failReason: "",
+    /** 用户已开始观看后是否处于暂停（与 needsTapToPlay 进房手势遮罩区分） */
+    isPaused: false,
     /** SDK 的全屏被拒绝时的 CSS 兜底 */
     pseudoFullscreen: false,
     /** SDK 控制栏 DOM，异步生成；Teleport 把互动按钮挂进去 */
@@ -42,9 +45,41 @@ export function usePlayerControls(options: PlayerControlsOptions) {
   let playInProgress = false;
   // 用户是否主动点过播放；进房默认不播放，SDK 自行起播也要暂停等用户点击
   let playRequested = false;
+  /** 用户主动点了暂停：轮询/SDK 起播时不要当成「被策略拦住」再出点击遮罩 */
+  let userPaused = false;
   let disposed = false;
+  let boundMedia: HTMLMediaElement | null = null;
   /** SDK 文案（480p 等）→ 展示文案（高清 等），loadQualityLabels 填充 */
   const qualityLabelMap: Record<string, string> = {};
+
+  function onMediaPlay() {
+    player.isPaused = false;
+    userPaused = false;
+  }
+
+  function onMediaPause() {
+    // 进房还没点过播放时的强制 pause 不算「用户暂停观看」
+    if (!playRequested) return;
+    player.isPaused = true;
+    // SDK 左侧暂停按钮也会走到这里，标记为主动暂停，避免再出「点击播放」遮罩
+    userPaused = true;
+  }
+
+  function unbindMediaEvents() {
+    if (!boundMedia) return;
+    boundMedia.removeEventListener("play", onMediaPlay);
+    boundMedia.removeEventListener("pause", onMediaPause);
+    boundMedia = null;
+  }
+
+  function bindMediaEvents(media: HTMLMediaElement) {
+    if (boundMedia === media) return;
+    unbindMediaEvents();
+    boundMedia = media;
+    media.addEventListener("play", onMediaPlay);
+    media.addEventListener("pause", onMediaPause);
+    if (playRequested) player.isPaused = media.paused;
+  }
 
   function applyPseudoFullscreen(on: boolean) {
     if (player.pseudoFullscreen === on) return;
@@ -194,10 +229,20 @@ export function usePlayerControls(options: PlayerControlsOptions) {
       tries += 1;
       const media = findPlayerMedia();
       if (media) {
+        bindMediaEvents(media);
         // 进房默认不播放：用户没点过之前，SDK 若自行起播（通常静音）也暂停并保留遮罩
         if (!playRequested) {
           if (!media.paused) media.pause();
           showTapOverlay();
+          stopPlayPoll();
+          return;
+        }
+        // 用户主动暂停：保持暂停态，不要当成自动播放失败
+        if (userPaused) {
+          player.waitingForMedia = false;
+          player.mediaFailed = false;
+          player.needsTapToPlay = false;
+          player.isPaused = true;
           stopPlayPoll();
           return;
         }
@@ -211,6 +256,7 @@ export function usePlayerControls(options: PlayerControlsOptions) {
           player.waitingForMedia = false;
           player.mediaFailed = false;
           player.needsTapToPlay = false;
+          player.isPaused = false;
           stopPlayPoll();
           return;
         }
@@ -239,8 +285,10 @@ export function usePlayerControls(options: PlayerControlsOptions) {
       return;
     }
 
+    bindMediaEvents(media);
     playInProgress = true;
     playRequested = true;
+    userPaused = false;
     try {
       media.muted = false;
       media.volume = Math.max(media.volume, 0.5);
@@ -249,6 +297,7 @@ export function usePlayerControls(options: PlayerControlsOptions) {
       player.needsTapToPlay = false;
       player.waitingForMedia = false;
       player.mediaFailed = false;
+      player.isPaused = false;
     } catch (e) {
       showTapOverlay();
       // 自动播放被策略拦截、或 play 被换源打断都是可重试的常态，只出“点击播放”遮罩，不弹错误横幅
@@ -264,8 +313,38 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     }
   }
 
+  /** 直播中暂停观看：冻结本地画面/声音，不退房；点继续再追到最新流 */
+  function pausePlayback() {
+    if (!playRequested || player.needsTapToPlay || player.waitingForMedia || player.mediaFailed) {
+      return;
+    }
+    const media = findPlayerMedia();
+    if (!media) return;
+    bindMediaEvents(media);
+    userPaused = true;
+    media.pause();
+    player.isPaused = true;
+    player.needsTapToPlay = false;
+  }
+
+  /** 已开播后切换暂停 / 继续；进房首次播放仍走 resumePlayback */
+  function togglePlayback() {
+    if (!playRequested || player.needsTapToPlay) {
+      void resumePlayback();
+      return;
+    }
+    const media = findPlayerMedia();
+    if (!media) {
+      void resumePlayback();
+      return;
+    }
+    if (media.paused || player.isPaused) void resumePlayback();
+    else pausePlayback();
+  }
+
   /** SDK 明确告知自动播放失败，比轮询更准 */
   function notifyAutoplayFailed() {
+    if (userPaused) return;
     if (findPlayerMedia()) showTapOverlay();
     else {
       player.waitingForMedia = true;
@@ -276,11 +355,14 @@ export function usePlayerControls(options: PlayerControlsOptions) {
   /** 重建播放器（如切到结束态）前复位手势状态 */
   function resetPlayback() {
     stopPlayPoll();
+    unbindMediaEvents();
     playRequested = false;
+    userPaused = false;
     player.needsTapToPlay = false;
     player.waitingForMedia = false;
     player.mediaFailed = false;
     player.failReason = "";
+    player.isPaused = false;
   }
 
   onMounted(() => {
@@ -292,11 +374,14 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     disposed = true;
     document.removeEventListener("fullscreenchange", handleFullscreenChange);
     document.removeEventListener("keydown", handleGlobalKeydown);
+    unbindMediaEvents();
     stopPlayPoll();
   });
 
   return Object.assign(player, {
     resumePlayback,
+    pausePlayback,
+    togglePlayback,
     startPlayPoll,
     stopPlayPoll,
     resetPlayback,

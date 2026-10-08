@@ -120,6 +120,12 @@ async function shareWatch() {
   shareVisible.value = true;
 }
 
+function goConsole() {
+  const token = ""; // 本站鉴权以后再补
+  const url = `http://localhost:5174/console/${id.value}?token=${encodeURIComponent(token)}`;
+  window.open(url, "_blank", "noopener");
+}
+
 onMounted(fetchDetail);
 watch(id, fetchDetail);
 </script>
@@ -205,7 +211,7 @@ watch(id, fetchDetail);
           </UiButton>
           <UiButton
             variant="default"
-            @click="toast('「中控台」暂未开放')"
+            @click="goConsole"
           >
             中控台
           </UiButton>

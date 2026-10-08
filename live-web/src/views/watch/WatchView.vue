@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import {
-  getWatchSdk,
-  getStoredGuestId,
-  storeGuestId,
   getStoredNickname,
   storeNickname,
-  type WatchSdkData,
 } from "@/api/watch";
 import NicknameForm from "@/components/watch/NicknameForm.vue";
 import PreviewScreen from "@/components/watch/PreviewScreen.vue";
@@ -15,239 +11,49 @@ import EndedScreen from "@/components/watch/EndedScreen.vue";
 import PlayerStage from "@/components/watch/PlayerStage.vue";
 import ChatPanel from "@/components/watch/ChatPanel.vue";
 import BarragePanel from "@/components/watch/BarragePanel.vue";
-import { useCountdown } from "@/composables/useCountdown";
-import { useBarrage } from "@/composables/useBarrage";
-import { useChat } from "@/composables/useChat";
-import { useRoomStats } from "@/composables/useRoomStats";
-import { usePlayerControls } from "@/composables/usePlayerControls";
-import { useAnnouncement } from "@/composables/useAnnouncement";
-import { createWatchAdapter } from "@/live/createWatchAdapter";
-import type { WatchAdapter } from "@/live/WatchAdapter";
-import { formatSdkError } from "@/utils/sdk";
+import { useWatchSession } from "@/composables/useWatchSession";
 
 const route = useRoute();
 const id = String(route.params.id);
 
-const loading = ref(true);
-const error = ref("");
-const data = ref<WatchSdkData | null>(null);
-const sdkFailed = ref(false);
-const useFallback = ref(false);
-
 const showNicknameForm = ref(!getStoredNickname());
 const nicknameSaving = ref(false);
-
 const activeTab = ref<"chat" | "intro" | "barrage">("chat");
-const showLiveStartPopup = ref(false);
 
-let adapter: WatchAdapter | null = null;
-const getSdk = () => adapter?.getSdk() ?? null;
-/** 20005/20006 自动重拉次数；每次用户主动 load() 清零 */
-let sdkRetryCount = 0;
-const SDK_MAX_RETRIES = 2;
-let sdkRetryTimer: ReturnType<typeof setTimeout> | null = null;
-
-const { countdown, start: startCountdown, stop: stopCountdown } = useCountdown();
-const barrage = useBarrage(getSdk);
-const chat = useChat({
-  getSdk,
-  getSender: () => ({ id: data.value?.guestId || "", name: data.value?.nickname || "我" }),
-  // 微吼 openBarrage 语义：收到聊天信息也显示为弹幕；重复回声/乐观上屏由 spawnDanmaku 内部去重
-  onIncoming: (msg) => barrage.spawnDanmaku(msg.msg),
-});
-const stats = useRoomStats(getSdk);
-const notice = useAnnouncement(getSdk);
-const player = usePlayerControls({
-  getSdk,
-  onError: (msg) => {
-    error.value = msg;
+const session = useWatchSession({
+  activityId: id,
+  role: "viewer",
+  getNickname: () => getStoredNickname().trim(),
+  getMatchNicknames: () => {
+    const nick = getStoredNickname().trim();
+    return nick ? [nick] : [];
   },
 });
 
-const isLive = computed(() => data.value?.state === 1);
-const isPreview = computed(() => data.value?.state === 2);
-const isEnded = computed(() => data.value?.state === 3);
-const isReplay = computed(() => data.value?.state === 4 || data.value?.state === 5);
-/** type=1 音频直播：浏览器常因自动播放策略把音轨挂起 */
-const isAudioLive = computed(() => data.value?.type === 1);
-
-function handleLiveStart() {
-  if (isPreview.value) {
-    showLiveStartPopup.value = true;
-  }
-}
-
-function enterLive() {
-  showLiveStartPopup.value = false;
-  void load();
-}
-
-async function shareWatch() {
-  const url = `${window.location.origin}/watch/${id}`;
-  try {
-    await navigator.clipboard.writeText(url);
-    alert("观看链接已复制");
-  } catch {
-    prompt("复制观看链接：", url);
-  }
-}
-
-function showGiftPlaceholder() {
-  alert("礼物功能即将上线");
-}
-
-function destroySdk() {
-  chat.cancelHistoryLoad();
-  stats.cancelRoomId?.();
-  if (sdkRetryTimer) {
-    clearTimeout(sdkRetryTimer);
-    sdkRetryTimer = null;
-  }
-  adapter?.destroy();
-  adapter = null;
-}
-
-/** 20005/20006：销毁后重新拉签名再 init（不整页 loading，避免闪一下昵称区） */
-async function retrySdkInit(reason: string) {
-  if (sdkRetryCount >= SDK_MAX_RETRIES) {
-    player.markMediaFailed(`${reason}（已自动重试 ${SDK_MAX_RETRIES} 次仍失败）`);
-    sdkFailed.value = true;
-    return;
-  }
-  sdkRetryCount += 1;
-  console.warn(`SDK 可重试错误，自动重拉签名 ${sdkRetryCount}/${SDK_MAX_RETRIES}:`, reason);
-  player.resetPlayback();
-  player.waitingForMedia = true;
-  destroySdk();
-  try {
-    const res = await getWatchSdk(id, buildWatchParams());
-    storeGuestId(res.guestId);
-    data.value = res;
-    // 若接口已明确结束，直接切结束页，别再 init
-    if (res.state === 3 || res.state === 4 || res.state === 5) {
-      loading.value = false;
-      return;
-    }
-    await initSdk();
-  } catch (e) {
-    player.markMediaFailed(e instanceof Error ? e.message : "重试加载失败");
-    sdkFailed.value = true;
-  }
-}
-
-async function switchToEndedFromLive() {
-  player.resetPlayback();
-  destroySdk();
-  try {
-    const res = await getWatchSdk(id, buildWatchParams());
-    // 微吼状态可能略慢一拍；先强制进结束 UI，时间字段用最新接口
-    data.value = { ...res, state: res.state === 1 ? 3 : res.state };
-  } catch {
-    if (data.value) {
-      data.value = { ...data.value, state: 3 };
-    } else {
-      // API 也失败时，给一个最小 data 让结束态 UI 能渲染
-      data.value = { id, state: 3, title: "", nickname: "", guestId: "" } as WatchSdkData;
-    }
-  }
-}
-
-async function initSdk() {
-  if (!data.value) return;
-
-  loading.value = false;
-  player.resetPlayback();
-  await nextTick();
-
-  try {
-    adapter = createWatchAdapter(data.value.provider ?? "vhall");
-    await adapter.init(data.value, {
-      onError: (msg) => {
-        player.markMediaFailed(formatSdkError(msg));
-        sdkFailed.value = true;
-      },
-      onRetryableError: (text) => {
-        // 本站仍显示直播中/预告时更值得重试；已结束就别空转
-        if (data.value?.state === 1 || data.value?.state === 2) {
-          if (sdkRetryTimer) return;
-          sdkRetryTimer = setTimeout(() => {
-            sdkRetryTimer = null;
-            void retrySdkInit(text);
-          }, 600);
-          return;
-        }
-        player.markMediaFailed(text);
-        sdkFailed.value = true;
-      },
-      onLiveEnded: () => {
-        void switchToEndedFromLive();
-      },
-      onAutoplayFailed: () => player.notifyAutoplayFailed(),
-      onLiveStart: handleLiveStart,
-      onChatMsg: chat.handleChatMessage,
-      onChatDelete: chat.handleChatDelete,
-      onDisableChat: () => chat.setMuted(true),
-      onPermitChat: () => chat.setMuted(false),
-      onAnnouncement: notice.handleAnnouncement,
-      onOnlinePopulation: stats.handleOnlinePopulation,
-      onPraiseTotal: stats.handlePraiseTotal,
-      afterInit: () => {
-        // SDK 的 JSONP 回调名按毫秒时间戳生成，并发调用会同名互踩，必须串行加载
-        void chat.loadChatHistory().then(() => notice.loadHistory());
-        stats.scheduleRoomId();
-        player.scheduleQualityLabels();
-        player.startPlayPoll();
-      },
-    });
-  } catch (e) {
-    adapter?.destroy();
-    adapter = null;
-    throw e;
-  }
-}
-
-function buildWatchParams(): Record<string, string> {
-  const params: Record<string, string> = {};
-  const guestId = getStoredGuestId();
-  const nickname = getStoredNickname();
-  if (guestId) params.guestId = guestId;
-  if (nickname) params.nickname = nickname;
-  return params;
-}
-
-async function load() {
-  loading.value = true;
-  error.value = "";
-  sdkFailed.value = false;
-  useFallback.value = false;
-  sdkRetryCount = 0;
-  data.value = null;
-  stopCountdown();
-  destroySdk();
-  try {
-    const res = await getWatchSdk(id, buildWatchParams());
-    storeGuestId(res.guestId);
-    data.value = res;
-
-    if (res.state === 2 && res.startTime) {
-      startCountdown(res.startTime);
-      await initSdk();
-    } else if (res.state === 1) {
-      await initSdk();
-    } else {
-      loading.value = false;
-    }
-  } catch (e) {
-    sdkFailed.value = true;
-    error.value = e instanceof Error ? e.message : "加载失败";
-    loading.value = false;
-  }
-}
-
-function switchToFallback() {
-  useFallback.value = true;
-  error.value = "";
-}
+const {
+  loading,
+  error,
+  data,
+  sdkFailed,
+  useFallback,
+  showLiveStartPopup,
+  countdown,
+  barrage,
+  chat,
+  stats,
+  notice,
+  player,
+  isLive,
+  isPreview,
+  isEnded,
+  isReplay,
+  isAudioLive,
+  load,
+  enterLiveFromPreview,
+  switchToFallback,
+  shareWatch,
+  showGiftPlaceholder,
+} = session;
 
 async function saveNickname(name: string) {
   if (!name) return;
@@ -267,24 +73,9 @@ function changeNickname() {
   showNicknameForm.value = true;
 }
 
-watch(
-  () => data.value?.state,
-  (newState) => {
-    if (newState === 2 && data.value?.startTime) {
-      startCountdown(data.value.startTime);
-    } else {
-      stopCountdown();
-    }
-  },
-);
-
 onMounted(() => {
-  if (!showNicknameForm.value) {
-    void load();
-  }
+  if (!showNicknameForm.value) void load();
 });
-
-onBeforeUnmount(destroySdk);
 </script>
 
 <template>
@@ -374,7 +165,7 @@ onBeforeUnmount(destroySdk);
           :data="data"
           :countdown="countdown"
           :show-live-start-popup="showLiveStartPopup"
-          @enter="enterLive"
+          @enter="enterLiveFromPreview"
         />
 
         <EndedScreen
@@ -386,7 +177,6 @@ onBeforeUnmount(destroySdk);
           v-else-if="data && isLive"
           class="flex min-h-0 flex-1 flex-col"
         >
-          <!-- 公告横幅 -->
           <div
             v-if="notice.text"
             class="flex flex-none items-center gap-2 bg-amber-600/90 px-4 py-2 text-sm text-white"
@@ -415,9 +205,7 @@ onBeforeUnmount(destroySdk);
               @fallback="switchToFallback"
             />
 
-            <!-- 互动区域（PC） -->
             <div class="flex min-h-0 w-[360px] flex-none flex-col border-l border-gray-800 bg-gray-900">
-              <!-- 标签栏 -->
               <div class="flex flex-none border-b border-gray-800">
                 <button
                   class="flex-1 bg-transparent px-4 py-3 text-sm font-medium"
@@ -451,7 +239,6 @@ onBeforeUnmount(destroySdk);
                 :barrage="barrage"
               />
 
-              <!-- 简介 -->
               <div
                 v-else
                 class="min-h-0 flex-1 overflow-y-auto p-4"

@@ -27,6 +27,8 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
 
   let roomId = "";
   let disposed = false;
+  /** live_over / state 3/4/5：强制 0，忽略迟到 onlinePopulation（含主讲减 1 后仍可能非 0） */
+  let liveEnded = false;
 
   async function loadRoomId() {
     const sdk = getSdk();
@@ -82,8 +84,25 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
   }
 
   function handleOnlinePopulation(data: unknown) {
+    if (liveEnded) {
+      stats.onlineCount = 0;
+      return;
+    }
     const info = data as { uv?: number; total?: number };
-    stats.onlineCount = info.uv || info.total || 0;
+    // 微吼 onlinePopulation 含主讲人；本站统计不显示老师，展示前减 1，且不少于 0
+    const raw = info.uv || info.total || 0;
+    stats.onlineCount = Math.max(0, raw - 1);
+  }
+
+  /** 关播 / 已结束：实时在线人数强制 0 */
+  function markLiveEnded() {
+    liveEnded = true;
+    stats.onlineCount = 0;
+  }
+
+  /** 换场次或重新进房前复位，允许再吃 onlinePopulation */
+  function resetLiveEnded() {
+    liveEnded = false;
   }
 
   function handlePraiseTotal(data: unknown) {
@@ -103,6 +122,8 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
     handleOnlinePopulation,
     handlePraiseTotal,
     scheduleRoomId,
+    markLiveEnded,
+    resetLiveEnded,
   });
 }
 

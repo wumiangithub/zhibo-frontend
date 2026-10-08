@@ -13,6 +13,7 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
+      // 观看 / 进出 / 中控台名单一律 live-service
       "/api": {
         target: "http://127.0.0.1:8082",
         changeOrigin: true,

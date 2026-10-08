@@ -144,9 +144,16 @@ export function useChat(options: ChatOptions) {
     trimList();
   }
 
-  function handleChatMessage(data: unknown) {
-    const msg = normalizeChatItem(data as Record<string, any>);
+  function handleChatMessage(data: VhallChatMsgMessage) {
+    const msg = normalizeChatItem(data as unknown as Record<string, any>);
     if (!msg) return;
+    // 实时推送带 date_time / msg_id，归一化历史字段对不上时补上
+    if (!msg.msgId && data.msg_id) msg.msgId = data.msg_id;
+    if (data.date_time) {
+      const t = Date.parse(data.date_time.replace(" ", "T"));
+      if (!Number.isNaN(t)) msg.timestamp = t;
+    }
+    if (!msg.sender_id && data.sender_id) msg.sender_id = data.sender_id;
     pushChatMessage(msg);
     onIncoming?.(msg);
   }

@@ -13,6 +13,13 @@
 
 缺接口写在 `docs/进度.md` 阻塞项。提交前缀 `[frontend]`。
 
+## 依赖版本（D36，强制）
+
+- `admin-web` / `live-web` 的 `package.json`：**禁止** `^`、`~`、`*`、`latest`，版本写到补丁号。
+- 必须提交 `package-lock.json`；装依赖优先 `npm ci`。
+- 已有 `.npmrc`：`save-exact=true`。新增包后检查没有浮动范围。
+- 升级第三方库：改 `package.json` + 重装更新 lock，写进进度说明原因；不要默默升小版本。
+
 ## 代码评审
 
 另有一个**技术总监** agent 只做 code review，结论写在 `../zhibo-shared/docs/代码评审.md`，他不改你的代码。有派给「前端」的条目就修，修完把那条状态改成 `已修` 并留一句怎么改的；不认同可以填 `不修` + 原因，别默默跳过。

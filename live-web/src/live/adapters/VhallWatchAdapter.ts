@@ -51,11 +51,21 @@ export class VhallWatchAdapter implements WatchAdapter {
     });
 
     // 官方：H5 活动直播结束 → live_over；streamOver 为旧 Flash 事件，一并听作兜底
-    this.sdk.$on("live_over", handlers.onLiveEnded);
-    this.sdk.$on("streamOver", handlers.onLiveEnded);
+    // 日志前缀统一 [vhall-sdk]，方便和控制台里的用户上下线推送对比先后
+    this.sdk.$on("live_over", (data) => {
+      console.log(`[vhall-sdk] live_over @ ${new Date().toISOString()}`, data);
+      handlers.onLiveEnded();
+    });
+    this.sdk.$on("streamOver", (data) => {
+      console.log(`[vhall-sdk] streamOver @ ${new Date().toISOString()}`, data);
+      handlers.onLiveEnded();
+    });
 
     this.sdk.$on("vhallplay_AUTOPLAY_FAILED", handlers.onAutoplayFailed);
-    this.sdk.$on("chatMsg", handlers.onChatMsg);
+    this.sdk.$on("chatMsg", (msg: VhallChatMsgMessage) => {
+      console.log(`[vhall-sdk] chatMsg @ ${new Date().toISOString()}`, msg);
+      handlers.onChatMsg(msg);
+    });
     this.sdk.$on("chatDelete", handlers.onChatDelete);
     this.sdk.$on("disableChat", handlers.onDisableChat);
     this.sdk.$on("permitChat", handlers.onPermitChat);
@@ -64,12 +74,13 @@ export class VhallWatchAdapter implements WatchAdapter {
     this.sdk.$on("onlinePopulation", handlers.onOnlinePopulation);
     this.sdk.$on("EVENT_PRAISE_TOTAL", handlers.onPraiseTotal);
 
-    // 调试：进出房事件，看微吼回调结构（正式逻辑后续再接）
-    this.sdk.$on("userOnline", (data: unknown) => {
-      console.log("[vhall] userOnline", data);
+    this.sdk.$on("userOnline", (msg: VhallUserPresenceMessage) => {
+      console.log(`[vhall-sdk] userOnline @ ${new Date().toISOString()}`, msg);
+      handlers.onUserOnline(msg);
     });
-    this.sdk.$on("userOffline", (data: unknown) => {
-      console.log("[vhall] userOffline", data);
+    this.sdk.$on("userOffline", (msg: VhallUserPresenceMessage) => {
+      console.log(`[vhall-sdk] userOffline @ ${new Date().toISOString()}`, msg);
+      handlers.onUserOffline(msg);
     });
 
     handlers.afterInit();

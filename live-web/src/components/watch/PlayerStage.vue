@@ -80,7 +80,7 @@ const emit = defineEmits<{ share: []; gift: []; retry: []; fallback: [] }>();
         <h2 class="mt-2 text-xl font-semibold text-white">{{ title }}</h2>
       </div>
 
-      <div class="audio-eq" aria-hidden="true">
+      <div class="audio-eq" :class="{ 'is-paused': player.isPaused }" aria-hidden="true">
         <span
           v-for="i in 5"
           :key="i"
@@ -90,8 +90,18 @@ const emit = defineEmits<{ share: []; gift: []; retry: []; fallback: [] }>();
       </div>
 
       <p class="text-sm text-gray-400">
-        正在播放音频直播
+        {{ player.isPaused ? '已暂停' : '正在播放音频直播' }}
       </p>
+
+      <button
+        v-if="!player.needsTapToPlay && !player.waitingForMedia && !player.mediaFailed"
+        type="button"
+        class="rounded-md bg-white/10 px-5 py-2.5 text-sm font-medium text-white hover:bg-white/20"
+        :title="player.isPaused ? '继续收听' : '暂停'"
+        @click="player.togglePlayback"
+      >
+        {{ player.isPaused ? '继续收听' : '暂停' }}
+      </button>
     </div>
 
     <div
@@ -110,7 +120,7 @@ const emit = defineEmits<{ share: []; gift: []; retry: []; fallback: [] }>();
 
     <BarrageLayer :barrage="barrage" />
 
-    <!-- 礼物/点赞/在线/分享：Teleport 进 SDK 控制栏，靠右对齐 -->
+    <!-- 礼物/点赞/弹幕/分享：Teleport 进 SDK 控制栏靠右；播放/暂停用 SDK 左侧按钮，勿重复 -->
     <Teleport v-if="player.controllerEl" :to="player.controllerEl">
       <div class="player-bar-actions">
         <!-- 弹幕开关：点击切换显示，设置在弹幕 tab 内 -->
@@ -373,5 +383,10 @@ const emit = defineEmits<{ share: []; gift: []; retry: []; fallback: [] }>();
 .audio-eq__bar:nth-child(5) {
   height: 32px;
   animation-duration: 0.95s;
+}
+
+.audio-eq.is-paused .audio-eq__bar {
+  animation-play-state: paused;
+  opacity: 0.45;
 }
 </style>

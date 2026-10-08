@@ -87,6 +87,20 @@ function onShellClick(label: string) {
   toast(`「${label}」暂未开放`);
 }
 
+/** 侧栏「直播中控台」：新窗口打开独立列表页 */
+function openLiveConsole() {
+  const url = `${window.location.origin}/live-console`;
+  window.open(url, "_blank", "noopener");
+}
+
+function onSideClick(item: { key: string; label: string }) {
+  if (item.key === "console" || item.key === "live-console") {
+    openLiveConsole();
+    return;
+  }
+  onShellClick(item.label);
+}
+
 function goHome() {
   void router.push("/");
 }
@@ -213,7 +227,7 @@ function goHome() {
               v-else
               type="button"
               class="side-nav-item"
-              @click="onShellClick(item.label)"
+              @click="onSideClick(item)"
             >
               <SideIcon
                 v-if="sideIconOf(item)"
