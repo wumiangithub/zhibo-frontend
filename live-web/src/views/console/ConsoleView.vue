@@ -226,6 +226,26 @@ onMounted(() => {
           v-else-if="isEnded || isReplay"
           class="sdk-tag"
         >已结束</span>
+        <button
+          type="button"
+          class="share-btn"
+          title="分享"
+          @click="shareWatch"
+        >
+          <svg
+            class="share-btn-icon"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+            />
+          </svg>
+        </button>
       </header>
 
       <div
@@ -289,7 +309,6 @@ onMounted(() => {
           :title="data.title"
           :is-audio-live="isAudioLive"
           :can-fallback="!!data.embedUrl"
-          @share="shareWatch"
           @gift="showGiftPlaceholder"
           @retry="load"
           @fallback="switchToFallback"
@@ -405,6 +424,31 @@ onMounted(() => {
   background: #f0f0f0;
   color: #666;
   font-size: 12px;
+}
+
+.share-btn {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+}
+
+.share-btn:hover {
+  color: #ef4444;
+  background: #f5f5f5;
+}
+
+.share-btn-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .sdk-tag.is-on {

@@ -108,9 +108,15 @@ export class VhallWatchAdapter implements WatchAdapter {
     // 隐藏控制条：SDK 自带 .hiddneControl（拼写即为 hiddne）。
     // moduleReady=模块就绪、vhallplay_LOADED=视频加载完；二者先后不定且可能只来其一，都听并幂等加 class。
     // 容器由 SDK 异步插入，事件可能早于 DOM，故短时 MutationObserver 兜底；destroy 时断开防泄漏。
-    const onPlayerUiReady = () => this.applyHiddneControl();
-    this.sdk.$on("moduleReady", onPlayerUiReady);
-    this.sdk.$on("vhallplay_LOADED", onPlayerUiReady);
+    this.sdk.$on("moduleReady", () => {
+      this.applyHiddneControl();
+      // 对齐 demo：isModuleReady 后再拉历史/房间信息；勿在 new 后立刻调
+      handlers.onModuleReady?.();
+    });
+    this.sdk.$on("vhallplay_LOADED", () => {
+      this.applyHiddneControl();
+      handlers.onPlayerLoaded?.();
+    });
     this.applyHiddneControl();
     this.armHideControlObserver();
 
@@ -127,6 +133,11 @@ export class VhallWatchAdapter implements WatchAdapter {
       }
     }
     this.sdk = null;
+    // SPA 重入 init 前清空容器，避免残留节点叠在二次 new 上（整页刷新本身已干净）
+    const playerEl = document.querySelector("#player");
+    const docEl = document.querySelector("#docWrap");
+    if (playerEl) playerEl.innerHTML = "";
+    if (docEl) docEl.innerHTML = "";
   }
 
   /** 给播放器壳与 shadow 加 SDK 自带 class；classList.add 天然幂等 */

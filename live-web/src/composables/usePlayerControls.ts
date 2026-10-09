@@ -1,9 +1,14 @@
-import { onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import { onBeforeUnmount, onMounted, reactive } from "vue";
 
 export interface PlayerControlsOptions {
   getSdk: () => VhallSdkInstance | null;
   /** 非自动播放类的真实错误交给页面显示 */
   onError: (msg: string) => void;
+}
+
+export interface QualityOption {
+  code: string;
+  label: string;
 }
 
 function findPlayerMedia(): HTMLMediaElement | null {
@@ -14,55 +19,98 @@ function findPlayerMedia(): HTMLMediaElement | null {
   );
 }
 
+/** 联调日志用：分别探测 #player 内 video / audio / #player-vhall-video */
+function inspectPlayerMediaPresence() {
+  return {
+    video: !!document.querySelector("#player video"),
+    audio: !!document.querySelector("#player audio"),
+    vhallVideo: !!document.querySelector("#player-vhall-video"),
+  };
+}
+
+/** same=原画、a=音频，其余数字档按从高到低叫 高清/标清/流畅 */
+function codesToQualityOptions(list: string[]): QualityOption[] {
+  const numeric = list
+    .map((c) => c.replace(/\D/g, ""))
+    .filter((n) => n !== "")
+    .sort((a, b) => Number(b) - Number(a));
+  const rankNames = ["高清", "标清", "流畅"];
+  return list.map((code) => {
+    const digits = code.replace(/\D/g, "");
+    let label: string;
+    if (code === "same") label = "原画";
+    else if (code === "a") label = "音频";
+    else if (digits) label = rankNames[numeric.indexOf(digits)] || `${digits}p`;
+    else label = code;
+    return { code, label };
+  });
+}
+
 /**
- * 播放器交互补丁：
- * - 等 `<video>` 出现后再出「点击播放」；过早点击会因 await 丢掉用户手势，浏览器静默拦 play()
- * - 进房默认不播放，等用户手势；被自动播放策略拦住时出「点击播放」遮罩
+ * 播放器交互（自建底栏，不依赖微吼 `.vh-player-controller`）：
+ * - 等 `<video>` 出现后再出「点击播放」；过早点击会因 await 丢掉用户手势
  * - 直播中微吼常不提供暂停，学员/助理用自建暂停/继续（直操作 media）
- * - SDK 全屏按钮在无 fullscreen 权限的环境里静默失败，用 fixed 铺满视口兜底
- * - 清晰度下拉文案按 canPlayDefinitions 码值改写，并自己维护选中态
+ * - 清晰度走文档 `player` API；音量/静音只走 HTMLMediaElement（不调 setMute/getVolume）
+ * - 全屏优先舞台 requestFullscreen，失败伪全屏
  */
 export function usePlayerControls(options: PlayerControlsOptions) {
   const { getSdk, onError } = options;
 
   const player = reactive({
     needsTapToPlay: false,
-    /** SDK 还没建好 video/audio，遮罩显示「加载中」而不是「点击播放」 */
     waitingForMedia: false,
-    /** 轮询超时仍无媒体节点 */
     mediaFailed: false,
-    /** 失败原因（如 SDK 20005），给遮罩展示 */
     failReason: "",
-    /** 用户已开始观看后是否处于暂停（与 needsTapToPlay 进房手势遮罩区分） */
     isPaused: false,
-    /** SDK 的全屏被拒绝时的 CSS 兜底 */
+    /** SDK 的全屏被拒绝时的 CSS 兜底（作用在舞台根，含自建底栏） */
     pseudoFullscreen: false,
-    /** SDK 控制栏 DOM，异步生成；Teleport 把互动按钮挂进去 */
-    controllerEl: ref<HTMLElement | null>(null),
+    isFullscreen: false,
+    qualityOptions: [] as QualityOption[],
+    currentQualityCode: "",
+    /** 音量 0～100，与 media.volume 同步（非 SDK getVolume） */
+    volume: 50,
+    muted: false,
   });
 
   let playPollTimer: ReturnType<typeof setInterval> | null = null;
+  let mediaStateTimer: ReturnType<typeof setInterval> | null = null;
   let playInProgress = false;
-  // 用户是否主动点过播放；进房默认不播放，SDK 自行起播也要暂停等用户点击
   let playRequested = false;
-  /** 用户主动点了暂停：轮询/SDK 起播时不要当成「被策略拦住」再出点击遮罩 */
   let userPaused = false;
   let disposed = false;
   let boundMedia: HTMLMediaElement | null = null;
-  /** SDK 文案（480p 等）→ 展示文案（高清 等），loadQualityLabels 填充 */
-  const qualityLabelMap: Record<string, string> = {};
+  let stageEl: HTMLElement | null = null;
+  let volumeBeforeMute = 50;
+  /** 拖拽滑条期间禁止 sync 回写，避免 UI 被瞬时旧值拽回中间 */
+  let volumeDragging = false;
+
+  function applyPausedUi(paused: boolean) {
+    if (player.waitingForMedia || player.mediaFailed) {
+      player.isPaused = paused;
+      return;
+    }
+    if (!playRequested) {
+      player.isPaused = true;
+      player.needsTapToPlay = true;
+      return;
+    }
+    player.isPaused = paused;
+    player.needsTapToPlay = paused;
+  }
 
   function onMediaPlay() {
-    player.isPaused = false;
+    if (!playRequested) {
+      applyPausedUi(true);
+      return;
+    }
+    applyPausedUi(false);
     userPaused = false;
   }
 
   function onMediaPause() {
-    // 进房还没点过播放时的强制 pause 不算「用户暂停观看」
-    if (!playRequested) return;
-    player.isPaused = true;
-    // SDK 左侧暂停按钮也会走到这里，标记为主动暂停，避免再出「点击播放」遮罩
-    userPaused = true;
+    if (player.waitingForMedia) return;
+    applyPausedUi(true);
+    if (playRequested) userPaused = true;
   }
 
   function unbindMediaEvents() {
@@ -78,118 +126,126 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     boundMedia = media;
     media.addEventListener("play", onMediaPlay);
     media.addEventListener("pause", onMediaPause);
-    if (playRequested) player.isPaused = media.paused;
+    if (!player.waitingForMedia) applyPausedUi(media.paused);
+  }
+
+  function bindStageEl(el: HTMLElement | null) {
+    stageEl = el;
   }
 
   function applyPseudoFullscreen(on: boolean) {
-    if (player.pseudoFullscreen === on) return;
+    const changed = player.pseudoFullscreen !== on;
     player.pseudoFullscreen = on;
-    // 容器尺寸变了，通知播放器重新布局（弹幕层等按 window resize 计算）
+    player.isFullscreen = on || !!document.fullscreenElement;
+    if (!changed) return;
     requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
   }
 
-  /** 把清晰度按钮上的当前档同步成下拉条目的高亮 */
-  function syncQualityActive() {
-    const btn = document.querySelector("#player .vh-definition-btn");
-    if (!btn) return;
-    let current = (btn.textContent || "").trim();
-    if (qualityLabelMap[current]) {
-      btn.textContent = qualityLabelMap[current];
-      current = qualityLabelMap[current];
-    }
-    document.querySelectorAll("#player .vh-quality-item").forEach((el) => {
-      el.classList.toggle("is-active", (el.textContent || "").trim() === current);
-    });
+  function syncVolumeFromMedia() {
+    if (volumeDragging) return;
+    const media = findPlayerMedia();
+    if (!media) return;
+    player.muted = media.muted || media.volume === 0;
+    player.volume = Math.round((media.muted ? 0 : media.volume) * 100);
   }
 
-  /** 按文档 canPlayDefinitions 的码值改写下拉文案：same=原画、a=音频，其余按档位叫 高清/标清/流畅 */
-  function loadQualityLabels() {
+  function setVolume(level: number) {
+    const v = Math.max(0, Math.min(100, Math.round(level)));
+    player.volume = v;
+    player.muted = v === 0;
+    if (v > 0) volumeBeforeMute = v;
+    const media = findPlayerMedia();
+    if (!media) return;
+    media.volume = v / 100;
+    media.muted = v === 0;
+  }
+
+  function beginVolumeDrag() {
+    volumeDragging = true;
+  }
+
+  /** 把当前 UI 音量写回 media（拖拽松手后对齐一次） */
+  function applyMediaVolumeFromState() {
+    const media = findPlayerMedia();
+    if (!media) return;
+    const v = player.volume;
+    const muted = player.muted || v === 0;
+    media.muted = muted;
+    media.volume = muted ? 0 : Math.max(0, Math.min(1, v / 100));
+  }
+
+  function endVolumeDrag() {
+    if (!volumeDragging) return;
+    volumeDragging = false;
+    applyMediaVolumeFromState();
+  }
+
+  function toggleMute() {
+    if (player.muted || player.volume === 0) {
+      setVolume(volumeBeforeMute > 0 ? volumeBeforeMute : 50);
+    } else {
+      volumeBeforeMute = player.volume > 0 ? player.volume : 50;
+      setVolume(0);
+    }
+  }
+
+  function loadQualities() {
     const playerMod = getSdk()?.player;
     if (!playerMod?.canPlayDefinitions) return;
-    // 播放器未就绪时 SDK 内部会抛错，由调用方重试
     playerMod.canPlayDefinitions((list: string[]) => {
-      if (!Array.isArray(list)) return;
-      const items = document.querySelectorAll("#player .vh-quality-item");
-      if (items.length !== list.length) return;
-      // 码值形如 same / a / 480p，先抽出数字位再排档位
-      const numeric = list
-        .map((c) => c.replace(/\D/g, ""))
-        .filter((n) => n !== "")
-        .sort((a, b) => Number(b) - Number(a));
-      const rankNames = ["高清", "标清", "流畅"];
-      list.forEach((code, i) => {
-        const el = items[i];
-        let sdkLabel = el.getAttribute("data-sdk-label");
-        if (!sdkLabel) {
-          sdkLabel = (el.textContent || "").trim();
-          el.setAttribute("data-sdk-label", sdkLabel);
-        }
-        const digits = code.replace(/\D/g, "");
-        let label: string;
-        if (code === "same") label = "原画";
-        else if (code === "a") label = "音频";
-        else if (digits) label = rankNames[numeric.indexOf(digits)] || `${digits}p`;
-        else label = code;
-        if (!qualityLabelMap[sdkLabel]) qualityLabelMap[sdkLabel] = label;
-        el.textContent = label;
-      });
-      syncQualityActive();
-    });
-  }
-
-  /** SDK 可能重渲染下拉，按已记录的映射把文案刷回来 */
-  function reapplyQualityLabels() {
-    document.querySelectorAll("#player .vh-quality-item").forEach((el) => {
-      const sdkLabel = el.getAttribute("data-sdk-label");
-      if (sdkLabel && qualityLabelMap[sdkLabel]) {
-        el.textContent = qualityLabelMap[sdkLabel];
+      if (!Array.isArray(list) || list.length === 0) return;
+      player.qualityOptions = codesToQualityOptions(list);
+      if (!player.currentQualityCode || !list.includes(player.currentQualityCode)) {
+        player.currentQualityCode = list.includes("same") ? "same" : list[0];
       }
     });
   }
 
-  function syncControllerEl() {
-    player.controllerEl = document.querySelector<HTMLElement>("#player .vh-player-controller");
-  }
-
-  /** 播放器就绪前 canPlayDefinitions 会抛错/不回调，轮询重试直到拿到码值 */
+  /** 播放器就绪前 canPlayDefinitions 会抛错/不回调，轮询重试 */
   function scheduleQualityLabels(tries = 0) {
     window.setTimeout(() => {
       if (disposed) return;
-      syncControllerEl();
       try {
-        loadQualityLabels();
+        loadQualities();
       } catch {
         /* 播放器未就绪 */
       }
-      if (Object.keys(qualityLabelMap).length === 0 && tries < 9) {
+      if (player.qualityOptions.length === 0 && tries < 9) {
         scheduleQualityLabels(tries + 1);
-      } else {
-        syncQualityActive();
       }
     }, 1500);
   }
 
-  function handlePlayerClick(e: MouseEvent) {
-    const target = e.target as HTMLElement | null;
-    if (!target) return;
-    if (target.closest("#vhExitFullScreen")) {
-      applyPseudoFullscreen(false);
-      return;
-    }
-    if (target.closest("#vhFullScreen")) {
-      window.setTimeout(() => {
-        if (!document.fullscreenElement) applyPseudoFullscreen(true);
-      }, 200);
-    }
-    // 切清晰度后 SDK 只更新按钮文字，下拉里的选中态需要我们自己标
-    window.setTimeout(() => {
-      reapplyQualityLabels();
-      syncQualityActive();
-    }, 300);
+  function setQuality(code: string) {
+    const playerMod = getSdk()?.player;
+    if (!playerMod?.setPlayerDefinition) return;
+    playerMod.setPlayerDefinition(code);
+    player.currentQualityCode = code;
   }
 
   function handleFullscreenChange() {
-    if (document.fullscreenElement) applyPseudoFullscreen(false);
+    if (document.fullscreenElement) {
+      if (player.pseudoFullscreen) player.pseudoFullscreen = false;
+      player.isFullscreen = true;
+      return;
+    }
+    player.isFullscreen = player.pseudoFullscreen;
+  }
+
+  function enterFullscreen() {
+    const el = stageEl;
+    if (el && typeof el.requestFullscreen === "function") {
+      void el.requestFullscreen().catch(() => applyPseudoFullscreen(true));
+      return;
+    }
+    applyPseudoFullscreen(true);
+  }
+
+  function exitFullscreen() {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    player.pseudoFullscreen = false;
+    player.isFullscreen = false;
+    requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
   }
 
   function handleGlobalKeydown(e: KeyboardEvent) {
@@ -203,66 +259,81 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     }
   }
 
+  function stopMediaStatePoll() {
+    if (mediaStateTimer) {
+      clearInterval(mediaStateTimer);
+      mediaStateTimer = null;
+    }
+  }
+
+  function startMediaStatePoll() {
+    if (mediaStateTimer) return;
+    mediaStateTimer = setInterval(() => {
+      if (disposed || player.waitingForMedia || player.mediaFailed) return;
+      const media = findPlayerMedia();
+      if (!media) return;
+      bindMediaEvents(media);
+      applyPausedUi(media.paused);
+      syncVolumeFromMedia();
+    }, 500);
+  }
+
   function showTapOverlay() {
     player.waitingForMedia = false;
     player.mediaFailed = false;
     player.failReason = "";
     player.needsTapToPlay = true;
+    player.isPaused = true;
+    startMediaStatePoll();
   }
 
-  /** SDK 致命错误或超时：立刻出失败遮罩，不再干等 */
   function markMediaFailed(reason = "播放器加载失败") {
     stopPlayPoll();
     player.waitingForMedia = false;
     player.needsTapToPlay = false;
+    player.isPaused = false;
     player.mediaFailed = true;
     player.failReason = reason;
+    stopMediaStatePoll();
+  }
+
+  function tryAdvanceMediaReady(media: HTMLMediaElement): boolean {
+    bindMediaEvents(media);
+    syncVolumeFromMedia();
+    if (!playRequested) {
+      showTapOverlay();
+      stopPlayPoll();
+      return true;
+    }
+    if (userPaused || media.paused) {
+      player.waitingForMedia = false;
+      player.mediaFailed = false;
+      applyPausedUi(true);
+      stopPlayPoll();
+      startMediaStatePoll();
+      return true;
+    }
+    player.waitingForMedia = false;
+    player.mediaFailed = false;
+    applyPausedUi(false);
+    stopPlayPoll();
+    startMediaStatePoll();
+    return true;
   }
 
   function startPlayPoll() {
     stopPlayPoll();
+    stopMediaStatePoll();
     player.waitingForMedia = true;
     player.mediaFailed = false;
     player.needsTapToPlay = false;
+    player.isPaused = false;
     let tries = 0;
     playPollTimer = setInterval(() => {
       tries += 1;
       const media = findPlayerMedia();
-      if (media) {
-        bindMediaEvents(media);
-        // 进房默认不播放：用户没点过之前，SDK 若自行起播（通常静音）也暂停并保留遮罩
-        if (!playRequested) {
-          if (!media.paused) media.pause();
-          showTapOverlay();
-          stopPlayPoll();
-          return;
-        }
-        // 用户主动暂停：保持暂停态，不要当成自动播放失败
-        if (userPaused) {
-          player.waitingForMedia = false;
-          player.mediaFailed = false;
-          player.needsTapToPlay = false;
-          player.isPaused = true;
-          stopPlayPoll();
-          return;
-        }
-        // readyState>=2 有数据但仍 paused → 多半被自动播放策略拦住
-        if (media.paused && media.readyState >= 2) {
-          showTapOverlay();
-          stopPlayPoll();
-          return;
-        }
-        if (!media.paused) {
-          player.waitingForMedia = false;
-          player.mediaFailed = false;
-          player.needsTapToPlay = false;
-          player.isPaused = false;
-          stopPlayPoll();
-          return;
-        }
-      }
+      if (media && tryAdvanceMediaReady(media)) return;
       if (tries >= 40) {
-        // 约 20s 仍无 <video>：不是自动播放问题，提示加载失败
         if (!findPlayerMedia()) {
           markMediaFailed("播放器长时间未就绪");
         } else {
@@ -273,10 +344,31 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     }, 500);
   }
 
+  function onVhallPlayLoaded() {
+    const at = new Date().toISOString();
+    const presence = inspectPlayerMediaPresence();
+    console.log(`[player] vhallplay_LOADED @ ${at}`, presence);
+    const media = findPlayerMedia();
+    if (!media) {
+      console.warn(
+        `[player] vhallplay_LOADED @ ${at} 已回调但 #player 内未找到 video/audio/#player-vhall-video，不推进就绪（继续轮询）`,
+        presence,
+      );
+      return;
+    }
+    if (tryAdvanceMediaReady(media)) {
+      console.log(`[player] vhallplay_LOADED @ ${at} 已找到媒体并推进就绪`, presence);
+    } else {
+      console.warn(
+        `[player] vhallplay_LOADED @ ${at} 已找到媒体但尚未可决出播放态（readyState/paused），继续轮询`,
+        { presence, paused: media.paused, readyState: media.readyState },
+      );
+    }
+  }
+
   async function resumePlayback() {
     if (playInProgress) return;
     const media = findPlayerMedia();
-    // 媒体还没建好：绝不能 await 等待后再 play()——会丢掉用户手势，浏览器静默 NotAllowedError
     if (!media) {
       player.waitingForMedia = true;
       player.needsTapToPlay = false;
@@ -290,17 +382,20 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     playRequested = true;
     userPaused = false;
     try {
+      // 起播解除静音；已有用户音量则保留，否则抬到 ≥0.5 方便出声
       media.muted = false;
-      media.volume = Math.max(media.volume, 0.5);
-      // 必须在手势调用栈里同步发起 play()，中间不能先 await
+      if (player.volume > 0) media.volume = player.volume / 100;
+      else media.volume = Math.max(media.volume, 0.5);
+      player.muted = false;
+      player.volume = Math.round(media.volume * 100);
+      if (player.volume > 0) volumeBeforeMute = player.volume;
       await media.play();
-      player.needsTapToPlay = false;
       player.waitingForMedia = false;
       player.mediaFailed = false;
-      player.isPaused = false;
+      applyPausedUi(false);
+      startMediaStatePoll();
     } catch (e) {
       showTapOverlay();
-      // 自动播放被策略拦截、或 play 被换源打断都是可重试的常态，只出“点击播放”遮罩，不弹错误横幅
       const benign =
         e instanceof DOMException
           ? e.name === "AbortError" || e.name === "NotAllowedError"
@@ -313,21 +408,19 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     }
   }
 
-  /** 直播中暂停观看：冻结本地画面/声音，不退房；点继续再追到最新流 */
   function pausePlayback() {
-    if (!playRequested || player.needsTapToPlay || player.waitingForMedia || player.mediaFailed) {
+    if (player.waitingForMedia || player.mediaFailed) {
       return;
     }
     const media = findPlayerMedia();
     if (!media) return;
     bindMediaEvents(media);
     userPaused = true;
+    playRequested = true;
     media.pause();
-    player.isPaused = true;
-    player.needsTapToPlay = false;
+    applyPausedUi(true);
   }
 
-  /** 已开播后切换暂停 / 继续；进房首次播放仍走 resumePlayback */
   function togglePlayback() {
     if (!playRequested || player.needsTapToPlay) {
       void resumePlayback();
@@ -342,9 +435,11 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     else pausePlayback();
   }
 
-  /** SDK 明确告知自动播放失败，比轮询更准 */
   function notifyAutoplayFailed() {
-    if (userPaused) return;
+    if (userPaused) {
+      applyPausedUi(true);
+      return;
+    }
     if (findPlayerMedia()) showTapOverlay();
     else {
       player.waitingForMedia = true;
@@ -352,9 +447,9 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     }
   }
 
-  /** 重建播放器（如切到结束态）前复位手势状态 */
   function resetPlayback() {
     stopPlayPoll();
+    stopMediaStatePoll();
     unbindMediaEvents();
     playRequested = false;
     userPaused = false;
@@ -363,6 +458,10 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     player.mediaFailed = false;
     player.failReason = "";
     player.isPaused = false;
+    player.isFullscreen = false;
+    player.pseudoFullscreen = false;
+    player.qualityOptions = [];
+    player.currentQualityCode = "";
   }
 
   onMounted(() => {
@@ -376,6 +475,8 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     document.removeEventListener("keydown", handleGlobalKeydown);
     unbindMediaEvents();
     stopPlayPoll();
+    stopMediaStatePoll();
+    stageEl = null;
   });
 
   return Object.assign(player, {
@@ -386,10 +487,17 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     stopPlayPoll,
     resetPlayback,
     notifyAutoplayFailed,
+    onVhallPlayLoaded,
     markMediaFailed,
-    handlePlayerClick,
-    syncControllerEl,
+    bindStageEl,
+    enterFullscreen,
+    exitFullscreen,
     scheduleQualityLabels,
+    setQuality,
+    setVolume,
+    toggleMute,
+    beginVolumeDrag,
+    endVolumeDrag,
   });
 }
 

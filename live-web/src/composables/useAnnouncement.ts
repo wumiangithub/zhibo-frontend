@@ -28,7 +28,10 @@ export function useAnnouncement(getSdk: () => VhallSdkInstance | null) {
         }
       }
     } catch (e) {
-      console.warn("加载公告历史失败", e);
+      // 与聊天历史同路：偶发 CORS；已有实时公告时不刷 warn
+      if (!notice.text) {
+        console.warn("加载公告历史失败", e);
+      }
     }
   }
 

@@ -192,6 +192,10 @@ export function useChat(options: ChatOptions) {
     return !!(w.vhsdklInfo?.interact_token || w.interact_token);
   }
 
+  /**
+   * 拉直播历史（SDK → open-api .../chat/get-list）。
+   * 成功才整体替换列表；失败不碰已有消息（实时 chatMsg / 先前成功页仍可展示）。
+   */
   async function loadChatHistory() {
     const sdk = getSdk();
     if (!sdk) return;
@@ -205,7 +209,10 @@ export function useChat(options: ChatOptions) {
       chat.chatMessages = items.reverse();
       scrollChatToBottom();
     } catch (e) {
-      console.warn("加载聊天历史失败", e);
+      // 偶发 CORS/Network（localhost→open-api）；列表已有内容时 warn 易误导成「历史没了」
+      if (chat.chatMessages.length === 0) {
+        console.warn("加载聊天历史失败", e);
+      }
       throw e;
     }
   }
@@ -223,9 +230,12 @@ export function useChat(options: ChatOptions) {
           await onReady?.();
         })
         .catch(() => {
-          // 就绪后仍失败再补拉（login 边缘态 / 瞬时断连）
+          // 就绪后仍失败再补拉（login 边缘态 / 瞬时 CORS / 断连）
           if (historyDisposed) return;
           if (tries >= 18) {
+            if (chat.chatMessages.length === 0) {
+              console.warn("加载聊天历史已放弃重试（列表仍空）");
+            }
             void onReady?.();
             return;
           }

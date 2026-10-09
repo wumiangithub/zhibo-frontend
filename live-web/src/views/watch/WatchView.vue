@@ -112,7 +112,7 @@ onBeforeUnmount(() => {
       />
 
       <template v-else>
-        <!-- 小屏顶栏：头像 + 昵称 | 首页 -->
+        <!-- 小屏顶栏：头像 + 昵称 | 分享 + 首页 -->
         <div class="flex flex-none items-center justify-between gap-3 border-b border-gray-800 px-3 py-2 md:hidden">
           <button
             type="button"
@@ -122,16 +122,33 @@ onBeforeUnmount(() => {
             <span class="h-8 w-8 flex-none rounded-full bg-gray-700" />
             <span class="truncate text-sm text-gray-100">{{ displayNickname }}</span>
           </button>
-          <button
-            type="button"
-            class="flex h-9 w-9 flex-none items-center justify-center rounded-md bg-transparent text-gray-300 hover:bg-gray-800 hover:text-white"
-            title="首页"
-            @click="goHome"
-          >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h3a1 1 0 001-1V10" />
-            </svg>
-          </button>
+          <div class="flex flex-none items-center gap-1">
+            <button
+              type="button"
+              class="flex h-9 w-9 flex-none items-center justify-center rounded-md bg-transparent text-white hover:bg-gray-800 hover:text-red-500"
+              title="分享"
+              @click="shareWatch"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="flex h-9 w-9 flex-none items-center justify-center rounded-md bg-transparent text-gray-300 hover:bg-gray-800 hover:text-white"
+              title="首页"
+              @click="goHome"
+            >
+              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h3a1 1 0 001-1V10" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <!-- PC 顶栏 -->
@@ -149,6 +166,21 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <div class="flex flex-none items-center gap-3">
+            <button
+              type="button"
+              class="flex h-7 w-7 flex-none items-center justify-center rounded bg-transparent text-white hover:text-red-500"
+              title="分享"
+              @click="shareWatch"
+            >
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
+                />
+              </svg>
+            </button>
             <span class="flex items-center gap-1 text-xs text-gray-300">
               <span class="h-2 w-2 rounded-full bg-green-500"></span>
               {{ stats.onlineCount }}
@@ -248,7 +280,6 @@ onBeforeUnmount(() => {
               :can-fallback="!!data.embedUrl"
               mobile-aspect-video
               hide-mobile-bar-actions
-              @share="shareWatch"
               @gift="showGiftPlaceholder"
               @retry="load"
               @fallback="switchToFallback"

@@ -48,11 +48,18 @@ export function useWatchSession(opts: WatchSessionOptions) {
 
   let adapter: WatchAdapter | null = null;
   const getSdk = () => adapter?.getSdk() ?? null;
+  /**
+   * 可重试错误（20005/20006）是否自动 destroy 再拉签名 init。
+   * 默认 false：贴官方 demo；刷新时二次 init 易放大 handleRoomInfo。可恢复：改 true。
+   */
+  const AUTO_RETRY_RETRYABLE_SDK = false;
   let sdkRetryCount = 0;
   const SDK_MAX_RETRIES = 2;
   let sdkRetryTimer: ReturnType<typeof setTimeout> | null = null;
   /** 使进行中的 adapter.init（含 loadScript）在重入 load / destroy 后失效 */
   let initEpoch = 0;
+  /** 同一 epoch 内 moduleReady 只跑一次侧效（SDK 可能重复推送） */
+  let moduleReadyEpoch = -1;
 
   const { countdown, start: startCountdown, stop: stopCountdown } = useCountdown();
   const barrage = useBarrage(getSdk);
@@ -117,13 +124,36 @@ export function useWatchSession(opts: WatchSessionOptions) {
   function destroySdk() {
     initEpoch += 1;
     chat.cancelHistoryLoad();
-    stats.cancelRoomId?.();
+    stats.cancelRoomId();
     if (sdkRetryTimer) {
       clearTimeout(sdkRetryTimer);
       sdkRetryTimer = null;
     }
     adapter?.destroy();
     adapter = null;
+  }
+
+  /** afterInit：仅安全绑定后工作，不碰房间信息 API */
+  function beginAfterInitSideEffects(epoch: number) {
+    if (epoch !== initEpoch) return;
+    chat.resetHistoryLoad();
+    player.startPlayPoll();
+  }
+
+  /**
+   * moduleReady：对齐 demo `isModuleReady`，再拉聊天/公告历史、房间 id、清晰度。
+   * scheduleLoadHistory 内部仍可等 interact_token，但调度起点必须在 moduleReady 之后。
+   */
+  function beginModuleReadySideEffects(epoch: number) {
+    if (epoch !== initEpoch) return;
+    if (moduleReadyEpoch === epoch) return;
+    moduleReadyEpoch = epoch;
+    chat.scheduleLoadHistory(() => {
+      if (epoch !== initEpoch) return;
+      return notice.loadHistory();
+    });
+    stats.scheduleRoomId();
+    player.scheduleQualityLabels();
   }
 
   async function initSdk() {
@@ -146,6 +176,11 @@ export function useWatchSession(opts: WatchSessionOptions) {
         },
         onRetryableError: (text) => {
           if (epoch !== initEpoch) return;
+          // 贴官方 demo：默认可重试错误只打日志，不自动 destroy 重拉。
+          // 刷新时二次 init 更易放大 handleRoomInfo / nick_name / marquee（20005）。
+          // 可恢复：AUTO_RETRY_RETRYABLE_SDK=true，或用户点遮罩「刷新」/「切换嵌入」。
+          console.warn("[vhall-sdk] 可重试错误（已关闭自动 destroy 重拉）:", text);
+          if (!AUTO_RETRY_RETRYABLE_SDK) return;
           if (data.value?.state === 1 || data.value?.state === 2) {
             if (sdkRetryTimer) return;
             sdkRetryTimer = setTimeout(() => {
@@ -181,12 +216,11 @@ export function useWatchSession(opts: WatchSessionOptions) {
           void attendance.onUserOffline(msg);
           opts.onPresenceOffline?.(msg);
         },
-        afterInit: () => {
+        afterInit: () => beginAfterInitSideEffects(epoch),
+        onModuleReady: () => beginModuleReadySideEffects(epoch),
+        onPlayerLoaded: () => {
           if (epoch !== initEpoch) return;
-          void chat.loadChatHistory().then(() => notice.loadHistory());
-          stats.scheduleRoomId();
-          player.scheduleQualityLabels();
-          player.startPlayPoll();
+          player.onVhallPlayLoaded();
         },
       });
       if (epoch !== initEpoch) {

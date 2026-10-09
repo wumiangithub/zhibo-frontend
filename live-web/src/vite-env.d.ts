@@ -73,8 +73,14 @@ interface VhallNoticeItem {
 }
 
 interface VhallPlayerModule {
+  play?(): void;
+  pause?(): void;
   canPlayDefinitions(cb: (list: string[]) => void): void;
   setPlayerDefinition?(value: string): void;
+  /** 静音；文档 ≥3.5.4，设计给静音自动播放。自建底栏音量/静音钮不用此 API，走 HTMLMediaElement */
+  setMute?(muted: boolean): Promise<void>;
+  /** 音量 0～100；文档 ≥3.5.4。自建底栏不读此值（易陈旧/与 media 冲突），走 HTMLMediaElement */
+  getVolume?(): number;
 }
 
 /** 微吼进出房推送的分组上下文 */

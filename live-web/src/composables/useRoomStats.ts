@@ -27,6 +27,7 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
 
   let roomId = "";
   let disposed = false;
+  let roomIdTimer: ReturnType<typeof window.setTimeout> | undefined;
   /** live_over / state 3/4/5：强制 0，忽略迟到 onlinePopulation（含主讲减 1 后仍可能非 0） */
   let liveEnded = false;
 
@@ -58,6 +59,14 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
     }
   }
 
+  /** destroySdk / unmount：清掉 roomId 轮询定时器 */
+  function cancelRoomId() {
+    if (roomIdTimer != null) {
+      window.clearTimeout(roomIdTimer);
+      roomIdTimer = undefined;
+    }
+  }
+
   /** getRoominfo 在 sdk-init 完成前返回空对象，轮询等到房间 id 出现再拉点赞总数 */
   function scheduleRoomId(tries = 0) {
     void loadRoomId().then(() => {
@@ -66,7 +75,9 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
         void loadLikeCount();
         return;
       }
-      if (tries < 9) window.setTimeout(() => scheduleRoomId(tries + 1), 1000);
+      if (tries < 9) {
+        roomIdTimer = window.setTimeout(() => scheduleRoomId(tries + 1), 1000);
+      }
     });
   }
 
@@ -115,6 +126,7 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
 
   onBeforeUnmount(() => {
     disposed = true;
+    cancelRoomId();
   });
 
   return Object.assign(stats, {
@@ -122,6 +134,7 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
     handleOnlinePopulation,
     handlePraiseTotal,
     scheduleRoomId,
+    cancelRoomId,
     markLiveEnded,
     resetLiveEnded,
   });

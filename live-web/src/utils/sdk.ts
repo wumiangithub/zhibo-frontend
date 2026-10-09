@@ -72,14 +72,38 @@ export function isFatalSdkError(msg: unknown): boolean {
 
 export function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`);
+    if (existing) {
+      // 我们标过 loaded → 已完成；标过 loading → 尚在飞，必须等，否则会 new 时找不到 VhallSDK
+      if (existing.dataset.loaded === "1") {
+        resolve();
+        return;
+      }
+      if (existing.dataset.loading === "1") {
+        existing.addEventListener("load", () => resolve(), { once: true });
+        existing.addEventListener(
+          "error",
+          () => reject(new Error(`脚本加载失败: ${src}`)),
+          { once: true },
+        );
+        return;
+      }
+      // 无标记：多为已完成的历史节点（或非本函数插入），不能再等 load（永不触发）
       resolve();
       return;
     }
     const el = document.createElement("script");
     el.src = src;
-    el.onload = () => resolve();
-    el.onerror = () => reject(new Error(`脚本加载失败: ${src}`));
+    el.dataset.loading = "1";
+    el.onload = () => {
+      delete el.dataset.loading;
+      el.dataset.loaded = "1";
+      resolve();
+    };
+    el.onerror = () => {
+      delete el.dataset.loading;
+      reject(new Error(`脚本加载失败: ${src}`));
+    };
     document.head.appendChild(el);
   });
 }
