@@ -12,13 +12,22 @@ defineProps<{
   /** type=1 音频直播：浏览器常因自动播放策略把音轨挂起 */
   isAudioLive: boolean;
   canFallback?: boolean;
+  /** 观看页小屏：播放器 16:9 顶置；中控台勿开 */
+  mobileAspectVideo?: boolean;
+  /** 观看页小屏：礼物/点赞改走聊天底栏；中控台勿开 */
+  hideMobileBarActions?: boolean;
 }>();
 
 const emit = defineEmits<{ share: []; gift: []; retry: []; fallback: [] }>();
 </script>
 
 <template>
-  <div class="relative min-h-0 min-w-0 flex-1 bg-black">
+  <div
+    class="relative w-full bg-black"
+    :class="mobileAspectVideo
+      ? 'aspect-video flex-none md:aspect-auto md:min-h-0 md:min-w-0 md:flex-1'
+      : 'min-h-0 min-w-0 flex-1'"
+  >
     <button
       v-if="player.needsTapToPlay"
       type="button"
@@ -134,9 +143,10 @@ const emit = defineEmits<{ share: []; gift: []; retry: []; fallback: [] }>();
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5M4 6h16a1 1 0 011 1v10a1 1 0 01-1 1H8l-4 3V7a1 1 0 011-1z" />
           </svg>
         </button>
-        <!-- 礼物占位 -->
+        <!-- 礼物占位（观看页小屏改走聊天底栏） -->
         <button
           type="button"
+          :class="{ 'max-md:hidden': hideMobileBarActions }"
           title="礼物"
           @click="emit('gift')"
         >
@@ -144,9 +154,10 @@ const emit = defineEmits<{ share: []; gift: []; retry: []; fallback: [] }>();
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
           </svg>
         </button>
-        <!-- 点赞 -->
+        <!-- 点赞（观看页小屏改走聊天底栏） -->
         <button
           type="button"
+          :class="{ 'max-md:hidden': hideMobileBarActions }"
           title="点赞"
           @click="stats.handleLike"
         >

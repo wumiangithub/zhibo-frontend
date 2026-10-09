@@ -7,9 +7,17 @@ import {
 } from "@/utils/sdk";
 import type { WatchAdapter, WatchAdapterHandlers } from "../WatchAdapter";
 
+/** 微吼自带隐藏控制条 class（官方拼写即为 hiddne，非 typo） */
+const HIDDNE_CONTROL_CLASS = "hiddneControl";
+
+/** MutationObserver 兜底最长观察时间：容器异步插入后事件可能已错过 */
+const HIDE_CONTROL_OBSERVER_MS = 8000;
+
 /** 微吼观看适配器：脚本加载、VhallSDK init/destroy、事件绑定 */
 export class VhallWatchAdapter implements WatchAdapter {
   private sdk: VhallSdkInstance | null = null;
+  private hideControlObserver: MutationObserver | null = null;
+  private hideControlTimer: ReturnType<typeof setTimeout> | null = null;
 
   getSdk(): VhallSdkInstance | null {
     return this.sdk;
@@ -21,8 +29,17 @@ export class VhallWatchAdapter implements WatchAdapter {
     }
     await loadScript(data.sdk.scriptUrl);
 
+    // loadScript 可能耗时数秒；期间 load/卸页会使容器消失，new 前必须再确认
+    if (handlers.isInitCurrent && !handlers.isInitCurrent()) {
+      return;
+    }
+
     if (!window.VhallSDK) {
       throw new Error("SDK 加载异常，未找到 VhallSDK（需 3.9.1）");
+    }
+
+    if (!document.querySelector("#player") || !document.querySelector("#docWrap")) {
+      throw new Error("播放器容器未就绪（#player / #docWrap）");
     }
 
     this.sdk = new window.VhallSDK({
@@ -36,6 +53,11 @@ export class VhallWatchAdapter implements WatchAdapter {
       videoContent: "#player",
       docContent: "#docWrap",
     });
+
+    if (handlers.isInitCurrent && !handlers.isInitCurrent()) {
+      this.destroy();
+      return;
+    }
 
     // 硬失败立刻提示；20005/20006 联调常为瞬时，交由上层重拉签名再 init
     this.sdk.$on("error", (msg: unknown) => {
@@ -83,10 +105,20 @@ export class VhallWatchAdapter implements WatchAdapter {
       handlers.onUserOffline(msg);
     });
 
+    // 隐藏控制条：SDK 自带 .hiddneControl（拼写即为 hiddne）。
+    // moduleReady=模块就绪、vhallplay_LOADED=视频加载完；二者先后不定且可能只来其一，都听并幂等加 class。
+    // 容器由 SDK 异步插入，事件可能早于 DOM，故短时 MutationObserver 兜底；destroy 时断开防泄漏。
+    const onPlayerUiReady = () => this.applyHiddneControl();
+    this.sdk.$on("moduleReady", onPlayerUiReady);
+    this.sdk.$on("vhallplay_LOADED", onPlayerUiReady);
+    this.applyHiddneControl();
+    this.armHideControlObserver();
+
     handlers.afterInit();
   }
 
   destroy(): void {
+    this.stopHideControlObserver();
     if (this.sdk?.destroy) {
       try {
         this.sdk.destroy();
@@ -95,5 +127,34 @@ export class VhallWatchAdapter implements WatchAdapter {
       }
     }
     this.sdk = null;
+  }
+
+  /** 给播放器壳与 shadow 加 SDK 自带 class；classList.add 天然幂等 */
+  private applyHiddneControl(): void {
+    document
+      .querySelectorAll("#player .vhallPlayer-container, #player .vhallPlayerh5-shadow")
+      .forEach((el) => el.classList.add(HIDDNE_CONTROL_CLASS));
+    // 主目标已挂上则停观察，避免长时间挂着 observer
+    if (document.querySelector(`#player .vhallPlayer-container.${HIDDNE_CONTROL_CLASS}`)) {
+      this.stopHideControlObserver();
+    }
+  }
+
+  private armHideControlObserver(): void {
+    this.stopHideControlObserver();
+    const root = document.querySelector("#player");
+    if (!root) return;
+    this.hideControlObserver = new MutationObserver(() => this.applyHiddneControl());
+    this.hideControlObserver.observe(root, { childList: true, subtree: true });
+    this.hideControlTimer = setTimeout(() => this.stopHideControlObserver(), HIDE_CONTROL_OBSERVER_MS);
+  }
+
+  private stopHideControlObserver(): void {
+    if (this.hideControlTimer) {
+      clearTimeout(this.hideControlTimer);
+      this.hideControlTimer = null;
+    }
+    this.hideControlObserver?.disconnect();
+    this.hideControlObserver = null;
   }
 }

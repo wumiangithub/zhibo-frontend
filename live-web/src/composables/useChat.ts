@@ -69,22 +69,40 @@ export function useChat(options: ChatOptions) {
     return localStorage.getItem(VERIFY_KEY) === "1";
   }
 
+  /** 把 template ref / 组件实例收成可 focus 的 DOM 节点 */
+  function resolveFocusEl(el: unknown): HTMLElement | null {
+    if (!el) return null;
+    if (el instanceof HTMLElement) return el;
+    if (typeof el === "object" && el !== null && "$el" in el) {
+      const root = (el as { $el: unknown }).$el;
+      return root instanceof HTMLElement ? root : null;
+    }
+    // Vue Ref：勿用 `'value' in el` 误伤 HTMLInputElement（本身也有 value）
+    if (typeof el === "object" && el !== null && !(el instanceof Node)) {
+      const maybe = el as { value?: unknown };
+      if ("value" in maybe) return resolveFocusEl(maybe.value);
+    }
+    return null;
+  }
+
   /** 输入框聚焦即视为想发言：未验证先抢回焦点再弹验证框 */
-  function requestChatFocus(el: HTMLInputElement | null) {
+  function requestChatFocus(el: unknown) {
+    const input = resolveFocusEl(el);
     if (chat.isChatMuted) return;
     if (isVerified()) {
-      el?.focus();
+      input?.focus();
     } else {
-      el?.blur();
+      input?.blur();
       chat.showVerifyDialog = true;
     }
   }
 
-  function completeVerify(inputEl?: HTMLInputElement | null) {
+  function completeVerify(inputEl?: unknown) {
     localStorage.setItem(VERIFY_KEY, "1");
     chat.showVerifyDialog = false;
     chat.verifyInput = "";
-    window.setTimeout(() => inputEl?.focus(), 100);
+    const el = resolveFocusEl(inputEl);
+    window.setTimeout(() => el?.focus(), 100);
   }
 
   function trimList() {

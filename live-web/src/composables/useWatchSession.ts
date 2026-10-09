@@ -51,6 +51,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
   let sdkRetryCount = 0;
   const SDK_MAX_RETRIES = 2;
   let sdkRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 使进行中的 adapter.init（含 loadScript）在重入 load / destroy 后失效 */
+  let initEpoch = 0;
 
   const { countdown, start: startCountdown, stop: stopCountdown } = useCountdown();
   const barrage = useBarrage(getSdk);
@@ -113,6 +115,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
   }
 
   function destroySdk() {
+    initEpoch += 1;
     chat.cancelHistoryLoad();
     stats.cancelRoomId?.();
     if (sdkRetryTimer) {
@@ -125,18 +128,24 @@ export function useWatchSession(opts: WatchSessionOptions) {
 
   async function initSdk() {
     if (!data.value) return;
+    const epoch = ++initEpoch;
+    // 先关 loading，让 WatchView/ConsoleView 挂上 PlayerStage 或 PreviewScreen（内含 #player/#docWrap）
     loading.value = false;
     player.resetPlayback();
     await nextTick();
+    if (epoch !== initEpoch) return;
 
     try {
       adapter = createWatchAdapter(data.value.provider ?? "vhall");
       await adapter.init(data.value, {
+        isInitCurrent: () => epoch === initEpoch,
         onError: (msg) => {
+          if (epoch !== initEpoch) return;
           player.markMediaFailed(formatSdkError(msg));
           sdkFailed.value = true;
         },
         onRetryableError: (text) => {
+          if (epoch !== initEpoch) return;
           if (data.value?.state === 1 || data.value?.state === 2) {
             if (sdkRetryTimer) return;
             sdkRetryTimer = setTimeout(() => {
@@ -149,9 +158,13 @@ export function useWatchSession(opts: WatchSessionOptions) {
           sdkFailed.value = true;
         },
         onLiveEnded: () => {
+          if (epoch !== initEpoch) return;
           void switchToEndedFromLive();
         },
-        onAutoplayFailed: () => player.notifyAutoplayFailed(),
+        onAutoplayFailed: () => {
+          if (epoch !== initEpoch) return;
+          player.notifyAutoplayFailed();
+        },
         onLiveStart: handleLiveStart,
         onChatMsg: chat.handleChatMessage,
         onChatDelete: chat.handleChatDelete,
@@ -169,13 +182,19 @@ export function useWatchSession(opts: WatchSessionOptions) {
           opts.onPresenceOffline?.(msg);
         },
         afterInit: () => {
+          if (epoch !== initEpoch) return;
           void chat.loadChatHistory().then(() => notice.loadHistory());
           stats.scheduleRoomId();
           player.scheduleQualityLabels();
           player.startPlayPoll();
         },
       });
+      if (epoch !== initEpoch) {
+        adapter?.destroy();
+        adapter = null;
+      }
     } catch (e) {
+      if (epoch !== initEpoch) return;
       adapter?.destroy();
       adapter = null;
       throw e;

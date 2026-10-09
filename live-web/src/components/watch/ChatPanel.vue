@@ -1,20 +1,68 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import EmojiPanel from "@/components/EmojiPanel.vue";
 import { insertEmojiAtCursor } from "@/composables/useEmojiInsert";
 import { splitEmojiText } from "@/constants/emoji";
 import type { ChatController } from "@/composables/useChat";
 
-const props = defineProps<{ chat: ChatController }>();
+const props = defineProps<{
+  chat: ChatController;
+  likeCount?: number;
+}>();
 const chat = props.chat;
 
+const emit = defineEmits<{ gift: []; like: [] }>();
+
 const inputEl = ref<HTMLInputElement | null>(null);
+const mobileInputEl = ref<HTMLInputElement | null>(null);
 const showEmoji = ref(false);
+/** 小屏输入框是否聚焦（失焦时短暂延迟，避免点发送/表情先塌布局） */
+const mobileInputFocused = ref(false);
+let mobileBlurTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 聚焦或已有输入或表情面板打开 → 底栏切到发送态 */
+const mobileComposerActive = computed(
+  () =>
+    mobileInputFocused.value ||
+    showEmoji.value ||
+    !!chat.chatInput.trim(),
+);
 
 function insertEmoji(name: string) {
-  const next = insertEmojiAtCursor(inputEl.value, chat.chatInput, name, 140);
+  const el = inputEl.value ?? mobileInputEl.value;
+  const next = insertEmojiAtCursor(el, chat.chatInput, name, 140);
   if (next !== null) chat.chatInput = next;
   showEmoji.value = false;
+}
+
+function onMobileFocus() {
+  if (mobileBlurTimer) {
+    clearTimeout(mobileBlurTimer);
+    mobileBlurTimer = null;
+  }
+  mobileInputFocused.value = true;
+  chat.requestChatFocus(mobileInputEl.value);
+}
+
+function onMobileBlur() {
+  if (mobileBlurTimer) clearTimeout(mobileBlurTimer);
+  mobileBlurTimer = setTimeout(() => {
+    mobileBlurTimer = null;
+    mobileInputFocused.value = false;
+  }, 120);
+}
+
+function toggleMobileEmoji() {
+  showEmoji.value = !showEmoji.value;
+  if (showEmoji.value) {
+    mobileInputFocused.value = true;
+    // 打开表情后尽量把焦点留在输入框，便于插入
+    mobileInputEl.value?.focus();
+  }
+}
+
+function sendMobileChat() {
+  void chat.sendChat();
 }
 </script>
 
@@ -87,8 +135,8 @@ function insertEmoji(name: string) {
       </div>
     </div>
 
-    <!-- 输入栏 -->
-    <div class="flex-none border-t border-gray-800 p-3">
+    <!-- PC 输入栏 -->
+    <div class="hidden flex-none border-t border-gray-800 p-3 md:block">
       <div class="flex items-center gap-2">
         <div class="relative z-50 flex-none">
           <button
@@ -112,7 +160,12 @@ function insertEmoji(name: string) {
           v-model="chat.chatInput"
           type="text"
           maxlength="140"
+          name="zhibo-chat-message"
           placeholder="参与聊天"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
           class="min-w-0 flex-1 rounded-md bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none disabled:opacity-50"
           :disabled="chat.isChatMuted"
           @focus="chat.requestChatFocus(inputEl)"
@@ -128,6 +181,98 @@ function insertEmoji(name: string) {
       </div>
     </div>
 
+    <!-- 小屏底栏：未聚焦=参与聊天+礼物/点赞；聚焦=表情+输入+发送（无头像；md 及以上隐藏） -->
+    <div class="flex flex-none items-center gap-2 border-t border-gray-800 bg-gray-900 px-3 py-2 md:hidden">
+      <!-- 发送态：左侧表情 -->
+      <div
+        v-if="mobileComposerActive"
+        class="relative z-50 flex-none"
+      >
+        <button
+          type="button"
+          class="flex h-9 w-9 items-center justify-center rounded-full text-gray-300 active:bg-gray-800 disabled:opacity-50"
+          aria-label="表情"
+          :disabled="chat.isChatMuted"
+          @mousedown.prevent
+          @click="toggleMobileEmoji"
+        >
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </button>
+        <EmojiPanel
+          v-if="showEmoji"
+          @insert="insertEmoji"
+        />
+      </div>
+
+      <div class="relative z-50 min-w-0 flex-1">
+        <input
+          id="chat-input-mobile"
+          ref="mobileInputEl"
+          v-model="chat.chatInput"
+          type="text"
+          maxlength="140"
+          name="zhibo-chat-message"
+          placeholder="参与聊天"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          class="w-full rounded-full bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none disabled:opacity-50"
+          :disabled="chat.isChatMuted"
+          @focus="onMobileFocus"
+          @blur="onMobileBlur"
+          @keyup.enter="sendMobileChat"
+        />
+      </div>
+
+      <!-- 发送态：圆形纸飞机 -->
+      <button
+        v-if="mobileComposerActive"
+        type="button"
+        class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-gray-200 active:bg-gray-700 disabled:opacity-50"
+        aria-label="发送"
+        :disabled="chat.isChatMuted || !chat.chatInput.trim()"
+        @mousedown.prevent
+        @click="sendMobileChat"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+        </svg>
+      </button>
+
+      <!-- 未聚焦：礼物 + 点赞 -->
+      <template v-else>
+        <button
+          type="button"
+          class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-gray-300 active:bg-gray-700"
+          aria-label="礼物"
+          @click="emit('gift')"
+        >
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="relative flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-red-400 active:bg-gray-700"
+          aria-label="点赞"
+          @click="emit('like')"
+        >
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.601 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+          </svg>
+          <span
+            v-if="likeCount && likeCount > 0"
+            class="absolute -right-0.5 -top-0.5 min-w-[14px] rounded-full bg-red-500 px-1 text-center text-[10px] leading-[14px] text-white"
+          >
+            {{ likeCount > 99 ? '99+' : likeCount }}
+          </span>
+        </button>
+      </template>
+    </div>
+
     <!-- 假验证弹窗 -->
     <div
       v-if="chat.showVerifyDialog"
@@ -141,7 +286,7 @@ function insertEmoji(name: string) {
           type="text"
           placeholder="输入任意内容..."
           class="mb-4 w-full rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-green-500 focus:outline-none"
-          @keyup.enter="chat.completeVerify(inputEl)"
+          @keyup.enter="chat.completeVerify(mobileInputEl || inputEl)"
         />
         <div class="flex justify-end gap-2">
           <button
@@ -153,7 +298,7 @@ function insertEmoji(name: string) {
           <button
             class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
             :disabled="!chat.verifyInput.trim()"
-            @click="chat.completeVerify(inputEl)"
+            @click="chat.completeVerify(mobileInputEl || inputEl)"
           >
             确定
           </button>

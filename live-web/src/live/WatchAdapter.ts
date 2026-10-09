@@ -17,6 +17,11 @@ export interface WatchAdapterHandlers {
   onUserOffline: (msg: VhallUserPresenceMessage) => void;
   /** 用于 chat.loadHistory / stats.scheduleRoomId / player polls */
   afterInit: () => void;
+  /**
+   * 脚本加载等异步间隙后仍应继续 init 时返回 true。
+   * 上层换场次 / 重入 load 时应失效，避免对已卸载的 #player 执行 new。
+   */
+  isInitCurrent?: () => boolean;
 }
 
 export interface WatchAdapter {
