@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import BarrageLayer from "@/components/watch/BarrageLayer.vue";
 import PlayerToolbar from "@/components/watch/PlayerToolbar.vue";
 import type { PlayerController } from "@/composables/usePlayerControls";
@@ -21,6 +21,11 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{ gift: []; retry: []; fallback: [] }>();
+
+/** 纯音频场（type=1）或清晰度选「音频」(code=a) 都走同一套 EQ 遮罩 */
+const showAudioVisual = computed(
+  () => props.isAudioLive || props.player.currentQualityCode === "a",
+);
 
 const stageRef = ref<HTMLElement | null>(null);
 
@@ -48,7 +53,7 @@ onBeforeUnmount(() => syncStageEl(null));
       v-if="!player.waitingForMedia && !player.mediaFailed && (player.needsTapToPlay || player.isPaused)"
       type="button"
       class="center-play-hit"
-      :aria-label="isAudioLive ? '点击收听' : '点击播放'"
+      :aria-label="showAudioVisual ? '点击收听' : '点击播放'"
       @click="player.resumePlayback"
     >
       <span class="center-play-orb" aria-hidden="true">
@@ -91,7 +96,7 @@ onBeforeUnmount(() => syncStageEl(null));
     </div>
 
     <div
-      v-if="isAudioLive"
+      v-if="showAudioVisual"
       class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6"
     >
       <div class="flex flex-col items-center gap-2">
@@ -111,32 +116,22 @@ onBeforeUnmount(() => syncStageEl(null));
         />
       </div>
 
-      <p class="text-sm text-gray-400">
-        {{ player.isPaused ? '已暂停' : '正在播放音频直播' }}
+      <p v-if="!player.isPaused" class="text-sm text-gray-400">
+        正在播放音频直播
       </p>
-
-      <button
-        v-if="!player.needsTapToPlay && !player.waitingForMedia && !player.mediaFailed"
-        type="button"
-        class="rounded-md bg-white/10 px-5 py-2.5 text-sm font-medium text-white hover:bg-white/20"
-        :title="player.isPaused ? '继续收听' : '暂停'"
-        @click="player.togglePlayback"
-      >
-        {{ player.isPaused ? '继续收听' : '暂停' }}
-      </button>
     </div>
 
     <div
       id="player"
       class="h-full w-full"
-      :class="{ 'opacity-0': isAudioLive }"
+      :class="{ 'opacity-0': showAudioVisual }"
     />
     <div id="docWrap" class="hidden" />
 
     <BarrageLayer :barrage="barrage" />
 
     <PlayerToolbar
-      v-if="!player.mediaFailed"
+      v-if="!player.mediaFailed && !player.waitingForMedia && !player.needsTapToPlay && !player.isPaused"
       :player="player"
       :barrage="barrage"
       :stats="stats"
@@ -157,10 +152,20 @@ onBeforeUnmount(() => syncStageEl(null));
   background: #000;
 }
 
-/* 暂停居中播放：半透明黑圆 + 白三角；不盖底栏 */
+/*
+ * 自建底栏时永久藏微吼原生控制条。
+ * hiddneControl 只作用于 .vhallPlayer-container / shadow，不覆盖 .vh-player-controller；
+ * 以前靠自建条 z-index 叠盖，暂停卸掉 PlayerToolbar 后原生条会露出来。
+ */
+#player :deep(.vh-player-controller),
+#player :deep(.vh-player-record-control) {
+  display: none !important;
+}
+
+/* 暂停居中播放：半透明黑圆 + 白三角；底栏隐藏时铺满舞台 */
 .center-play-hit {
   position: absolute;
-  inset: 0 0 50px;
+  inset: 0;
   z-index: 50;
   display: flex;
   align-items: center;

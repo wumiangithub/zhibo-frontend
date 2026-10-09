@@ -105,9 +105,9 @@ export class VhallWatchAdapter implements WatchAdapter {
       handlers.onUserOffline(msg);
     });
 
-    // 隐藏控制条：SDK 自带 .hiddneControl（拼写即为 hiddne）。
-    // moduleReady=模块就绪、vhallplay_LOADED=视频加载完；二者先后不定且可能只来其一，都听并幂等加 class。
-    // 容器由 SDK 异步插入，事件可能早于 DOM，故短时 MutationObserver 兜底；destroy 时断开防泄漏。
+    // 隐藏控制条：SDK 自带 .hiddneControl（拼写即为 hiddne）+ 显式藏 .vh-player-controller。
+    // moduleReady=模块就绪、vhallplay_LOADED=视频加载完；二者先后不定且可能只来其一，都听并幂等。
+    // 容器/控制条由 SDK 异步插入，事件可能早于 DOM，故短时 MutationObserver 兜底；destroy 时断开防泄漏。
     this.sdk.$on("moduleReady", () => {
       this.applyHiddneControl();
       // 对齐 demo：isModuleReady 后再拉历史/房间信息；勿在 new 后立刻调
@@ -140,15 +140,20 @@ export class VhallWatchAdapter implements WatchAdapter {
     if (docEl) docEl.innerHTML = "";
   }
 
-  /** 给播放器壳与 shadow 加 SDK 自带 class；classList.add 天然幂等 */
+  /**
+   * 1) 给壳 / shadow 加 SDK 自带 hiddneControl（不覆盖 .vh-player-controller）
+   * 2) 显式 display:none 原生底栏（暂停时 SDK 常再插/再显该节点；PlayerStage 另有 :deep CSS）
+   * classList / style 均幂等；持久隐藏靠 CSS，此处配合 MutationObserver 在 SDK 重插时再刷一次
+   */
   private applyHiddneControl(): void {
     document
       .querySelectorAll("#player .vhallPlayer-container, #player .vhallPlayerh5-shadow")
       .forEach((el) => el.classList.add(HIDDNE_CONTROL_CLASS));
-    // 主目标已挂上则停观察，避免长时间挂着 observer
-    if (document.querySelector(`#player .vhallPlayer-container.${HIDDNE_CONTROL_CLASS}`)) {
-      this.stopHideControlObserver();
-    }
+    document
+      .querySelectorAll("#player .vh-player-controller, #player .vh-player-record-control")
+      .forEach((el) => {
+        (el as HTMLElement).style.setProperty("display", "none", "important");
+      });
   }
 
   private armHideControlObserver(): void {
@@ -157,6 +162,7 @@ export class VhallWatchAdapter implements WatchAdapter {
     if (!root) return;
     this.hideControlObserver = new MutationObserver(() => this.applyHiddneControl());
     this.hideControlObserver.observe(root, { childList: true, subtree: true });
+    // 固定观察窗口：勿在仅挂上 hiddneControl 后立刻停，控制条可能晚于壳插入
     this.hideControlTimer = setTimeout(() => this.stopHideControlObserver(), HIDE_CONTROL_OBSERVER_MS);
   }
 
