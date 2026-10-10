@@ -100,7 +100,7 @@ export function listMaterialGroups() {
 export function listMaterialVideos(query: MaterialVideoQuery = {}) {
   return get<MaterialVideoListData>("/materials/videos", {
     params: {
-      page: query.page ?? 0,
+      page: query.page ?? 1,
       pageSize: query.pageSize ?? 20,
       groupId: query.groupId || undefined,
       keyword: query.keyword || undefined,
@@ -114,7 +114,7 @@ export function listMaterialVideos(query: MaterialVideoQuery = {}) {
  */
 export async function listVhallLives(query: VhallLiveQuery = {}): Promise<VhallLiveListData> {
   const data = await listActivities({
-    page: query.page ?? 0,
+    page: query.page ?? 1,
     pageSize: query.pageSize ?? 20,
     keyword: query.keyword,
     provider: "vhall",

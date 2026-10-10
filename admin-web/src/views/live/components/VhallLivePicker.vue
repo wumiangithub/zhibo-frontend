@@ -30,7 +30,7 @@ const listError = ref("");
 const keyword = ref("");
 const list = ref<VhallLiveItem[]>([]);
 const total = ref(0);
-const page = ref(0);
+const page = ref(1);
 const pageSize = 10;
 const pickedLiveId = ref("");
 
@@ -138,7 +138,7 @@ watch(
   (open) => {
     if (!open) return;
     keyword.value = "";
-    page.value = 0;
+    page.value = 1;
     pickedLiveId.value = "";
     listError.value = "";
     playbackVisible.value = false;
@@ -175,11 +175,11 @@ watch(
         clearable
         placeholder="搜索直播名称"
         style="width: 240px; margin-left: auto"
-        @keyup.enter="page = 0; fetchLives()"
+        @keyup.enter="page = 1; fetchLives()"
       />
       <UiButton
         variant="outline"
-        @click="page = 0; fetchLives()"
+        @click="page = 1; fetchLives()"
       >
         搜索
       </UiButton>
@@ -243,17 +243,17 @@ watch(
     </table>
 
     <div class="pager">
-      <span>共 {{ total }} 条 · 第 {{ page + 1 }}/{{ pageCount }} 页</span>
+      <span>共 {{ total }} 条 · 第 {{ page }}/{{ pageCount }} 页</span>
       <UiButton
         variant="default"
-        :disabled="page <= 0 || loading"
+        :disabled="page <= 1 || loading"
         @click="page--; fetchLives()"
       >
         上一页
       </UiButton>
       <UiButton
         variant="default"
-        :disabled="page + 1 >= pageCount || loading"
+        :disabled="page >= pageCount || loading"
         @click="page++; fetchLives()"
       >
         下一页

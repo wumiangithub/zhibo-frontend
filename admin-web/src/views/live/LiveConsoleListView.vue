@@ -19,7 +19,7 @@ const total = ref(0);
 
 const query = reactive({
   keyword: "",
-  page: 0,
+  page: 1,
   pageSize: 20,
 });
 
@@ -80,13 +80,13 @@ async function fetchList() {
 }
 
 function search() {
-  query.page = 0;
+  query.page = 1;
   void fetchList();
 }
 
 function resetFilter() {
   query.keyword = "";
-  query.page = 0;
+  query.page = 1;
   void fetchList();
 }
 
@@ -97,14 +97,14 @@ function goConsole(id: string) {
 }
 
 function prev() {
-  if (query.page > 0) {
+  if (query.page > 1) {
     query.page--;
     void fetchList();
   }
 }
 
 function next() {
-  if (query.page < pageCount.value - 1) {
+  if (query.page < pageCount.value) {
     query.page++;
     void fetchList();
   }
@@ -248,15 +248,15 @@ onMounted(fetchList);
       <div class="flex items-center gap-2">
         <UiButton
           variant="default"
-          :disabled="query.page === 0 || loading"
+          :disabled="query.page <= 1 || loading"
           @click="prev"
         >
           上一页
         </UiButton>
-        <span>{{ query.page + 1 }} / {{ pageCount }}</span>
+        <span>{{ query.page }} / {{ pageCount }}</span>
         <UiButton
           variant="default"
-          :disabled="query.page >= pageCount - 1 || loading"
+          :disabled="query.page >= pageCount || loading"
           @click="next"
         >
           下一页

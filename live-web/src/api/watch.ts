@@ -86,6 +86,6 @@ export function getWatchSdk(id: string, params: WatchParams = {}) {
   return get<WatchSdkData>(`/watch/${id}/sdk`, { params });
 }
 
-export function listWatchActivities(page = 0, pageSize = 20) {
+export function listWatchActivities(page = 1, pageSize = 20) {
   return get<WatchActivityListData>("/watch/activities", { params: { page, pageSize } });
 }

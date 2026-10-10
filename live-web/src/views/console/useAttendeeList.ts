@@ -19,7 +19,7 @@ function mergeByUserId(primary: AttendeeItem[], fallback: AttendeeItem[]): Atten
   return primary.concat(extra);
 }
 
-/** 中控台左侧名单：换 Tab、改搜索词从第 0 页重拉；加载更多只在点击时请求。 */
+/** 中控台左侧名单：换 Tab、改搜索词从第 1 页重拉（D37）；加载更多只在点击时请求。 */
 export function useAttendeeList(
   activityId: Ref<string>,
   /** 直播已结束/点播/回放：D30 全员离线，不再吃 Join 本地补丁 */
@@ -29,7 +29,7 @@ export function useAttendeeList(
   const keyword = ref("");
   const list = ref<AttendeeItem[]>([]);
   const total = ref(0);
-  const page = ref(0);
+  const page = ref(1);
   const loading = ref(false);
   const loadingMore = ref(false);
   const error = ref("");
@@ -129,12 +129,12 @@ export function useAttendeeList(
       list.value = [];
       total.value = 0;
     }
-    page.value = 0;
+    page.value = 1;
     try {
       const apiTab = requestTab(tab.value, ended.value);
       const res = await listAttendees(activityId.value, {
         tab: apiTab,
-        page: 0,
+        page: 1,
         pageSize: PAGE_SIZE,
         keyword: keyword.value,
       });
@@ -142,7 +142,7 @@ export function useAttendeeList(
       applyFetchedRows(
         res.list ?? [],
         Number(res.total) || 0,
-        res.page ?? 0,
+        res.page ?? 1,
         res.activityState,
         false,
         keepFallback,
@@ -173,7 +173,7 @@ export function useAttendeeList(
     if (forceEnded && tab.value === "online") {
       list.value = [];
       total.value = 0;
-      page.value = 0;
+      page.value = 1;
       return;
     }
     if (forceEnded) {

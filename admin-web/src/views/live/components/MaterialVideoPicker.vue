@@ -36,7 +36,7 @@ const groups = ref<MaterialGroup[]>([]);
 const activeGroupId = ref("all");
 const list = ref<MaterialVideoItem[]>([]);
 const total = ref(0);
-const page = ref(0);
+const page = ref(1);
 const pageSize = 10;
 const pickedId = ref("");
 const sortLabel = ref("上传时间");
@@ -141,7 +141,7 @@ function applyMock() {
   const kw = videoKeyword.value.trim();
   if (kw) rows = rows.filter((v) => v.title.includes(kw) || v.id.includes(kw));
   total.value = rows.length;
-  const start = page.value * pageSize;
+  const start = (page.value - 1) * pageSize;
   list.value = rows.slice(start, start + pageSize);
 }
 
@@ -200,12 +200,12 @@ function syncPicked() {
 
 function selectGroup(id: string) {
   activeGroupId.value = id;
-  page.value = 0;
+  page.value = 1;
   void fetchList();
 }
 
 function searchVideos() {
-  page.value = 0;
+  page.value = 1;
   void fetchList();
 }
 
@@ -226,7 +226,7 @@ watch(
     groupKeyword.value = "";
     videoKeyword.value = "";
     activeGroupId.value = "all";
-    page.value = 0;
+    page.value = 1;
     void fetchList();
   },
 );
@@ -367,17 +367,17 @@ watch(
         </table>
 
         <div class="pager">
-          <span>共 {{ total }} 条 · 第 {{ page + 1 }}/{{ pageCount }} 页</span>
+          <span>共 {{ total }} 条 · 第 {{ page }}/{{ pageCount }} 页</span>
           <UiButton
             variant="default"
-            :disabled="page <= 0 || loading"
+            :disabled="page <= 1 || loading"
             @click="page--; fetchList()"
           >
             上一页
           </UiButton>
           <UiButton
             variant="default"
-            :disabled="page + 1 >= pageCount || loading"
+            :disabled="page >= pageCount || loading"
             @click="page++; fetchList()"
           >
             下一页
