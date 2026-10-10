@@ -28,6 +28,11 @@ const router = createRouter({
           name: "live-detail",
           component: () => import("@/views/live/LiveDetailView.vue"),
         },
+        {
+          path: "settings/materials",
+          name: "settings-materials",
+          component: () => import("@/views/settings/materials/MaterialCenterView.vue"),
+        },
       ],
     },
     /** 直播中控台列表：侧栏新窗口打开，独立壳，不套 DefaultLayout */

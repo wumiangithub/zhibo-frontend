@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import { ElDialog, ElInput, ElButton, ElMessage, ElRadio } from "element-plus";
 import {
   listMaterialGroups,
@@ -9,6 +10,8 @@ import {
 } from "@/api/recordResource";
 import { useToast } from "@/composables/useToast";
 import UiButton from "@/components/ui/UiButton.vue";
+
+const router = useRouter();
 
 const props = defineProps<{
   modelValue: boolean;
@@ -219,6 +222,11 @@ function onConfirm() {
   visible.value = false;
 }
 
+function goMaterialCenter() {
+  visible.value = false;
+  void router.push("/settings/materials");
+}
+
 watch(
   () => props.modelValue,
   (open) => {
@@ -390,7 +398,7 @@ watch(
       <div class="footer">
         <UiButton
           variant="link"
-          @click="toast('「前往素材中心」暂未开放')"
+          @click="goMaterialCenter"
         >
           前往素材中心
         </UiButton>

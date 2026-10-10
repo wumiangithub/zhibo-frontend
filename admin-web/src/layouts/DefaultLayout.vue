@@ -17,7 +17,7 @@ const topNav = [
   { key: "trade", label: "交易" },
   { key: "user", label: "用户" },
   { key: "data", label: "数据" },
-  { key: "settings", label: "设置" },
+  { key: "settings", label: "设置", to: "/settings/materials" },
   { key: "apps", label: "应用" },
 ] as const;
 
@@ -33,7 +33,7 @@ const workbenchSideNav = [
   { key: "public", label: "公域概况", icon: "globe" },
   { key: "users", label: "用户列表", icon: "user" },
   { key: "traffic", label: "流量中心", icon: "trend" },
-  { key: "material", label: "素材中心", icon: "grid" },
+  { key: "material", label: "素材中心", icon: "grid", to: "/settings/materials" },
 ] as const;
 
 /** 直播模块侧栏：无图标，贴近截图 */
@@ -46,6 +46,11 @@ const liveSideNav = [
   { key: "settings", label: "通用设置" },
 ] as const;
 
+/** 设置模块侧栏 */
+const settingsSideNav = [
+  { key: "materials", label: "素材中心", icon: "grid", to: "/settings/materials" },
+] as const;
+
 const isLiveModule = computed(() => {
   const name = route.name;
   return (
@@ -56,13 +61,22 @@ const isLiveModule = computed(() => {
   );
 });
 
+const isSettingsModule = computed(
+  () => route.name === "settings-materials" || route.path.startsWith("/settings"),
+);
+
 const activeTop = computed(() => {
   if (isLiveModule.value) return "live";
+  if (isSettingsModule.value) return "settings";
   if (route.name === "dashboard" || route.path === "/") return "workbench";
   return "";
 });
 
 const activeSide = computed(() => {
+  if (isSettingsModule.value) {
+    if (route.name === "settings-materials") return "materials";
+    return "";
+  }
   if (isLiveModule.value) {
     if (route.name === "live-create") return "create";
     // 列表 / 详情均高亮「直播管理」
@@ -74,7 +88,11 @@ const activeSide = computed(() => {
   return route.name === "dashboard" || route.path === "/" ? "overview" : "";
 });
 
-const currentSideNav = computed(() => (isLiveModule.value ? liveSideNav : workbenchSideNav));
+const currentSideNav = computed(() => {
+  if (isSettingsModule.value) return settingsSideNav;
+  if (isLiveModule.value) return liveSideNav;
+  return workbenchSideNav;
+});
 
 function sideIconOf(item: object): string | undefined {
   if ("icon" in item && typeof (item as { icon?: unknown }).icon === "string") {
@@ -239,7 +257,7 @@ function goHome() {
         </nav>
 
         <div
-          v-if="!isLiveModule"
+          v-if="!isLiveModule && !isSettingsModule"
           class="box-border px-2 pb-3"
         >
           <button
