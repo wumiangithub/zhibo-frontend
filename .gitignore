@@ -10,3 +10,5 @@ dist-ssr/
 .vscode/
 Thumbs.db
 .DS_Store
+.tmp*
+.tmp/
