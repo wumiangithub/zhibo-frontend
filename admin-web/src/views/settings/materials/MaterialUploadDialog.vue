@@ -20,6 +20,7 @@ import {
   type MaterialType,
 } from "./mock";
 import { useToast } from "@/composables/useToast";
+import { useMaterialsStore } from "@/stores/materials";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -36,6 +37,7 @@ const emit = defineEmits<{
 }>();
 
 const { toast } = useToast();
+const materialsStore = useMaterialsStore();
 
 const visible = computed({
   get: () => props.modelValue,
@@ -62,6 +64,10 @@ watch(
     groupId.value =
       prefer && groupOptions.value.some((g) => g.id === prefer) ? prefer : first;
     fileList.value = [];
+    void materialsStore.ensureTosConfig().catch((err: unknown) => {
+      const msg = err instanceof Error ? err.message : "获取上传凭证失败";
+      ElMessage.error(msg);
+    });
   },
 );
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ElInput, ElMessageBox } from "element-plus";
-import { Search } from "@element-plus/icons-vue";
+import { ElInput, ElMessageBox, ElIcon } from "element-plus";
+import { Search, CirclePlus } from "@element-plus/icons-vue";
 import type { MaterialGroup } from "./mock";
 import { useToast } from "@/composables/useToast";
 
@@ -95,7 +95,7 @@ async function removeGroup(g: MaterialGroup) {
           title="新建分组"
           @click.stop="addGroup"
         >
-          +
+          <ElIcon :size="18"><CirclePlus /></ElIcon>
         </button>
         <span
           v-else
@@ -181,13 +181,15 @@ async function removeGroup(g: MaterialGroup) {
 
 .group-add {
   flex: none;
-  width: 20px;
-  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   border: 0;
   border-radius: 4px;
   background: transparent;
   color: var(--color-primary);
-  font-size: 16px;
   line-height: 1;
   cursor: pointer;
 }
