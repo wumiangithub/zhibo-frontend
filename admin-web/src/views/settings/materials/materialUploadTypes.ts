@@ -21,4 +21,14 @@ export interface FileTableItem {
 export interface UploadItem extends FileTableItem {
   previewUrl: string;
   resultUrl?: string;
+  objectKey?: string;
+}
+
+/** TOS 成功后可登记的条目 */
+export interface MaterialRegisterItem {
+  name: string;
+  url: string;
+  objectKey: string;
+  fileSize: number;
+  mimeType?: string;
 }

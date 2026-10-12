@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     ElIcon: typeof import('element-plus/es')['ElIcon']
+    ElImageViewer: typeof import('element-plus/es')['ElImageViewer']
     ElRadioButton: typeof import('element-plus/es')['ElRadioButton']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
@@ -20,5 +21,8 @@ declare module 'vue' {
     UiButton: typeof import('./src/components/ui/UiButton.vue')['default']
     UiCheckButton: typeof import('./src/components/ui/UiCheckButton.vue')['default']
     UiInput: typeof import('./src/components/ui/UiInput.vue')['default']
+  }
+  export interface GlobalDirectives {
+    vLoading: typeof import('element-plus/es')['ElLoadingDirective']
   }
 }

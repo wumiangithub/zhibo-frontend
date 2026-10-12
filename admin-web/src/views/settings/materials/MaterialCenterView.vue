@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
 import {
   ElInput,
   ElSelect,
@@ -9,113 +9,113 @@ import {
   ElTableColumn,
   ElPagination,
   ElTag,
+  ElMessageBox,
+  ElMessage,
 } from "element-plus";
-import { RefreshRight, EditPen } from "@element-plus/icons-vue";
+import { RefreshRight } from "@element-plus/icons-vue";
 import MaterialUploadDialog from "./MaterialUploadDialog.vue";
 import MaterialGroupSidebar from "./MaterialGroupSidebar.vue";
+import MaterialVideoPreviewDialog from "./MaterialVideoPreviewDialog.vue";
+import MaterialImageViewer from "./MaterialImageViewer.vue";
+import MaterialAssetCell from "./MaterialAssetCell.vue";
 import {
   AUDIT_OPTIONS,
   COL_ASSET_LABEL,
   COL_STATUS_LABEL,
-  MOCK_GROUPS,
   NAME_FILTER_LABEL,
   TYPE_TABS,
   UPLOAD_BTN,
-  buildMockDocuments,
-  buildMockImages,
-  buildMockVideos,
   type AuditStatus,
-  type MaterialGroup,
-  type MaterialItem,
-  type MaterialType,
 } from "./mock";
+import type { MaterialListItem } from "@/api/materials";
+import type { MaterialRegisterItem } from "./materialUploadTypes";
 import { useToast } from "@/composables/useToast";
+import { useMaterialCenter } from "@/composables/useMaterialCenter";
 
 const { toast } = useToast();
 
-const materialType = ref<MaterialType>("image");
-const groupKeyword = ref("");
-const nameKeyword = ref("");
+const {
+  materialType,
+  groupKeyword,
+  nameKeyword,
+  activeGroupId,
+  page,
+  pageSize,
+  total,
+  listLoading,
+  list,
+  filteredGroups,
+  uploadGroups,
+  refreshAll,
+  search,
+  resetFilter,
+  onPageChange,
+  onPageSizeChange,
+  addGroup,
+  renameGroup,
+  removeGroup,
+  registerAfterUpload,
+  renameMaterialItem,
+} = useMaterialCenter();
+
+/** 审核筛选本迭代占位（契约无此字段） */
 const auditFilter = ref<"" | AuditStatus>("");
-const activeGroupId = ref("all");
 const uploadVisible = ref(false);
 
-const allItems = reactive<Record<MaterialType, MaterialItem[]>>({
-  image: buildMockImages(),
-  video: buildMockVideos(),
-  document: buildMockDocuments(),
+/** 图片：Element Plus 查看器（当前页原图列表） */
+const imageViewerVisible = ref(false);
+const imageViewerIndex = ref(0);
+const imagePreviewItems = computed(() =>
+  list.value
+    .filter((row) => !!row.url)
+    .map((row) => ({ url: row.url as string, name: row.name })),
+);
+
+/** 视频：弹窗播放 */
+const videoPreviewVisible = ref(false);
+const videoPreviewUrl = ref("");
+const videoPreviewTitle = ref("");
+
+onMounted(() => {
+  void refreshAll();
 });
-
-const groups = reactive<Record<MaterialType, MaterialGroup[]>>({
-  image: MOCK_GROUPS.image.map((g) => ({ ...g })),
-  video: MOCK_GROUPS.video.map((g) => ({ ...g })),
-  document: MOCK_GROUPS.document.map((g) => ({ ...g })),
-});
-
-const page = ref(1);
-const pageSize = ref(10);
-
-const currentGroups = computed(() => groups[materialType.value]);
-
-const filteredGroups = computed(() => {
-  const kw = groupKeyword.value.trim();
-  if (!kw) return currentGroups.value;
-  return currentGroups.value.filter((g) => g.id === "all" || g.name.includes(kw));
-});
-
-const filteredList = computed(() => {
-  let list = allItems[materialType.value];
-  if (activeGroupId.value !== "all") {
-    list = list.filter((i) => i.groupId === activeGroupId.value);
-  }
-  const nameKw = nameKeyword.value.trim();
-  if (nameKw) list = list.filter((i) => i.name.includes(nameKw));
-  if (auditFilter.value) {
-    list = list.filter(
-      (i) => i.aiAudit === auditFilter.value || i.riskAudit === auditFilter.value,
-    );
-  }
-  return list;
-});
-
-const pagedList = computed(() => {
-  const start = (page.value - 1) * pageSize.value;
-  return filteredList.value.slice(start, start + pageSize.value);
-});
-
-const total = computed(() => filteredList.value.length);
-
-watch(materialType, () => {
-  activeGroupId.value = "all";
-  nameKeyword.value = "";
-  auditFilter.value = "";
-  page.value = 1;
-});
-
-watch([activeGroupId, nameKeyword, auditFilter, pageSize], () => {
-  page.value = 1;
-});
-
-function search() {
-  page.value = 1;
-}
-
-function resetFilter() {
-  nameKeyword.value = "";
-  auditFilter.value = "";
-  page.value = 1;
-}
 
 function openUpload() {
   uploadVisible.value = true;
 }
 
-function onUploadConfirm(_payload: {
+async function onUploadConfirm(payload: {
   groupId: string;
-  files: File[];
-  results: unknown[];
+  registerItems: MaterialRegisterItem[];
 }) {
-  // 列表落库后续迭代；本阶段上传结果仅在弹窗内展示
+  if (!payload.registerItems.length) return;
+  await registerAfterUpload(payload.groupId, payload.registerItems);
+}
+
+function onThumbClick(row: MaterialListItem) {
+  if (materialType.value === "image") {
+    if (!row.url) {
+      ElMessage.warning("暂无预览地址");
+      return;
+    }
+    const idx = imagePreviewItems.value.findIndex((i) => i.url === row.url);
+    if (idx < 0) {
+      ElMessage.warning("暂无预览地址");
+      return;
+    }
+    imageViewerIndex.value = idx;
+    imageViewerVisible.value = true;
+    return;
+  }
+  if (materialType.value === "video") {
+    if (!row.url) {
+      ElMessage.warning("暂无可播放地址");
+      return;
+    }
+    videoPreviewUrl.value = row.url;
+    videoPreviewTitle.value = row.name;
+    videoPreviewVisible.value = true;
+  }
 }
 
 function auditLabel(s: AuditStatus) {
@@ -130,26 +130,35 @@ function auditTagType(s: AuditStatus): "success" | "danger" | "info" {
   return "info";
 }
 
+/** 本迭代占位 */
+const PLACEHOLDER_AUDIT: AuditStatus = "pending";
+
 function shell(label: string) {
   toast(`「${label}」暂未开放`);
 }
 
-function addGroup(name: string) {
-  const list = groups[materialType.value];
-  const id = `g-${Date.now()}`;
-  list.push({ id, name, count: 0 });
-  activeGroupId.value = id;
-}
-
-function renameGroup(g: MaterialGroup, name: string) {
-  g.name = name;
-}
-
-function removeGroup(g: MaterialGroup) {
-  const list = groups[materialType.value];
-  const idx = list.findIndex((x) => x.id === g.id);
-  if (idx >= 0) list.splice(idx, 1);
-  if (activeGroupId.value === g.id) activeGroupId.value = "all";
+async function onEditName(row: MaterialListItem) {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      "请输入新的展示名称（建议保留原扩展名，不影响云端文件）",
+      "编辑名称",
+      {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        inputValue: row.name,
+        inputPlaceholder: "素材名称",
+        inputValidator: (v) => {
+          const t = String(v ?? "").trim();
+          if (!t) return "名称不能为空";
+          if (t.length > 256) return "名称不能超过 256 字";
+          return true;
+        },
+      },
+    );
+    await renameMaterialItem(row, String(value).trim());
+  } catch {
+    /* 取消 */
+  }
 }
 </script>
 
@@ -228,9 +237,12 @@ function removeGroup(g: MaterialGroup) {
           </div>
         </div>
 
-        <div class="table-wrap">
+        <div
+          v-loading="listLoading"
+          class="table-wrap"
+        >
           <ElTable
-            :data="pagedList"
+            :data="list"
             row-key="id"
             height="100%"
             class="material-table"
@@ -244,33 +256,12 @@ function removeGroup(g: MaterialGroup) {
               min-width="220"
             >
               <template #default="{ row }">
-                <div class="asset-cell">
-                  <div class="thumb">
-                    <img
-                      v-if="row.thumbUrl"
-                      :src="row.thumbUrl"
-                      :alt="row.name"
-                    >
-                    <span v-else>DOC</span>
-                  </div>
-                  <div class="asset-meta">
-                    <div class="asset-name">
-                      <span
-                        class="name-text"
-                        :title="row.name"
-                      >{{ row.name }}</span>
-                      <button
-                        type="button"
-                        class="icon-btn"
-                        title="编辑名称"
-                        @click="shell('编辑名称')"
-                      >
-                        <el-icon><EditPen /></el-icon>
-                      </button>
-                    </div>
-                    <div class="asset-sub">{{ row.meta }}</div>
-                  </div>
-                </div>
+                <MaterialAssetCell
+                  :row="row"
+                  :material-type="materialType"
+                  @edit-name="onEditName"
+                  @thumb-click="onThumbClick"
+                />
               </template>
             </ElTableColumn>
             <ElTableColumn
@@ -292,26 +283,28 @@ function removeGroup(g: MaterialGroup) {
               width="170"
             />
             <ElTableColumn
-              prop="uploader"
               label="上传人"
               width="100"
-            />
+            >
+              <template #default>—</template>
+            </ElTableColumn>
             <ElTableColumn
-              prop="department"
               label="所在部门"
               width="120"
-            />
+            >
+              <template #default>—</template>
+            </ElTableColumn>
             <ElTableColumn
               label="AI审核状态"
               width="120"
             >
-              <template #default="{ row }">
+              <template #default>
                 <ElTag
                   size="small"
-                  :type="auditTagType(row.aiAudit)"
+                  :type="auditTagType(PLACEHOLDER_AUDIT)"
                   effect="light"
                 >
-                  {{ auditLabel(row.aiAudit) }}
+                  {{ auditLabel(PLACEHOLDER_AUDIT) }}
                 </ElTag>
               </template>
             </ElTableColumn>
@@ -319,13 +312,13 @@ function removeGroup(g: MaterialGroup) {
               label="风控合规审核"
               width="130"
             >
-              <template #default="{ row }">
+              <template #default>
                 <ElTag
                   size="small"
-                  :type="auditTagType(row.riskAudit)"
+                  :type="auditTagType(PLACEHOLDER_AUDIT)"
                   effect="light"
                 >
-                  {{ auditLabel(row.riskAudit) }}
+                  {{ auditLabel(PLACEHOLDER_AUDIT) }}
                 </ElTag>
               </template>
             </ElTableColumn>
@@ -349,12 +342,14 @@ function removeGroup(g: MaterialGroup) {
 
         <div class="pager">
           <ElPagination
-            v-model:current-page="page"
-            v-model:page-size="pageSize"
+            :current-page="page"
+            :page-size="pageSize"
             background
             layout="total, sizes, prev, pager, next, jumper"
             :total="total"
             :page-sizes="[10, 20, 50]"
+            @current-change="onPageChange"
+            @size-change="onPageSizeChange"
           />
         </div>
       </section>
@@ -363,16 +358,27 @@ function removeGroup(g: MaterialGroup) {
     <MaterialUploadDialog
       v-model="uploadVisible"
       :material-type="materialType"
-      :groups="currentGroups"
+      :groups="uploadGroups"
       :default-group-id="activeGroupId"
       @confirm="onUploadConfirm"
+    />
+
+    <MaterialImageViewer
+      v-model="imageViewerVisible"
+      :items="imagePreviewItems"
+      :initial-index="imageViewerIndex"
+    />
+
+    <MaterialVideoPreviewDialog
+      v-model="videoPreviewVisible"
+      :url="videoPreviewUrl"
+      :title="videoPreviewTitle"
     />
   </div>
 </template>
 
 <style scoped>
 .material-page {
-  /* 顶栏 52 + main 上下 padding 40，页面自身不滚动 */
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -456,7 +462,6 @@ function removeGroup(g: MaterialGroup) {
   height: 100%;
 }
 
-/* 只要横线，不要竖线 */
 .material-table :deep(.el-table__cell) {
   border-right: none !important;
 }
@@ -488,72 +493,6 @@ function removeGroup(g: MaterialGroup) {
 .filter-label {
   font-size: 13px;
   color: var(--color-text-secondary);
-}
-
-.asset-cell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 0;
-}
-
-.thumb {
-  flex: none;
-  width: 72px;
-  height: 40px;
-  overflow: hidden;
-  border-radius: 4px;
-  background: var(--color-bg-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-placeholder);
-  font-size: 11px;
-}
-
-.thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.asset-meta {
-  min-width: 0;
-  flex: 1;
-}
-
-.asset-name {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: var(--color-text);
-}
-
-.name-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.icon-btn {
-  flex: none;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--color-text-placeholder);
-  cursor: pointer;
-  display: inline-flex;
-}
-
-.icon-btn:hover {
-  color: var(--color-primary);
-}
-
-.asset-sub {
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--color-text-placeholder);
 }
 
 .status-dot {

@@ -1,9 +1,14 @@
 import { computed, onBeforeUnmount, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import type { UploadUserFile } from "element-plus";
-import type { FileTableItem, UploadItem } from "@/views/settings/materials/materialUploadTypes";
+import type {
+  FileTableItem,
+  MaterialRegisterItem,
+  UploadItem,
+} from "@/views/settings/materials/materialUploadTypes";
 import {
   buildMaterialObjectKey,
+  resolveMaterialAccessUrl,
   type MaterialObjectKind,
 } from "@/views/settings/materials/materialUploadFormat";
 import { useMaterialsStore } from "@/stores/materials";
@@ -105,6 +110,7 @@ export function useMaterialUpload() {
   async function startUpload(materialType: MaterialObjectKind): Promise<{
     files: File[];
     results: Array<TosUploadResult | null>;
+    registerItems: MaterialRegisterItem[];
   } | null> {
     if (!canConfirm.value) return null;
     const targets = items.value.filter((i) => i.status === "waiting" || i.status === "error");
@@ -115,6 +121,7 @@ export function useMaterialUpload() {
 
     uploading.value = true;
     const results: Array<TosUploadResult | null> = [];
+    const registerItems: MaterialRegisterItem[] = [];
     try {
       const tosConfig = await materialsStore.ensureTosConfig();
       for (const item of targets) {
@@ -132,6 +139,7 @@ export function useMaterialUpload() {
         let lastAt = Date.now();
 
         const key = buildMaterialObjectKey(materialType, item.file.name);
+        item.objectKey = key;
         const res = await handleUpload({
           ...tosConfig,
           name: key,
@@ -162,19 +170,30 @@ export function useMaterialUpload() {
           item.status = "success";
           item.percent = 100;
           item.speedBps = 0;
-          item.resultUrl = typeof res.Location === "string" ? res.Location : undefined;
+          const url = resolveMaterialAccessUrl(
+            typeof res.Location === "string" ? res.Location : undefined,
+            key,
+          );
+          item.resultUrl = url;
+          registerItems.push({
+            name: item.file.name,
+            url,
+            objectKey: key,
+            fileSize: item.file.size,
+            mimeType: item.file.type || undefined,
+          });
         } else {
           item.status = "error";
           item.speedBps = 0;
         }
       }
 
-      const ok = results.filter((r) => r && !r.cancelled).length;
+      const ok = registerItems.length;
       const cancelled = results.filter((r) => r?.cancelled).length;
       const fail = results.length - ok - cancelled;
-      if (fail === 0 && cancelled === 0) {
+      if (fail === 0 && cancelled === 0 && ok > 0) {
         ElMessage.success(`上传成功 ${ok} 个`);
-      } else {
+      } else if (results.length) {
         ElMessage.warning(
           `上传完成：成功 ${ok}${cancelled ? `，取消 ${cancelled}` : ""}${fail ? `，失败 ${fail}` : ""}`,
         );
@@ -183,6 +202,7 @@ export function useMaterialUpload() {
       return {
         files: targets.map((t) => t.file),
         results,
+        registerItems,
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "上传失败";

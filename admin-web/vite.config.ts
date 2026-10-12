@@ -8,7 +8,7 @@ import { ElementPlusResolver } from "unplugin-vue-components/resolvers";
 
 export default defineConfig(({ mode }) => {
   const viteEnv = loadEnv(mode, process.cwd())
-  const { VITE_APP_TOS_NATIVE_URL } = viteEnv
+  const { VITE_APP_TOS_NATIVE_URL, VITE_APP_TOS_CDN_URL } = viteEnv
   return {
     plugins: [
       vue(),
@@ -38,6 +38,13 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
           rewrite: (p) => p.replace(/^\/tos/, ""),
+        },
+        // downloadFile / fileInfo 开发态把 CDN 换成 /cdn-media，避免直连跨域
+        "/cdn-media": {
+          target: VITE_APP_TOS_CDN_URL || VITE_APP_TOS_NATIVE_URL,
+          changeOrigin: true,
+          secure: false,
+          rewrite: (p) => p.replace(/^\/cdn-media/, ""),
         },
       },
     },

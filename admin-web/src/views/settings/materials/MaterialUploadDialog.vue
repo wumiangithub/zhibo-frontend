@@ -22,7 +22,7 @@ import {
 } from "./mock";
 import MaterialUploadFileTable from "./MaterialUploadFileTable.vue";
 import MaterialUploadThumbList from "./MaterialUploadThumbList.vue";
-import type { FileTableItem } from "./materialUploadTypes";
+import type { FileTableItem, MaterialRegisterItem } from "./materialUploadTypes";
 import { useToast } from "@/composables/useToast";
 import { useMaterialUpload } from "@/composables/useMaterialUpload";
 import type { TosUploadResult } from "@/utils/upload";
@@ -41,6 +41,7 @@ const emit = defineEmits<{
       groupId: string;
       files: File[];
       results: Array<TosUploadResult | null>;
+      registerItems: MaterialRegisterItem[];
     },
   ];
 }>();
@@ -143,6 +144,7 @@ async function onConfirm() {
     groupId: groupId.value,
     files: result.files,
     results: result.results,
+    registerItems: result.registerItems,
   });
 }
 

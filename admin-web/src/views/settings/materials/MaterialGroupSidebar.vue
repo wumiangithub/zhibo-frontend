@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { ElInput, ElMessageBox, ElIcon } from "element-plus";
 import { Search, CirclePlus } from "@element-plus/icons-vue";
-import type { MaterialGroup } from "./mock";
-import { useToast } from "@/composables/useToast";
+import type { MaterialGroup } from "@/api/materials";
 
-const props = defineProps<{
+defineProps<{
   groups: MaterialGroup[];
   activeGroupId: string;
   keyword: string;
@@ -18,8 +17,6 @@ const emit = defineEmits<{
   remove: [g: MaterialGroup];
 }>();
 
-const { toast } = useToast();
-
 async function addGroup() {
   try {
     const { value } = await ElMessageBox.prompt("请输入分组名称", "新建分组", {
@@ -30,7 +27,6 @@ async function addGroup() {
       inputErrorMessage: "名称不能为空",
     });
     emit("add", String(value).trim());
-    toast("已新建分组（Mock）");
   } catch {
     /* cancel */
   }
@@ -47,14 +43,13 @@ async function renameGroup(g: MaterialGroup) {
       inputErrorMessage: "名称不能为空",
     });
     emit("rename", g, String(value).trim());
-    toast("已重命名（Mock）");
   } catch {
     /* cancel */
   }
 }
 
 async function removeGroup(g: MaterialGroup) {
-  if (g.id === "all") return;
+  if (g.id === "all" || g.isDefault) return;
   try {
     await ElMessageBox.confirm(`确定删除分组「${g.name}」？`, "删除分组", {
       type: "warning",
@@ -62,10 +57,13 @@ async function removeGroup(g: MaterialGroup) {
       cancelButtonText: "取消",
     });
     emit("remove", g);
-    toast("已删除（Mock）");
   } catch {
     /* cancel */
   }
+}
+
+function canManage(g: MaterialGroup) {
+  return g.id !== "all" && !g.isDefault;
 }
 </script>
 
@@ -108,6 +106,7 @@ async function removeGroup(g: MaterialGroup) {
             重命名
           </button>
           <button
+            v-if="canManage(g)"
             type="button"
             @click.stop="removeGroup(g)"
           >

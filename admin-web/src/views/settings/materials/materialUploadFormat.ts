@@ -7,6 +7,15 @@ export function buildMaterialObjectKey(type: MaterialObjectKind, fileName: strin
   return `material/${type}/${Date.now()}_${fileName}`;
 }
 
+/** 登记用可访问 URL：优先 TOS Location，否则拼 CDN + objectKey */
+export function resolveMaterialAccessUrl(location: string | undefined, objectKey: string): string {
+  if (location && /^https?:\/\//i.test(location)) return location;
+  const base = String(import.meta.env.VITE_APP_TOS_CDN_URL || "").replace(/\/$/, "");
+  const key = objectKey.replace(/^\//, "");
+  if (!base) return location || key;
+  return `${base}/${key}`;
+}
+
 export function formatUploadSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)}KB`;
