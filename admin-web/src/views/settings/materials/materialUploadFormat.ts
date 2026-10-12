@@ -1,4 +1,11 @@
-/** 素材上传列表：大小 / 速度文案 */
+/** 素材上传列表：大小 / 速度文案 / 对象 key */
+
+export type MaterialObjectKind = "image" | "video" | "document";
+
+/** TOS 对象 key：`material/{image|video|document}/{timestamp}_{filename}` */
+export function buildMaterialObjectKey(type: MaterialObjectKind, fileName: string): string {
+  return `material/${type}/${Date.now()}_${fileName}`;
+}
 
 export function formatUploadSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;

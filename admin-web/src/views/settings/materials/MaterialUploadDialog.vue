@@ -137,7 +137,7 @@ function onBeforeClose(done: () => void) {
 }
 
 async function onConfirm() {
-  const result = await startUpload();
+  const result = await startUpload(props.materialType);
   if (!result) return;
   emit("confirm", {
     groupId: groupId.value,

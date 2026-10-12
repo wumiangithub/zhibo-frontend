@@ -32,4 +32,6 @@ export function batchHandleUpload(
   tosConfig: TosUploadConfig,
   onFileProgress?: (fileName: string, percent: number) => void,
   onBatchProgress?: (percent: number, completedCount: number, totalCount: number) => void,
+  /** 自定义对象 key；素材中心用 buildMaterialObjectKey，默认仍为 upload/{timestamp}_{filename} */
+  buildObjectKey?: (file: File) => string,
 ): Promise<Array<TosUploadResult | null>>;

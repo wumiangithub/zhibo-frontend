@@ -2,6 +2,10 @@ import { computed, onBeforeUnmount, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
 import type { UploadUserFile } from "element-plus";
 import type { FileTableItem, UploadItem } from "@/views/settings/materials/materialUploadTypes";
+import {
+  buildMaterialObjectKey,
+  type MaterialObjectKind,
+} from "@/views/settings/materials/materialUploadFormat";
 import { useMaterialsStore } from "@/stores/materials";
 import { handleUpload, type TosUploadResult } from "@/utils/upload";
 
@@ -98,7 +102,7 @@ export function useMaterialUpload() {
     }
   }
 
-  async function startUpload(): Promise<{
+  async function startUpload(materialType: MaterialObjectKind): Promise<{
     files: File[];
     results: Array<TosUploadResult | null>;
   } | null> {
@@ -127,7 +131,7 @@ export function useMaterialUpload() {
         let lastLoaded = 0;
         let lastAt = Date.now();
 
-        const key = `upload/${Date.now()}_${item.file.name}`;
+        const key = buildMaterialObjectKey(materialType, item.file.name);
         const res = await handleUpload({
           ...tosConfig,
           name: key,

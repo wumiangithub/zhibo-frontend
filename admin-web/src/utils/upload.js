@@ -144,10 +144,11 @@ export const handleUpload = async ({
  * @param {Object} tosConfig - 火山TOS配置参数（region、endpoint等）
  * @param {Function} [onFileProgress] - 单个文件进度回调，参数：(fileName, percent)
  * @param {Function} [onBatchProgress] - 批量总进度回调，参数：(percent, completedCount, totalCount)
+ * @param {Function} [buildObjectKey] - 可选，自定义 TOS 对象 key；素材中心请用 buildMaterialObjectKey（material/{type}/...）。未传时仍为 upload/{timestamp}_{filename}
  * @returns {Promise<Array<Object|null>>} 上传结果列表，与文件顺序一致，成功返回文件信息，失败返回null
- * @example  const resultList = await batchHandleUpload(files, tosConfig, onFileProgress, onBatchProgress)
+ * @example  const resultList = await batchHandleUpload(files, tosConfig, onFileProgress, onBatchProgress, (f) => buildMaterialObjectKey('image', f.name))
  */
-export const batchHandleUpload = async (files, tosConfig, onFileProgress, onBatchProgress) => {
+export const batchHandleUpload = async (files, tosConfig, onFileProgress, onBatchProgress, buildObjectKey) => {
   const results = []
   const fileList = Array.from(files) // 统一转为数组，兼容FileList对象
   const totalFileCount = fileList.length // 总文件数
@@ -157,7 +158,10 @@ export const batchHandleUpload = async (files, tosConfig, onFileProgress, onBatc
 
   // 遍历所有文件，逐个串行上传（稳定，避免浏览器并发限制）
   for (const file of fileList) {
-    const fileName = `upload/${Date.now()}_${file.name}` // 云端文件名（和你项目一致）
+    // 素材中心走 useMaterialUpload + buildMaterialObjectKey，不经过本函数
+    const fileName = typeof buildObjectKey === 'function'
+      ? buildObjectKey(file)
+      : `upload/${Date.now()}_${file.name}`
     const res = await handleUpload({
       ...tosConfig,
       name: fileName,
