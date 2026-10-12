@@ -7,10 +7,11 @@ import {
   ElUpload,
   ElButton,
   ElMessage,
+  ElIcon,
   type UploadFile,
   type UploadUserFile,
 } from "element-plus";
-import { UploadFilled } from "@element-plus/icons-vue";
+import { UploadFilled, InfoFilled } from "@element-plus/icons-vue";
 import {
   UPLOAD_ACCEPT,
   UPLOAD_DRAG_TEXT,
@@ -19,30 +20,57 @@ import {
   type MaterialGroup,
   type MaterialType,
 } from "./mock";
+import MaterialUploadFileTable from "./MaterialUploadFileTable.vue";
+import MaterialUploadThumbList from "./MaterialUploadThumbList.vue";
+import type { FileTableItem } from "./materialUploadTypes";
 import { useToast } from "@/composables/useToast";
-import { useMaterialsStore } from "@/stores/materials";
+import { useMaterialUpload } from "@/composables/useMaterialUpload";
+import type { TosUploadResult } from "@/utils/upload";
 
 const props = defineProps<{
   modelValue: boolean;
   materialType: MaterialType;
   groups: MaterialGroup[];
-  /** 打开时默认选中的分组（不含 all） */
   defaultGroupId?: string;
 }>();
 
 const emit = defineEmits<{
   "update:modelValue": [v: boolean];
-  /** UI 壳：确认时把文件列表抛出，实际上传逻辑后续自接 */
-  confirm: [payload: { groupId: string; files: File[] }];
+  confirm: [
+    payload: {
+      groupId: string;
+      files: File[];
+      results: Array<TosUploadResult | null>;
+    },
+  ];
 }>();
 
 const { toast } = useToast();
-const materialsStore = useMaterialsStore();
+const {
+  items,
+  uploading,
+  pendingCount,
+  successCount,
+  uploadingCount,
+  showStats,
+  canConfirm,
+  syncItemsFromFileList,
+  removeItem,
+  cancelUpload,
+  resetSession,
+  ensureStsOnOpen,
+  startUpload,
+} = useMaterialUpload();
 
 const visible = computed({
   get: () => props.modelValue,
   set: (v) => emit("update:modelValue", v),
 });
+
+/** 视频 / 文档共用表格；图片用缩略图 */
+const useFileTable = computed(
+  () => props.materialType === "video" || props.materialType === "document",
+);
 
 const groupOptions = computed(() => props.groups.filter((g) => g.id !== "all"));
 
@@ -53,7 +81,6 @@ const accept = computed(() => UPLOAD_ACCEPT[props.materialType]);
 const hints = computed(() => UPLOAD_HINTS[props.materialType]);
 const title = computed(() => UPLOAD_TITLE[props.materialType]);
 const dragText = computed(() => UPLOAD_DRAG_TEXT[props.materialType]);
-const canConfirm = computed(() => fileList.value.length > 0);
 
 watch(
   () => props.modelValue,
@@ -64,10 +91,8 @@ watch(
     groupId.value =
       prefer && groupOptions.value.some((g) => g.id === prefer) ? prefer : first;
     fileList.value = [];
-    void materialsStore.ensureTosConfig().catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : "获取上传凭证失败";
-      ElMessage.error(msg);
-    });
+    resetSession();
+    void ensureStsOnOpen();
   },
 );
 
@@ -76,32 +101,61 @@ function onExceed() {
 }
 
 function onChange(_file: UploadFile, files: UploadUserFile[]) {
+  if (uploading.value) return;
   fileList.value = files;
+  syncItemsFromFileList(files);
 }
 
 function onRemove(_file: UploadFile, files: UploadUserFile[]) {
+  if (uploading.value) return;
   fileList.value = files;
+  syncItemsFromFileList(files);
+}
+
+function onRemoveItem(item: FileTableItem) {
+  fileList.value = removeItem(item, fileList.value);
+}
+
+function onCancelItem(item: FileTableItem) {
+  fileList.value = cancelUpload(item, fileList.value);
 }
 
 function close() {
+  if (uploading.value) {
+    ElMessage.warning("上传进行中，请勿关闭");
+    return;
+  }
   visible.value = false;
 }
 
-function onConfirm() {
-  if (!canConfirm.value) return;
-  // Element Plus raw 是 UploadRawFile（File + uid），直接收成 File[]
-  const files: File[] = fileList.value.flatMap((f) => (f.raw ? [f.raw] : []));
-  if (!files.length) {
-    ElMessage.warning("请先选择文件");
+function onBeforeClose(done: () => void) {
+  if (uploading.value) {
+    ElMessage.warning("上传进行中，请勿关闭");
     return;
   }
-  emit("confirm", { groupId: groupId.value, files });
-  toast("已选文件（Mock，实际上传逻辑待接）");
-  close();
+  done();
+}
+
+async function onConfirm() {
+  const result = await startUpload();
+  if (!result) return;
+  emit("confirm", {
+    groupId: groupId.value,
+    files: result.files,
+    results: result.results,
+  });
 }
 
 function onViewTranscode() {
   toast("「查看转码规则」暂未开放");
+}
+
+function onDocTip() {
+  toast("排查文档暂未开放");
+}
+
+function onOpenNewWindow() {
+  window.open(window.location.href, "_blank");
 }
 </script>
 
@@ -112,6 +166,9 @@ function onViewTranscode() {
     width="900px"
     align-center
     destroy-on-close
+    :close-on-click-modal="!uploading"
+    :close-on-press-escape="!uploading"
+    :before-close="onBeforeClose"
     class="material-upload-dialog"
   >
     <div class="upload-body">
@@ -120,6 +177,7 @@ function onViewTranscode() {
         <ElSelect
           v-model="groupId"
           placeholder="请选择分组"
+          :disabled="uploading"
           style="width: 280px"
         >
           <ElOption
@@ -136,6 +194,8 @@ function onViewTranscode() {
         drag
         multiple
         :auto-upload="false"
+        :show-file-list="false"
+        :disabled="uploading"
         :limit="100"
         :accept="accept"
         :on-exceed="onExceed"
@@ -169,17 +229,74 @@ function onViewTranscode() {
           </p>
         </div>
       </ElUpload>
+
+      <div
+        v-if="showStats"
+        class="upload-stats"
+      >
+        共 {{ items.length }} 个
+        <template v-if="successCount > 0">
+          上传成功 <span class="stat-ok">{{ successCount }}</span>
+        </template>
+        <template v-if="uploadingCount > 0">
+          上传中 <span class="stat-ing">{{ uploadingCount }}</span>
+        </template>
+      </div>
+
+      <MaterialUploadFileTable
+        v-if="useFileTable && items.length"
+        :items="items"
+        :material-type="materialType as 'video' | 'document'"
+        @remove="onRemoveItem"
+        @cancel="onCancelItem"
+      />
+
+      <MaterialUploadThumbList
+        v-else-if="!useFileTable && items.length"
+        :items="items"
+      />
+
+      <div
+        v-if="showStats"
+        class="upload-notice"
+      >
+        <ElIcon class="notice-icon"><InfoFilled /></ElIcon>
+        <p>
+          上传失败或缓慢问题可点击
+          <button
+            type="button"
+            class="link-btn"
+            @click="onDocTip"
+          >
+            该文档
+          </button>
+          排查。上传期间请勿关闭本页面，否则将会上传失败。如需进行其他操作请
+          <button
+            type="button"
+            class="link-btn"
+            @click="onOpenNewWindow"
+          >
+            前往新窗口
+          </button>
+        </p>
+      </div>
     </div>
 
     <template #footer>
       <div class="dialog-footer">
-        <ElButton @click="close">取消</ElButton>
+        <ElButton
+          :disabled="uploading"
+          @click="close"
+        >
+          取消
+        </ElButton>
         <ElButton
           type="primary"
           :disabled="!canConfirm"
+          :loading="uploading"
           @click="onConfirm"
         >
-          确认上传
+          确认上传({{ pendingCount }})
         </ElButton>
       </div>
     </template>
@@ -263,6 +380,46 @@ function onViewTranscode() {
 
 .link-btn:hover {
   color: var(--color-primary-hover);
+}
+
+.upload-stats {
+  margin-top: 12px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.stat-ok {
+  color: var(--color-success);
+  margin: 0 2px;
+}
+
+.stat-ing {
+  margin-left: 2px;
+}
+
+.upload-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: var(--el-color-primary-light-9);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.notice-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--color-primary);
+  font-size: 14px;
+}
+
+.upload-notice p {
+  margin: 0;
 }
 
 .dialog-footer {

@@ -32,8 +32,9 @@ async function loadTosSDK() {
  * @param {string} params.name - 云端文件路径及名称
  * @param {File} params.file - 待上传文件对象
  * @param {number} params.fileSize - 文件大小（单位：B）
- * @param {Function} [params.onProgress] - 进度回调函数，参数为当前进度百分比（0-100）
- * @returns {Promise<Object|null>} 上传成功返回文件信息，失败/取消返回null
+ * @param {Function} [params.onProgress] - (percent 0-100, loadedBytes) 分片完成后回调
+ * @param {Function} [params.shouldCancel] - 返回 true 则中止并 abortMultipartUpload
+ * @returns {Promise<Object|null>} 成功返回文件信息；失败/取消返回 null（取消时带 cancelled:true）
  */
 export const handleUpload = async ({
   region,
@@ -45,7 +46,8 @@ export const handleUpload = async ({
   name,
   file,
   fileSize,
-  onProgress
+  onProgress,
+  shouldCancel
 }) => {
   const TOS = await loadTosSDK()
   let uploadId = null
@@ -53,7 +55,8 @@ export const handleUpload = async ({
   // eslint-disable-next-line
   let proxy = isDev ? {
     proxy: {
-      url: '/tos',
+      // 须带尾斜杠，与 vite `/tos/` 代理一致，避免抢走 public 里的 tos.umd*.js
+      url: '/tos/',
       needProxyParams: false
     }
   } : {}
@@ -66,7 +69,23 @@ export const handleUpload = async ({
     stsToken: sessionToken,
     bucket: bucketName
   })
+
+  const abortIfNeeded = async () => {
+    if (!uploadId) return
+    try {
+      await client.abortMultipartUpload({
+        key: name,
+        uploadId
+      })
+    } catch (abortError) {
+      console.log('取消分片上传失败', abortError)
+    }
+  }
+
   try {
+    if (shouldCancel?.()) {
+      return { cancelled: true }
+    }
     const {
       data: { UploadId }
     } = await client.createMultipartUpload({
@@ -79,6 +98,10 @@ export const handleUpload = async ({
     const totalParts = Math.ceil(file.size / PART_SIZE) // 总分片数，用于计算进度
     // 串行上传每个 Part（和你项目一致）
     for (let i = 0; i * PART_SIZE < file.size; ++i) {
+      if (shouldCancel?.()) {
+        await abortIfNeeded()
+        return { cancelled: true }
+      }
       const { data } = await client.uploadPart({
         key: name,
         partNumber: i + 1,
@@ -87,9 +110,13 @@ export const handleUpload = async ({
       })
       uploadPartRes[i] = data.ETag
 
-      // 新增：计算单个文件当前进度，触发回调（供Vue页面接收，渲染进度条）
-      const currentProgress = (i + 1) / totalParts // 当前分片占比
-      onProgress?.(Math.round(currentProgress * 100)) // 转成百分比，回调给Vue页面
+      const loadedBytes = Math.min((i + 1) * PART_SIZE, file.size)
+      const currentProgress = (i + 1) / totalParts
+      onProgress?.(Math.round(currentProgress * 100), loadedBytes)
+    }
+    if (shouldCancel?.()) {
+      await abortIfNeeded()
+      return { cancelled: true }
     }
     let resp = await client.completeMultipartUpload({
       key: name,
@@ -99,26 +126,15 @@ export const handleUpload = async ({
       })),
       uploadId: UploadId
     })
-    // console.log('单个文件上传结果', resp)
     if (resp.data.Location) {
       resp.data.fileSize = fileSize
-      return resp.data // 上传成功，返回文件信息（Location、fileSize等）
+      return resp.data
     }
-    return null // 上传无结果，返回null
+    return null
   } catch (error) {
     console.log('单个文件上传失败', error)
-    if (uploadId) {
-      // 出错后取消分片，避免产生垃圾文件（和你项目一致）
-      try {
-        await client.abortMultipartUpload({
-          key: name,
-          uploadId
-        })
-      } catch (abortError) {
-        console.log('取消分片上传失败', abortError)
-      }
-    }
-    return null // 上传失败，返回null
+    await abortIfNeeded()
+    return null
   }
 }
 

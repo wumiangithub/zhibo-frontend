@@ -32,11 +32,12 @@ export default defineConfig(({ mode }) => {
           target: "http://127.0.0.1:8081",
           changeOrigin: true,
         },
-        '/tos': {
+        // 仅代理 /tos/... 上传请求；勿匹配 /tos.umd.production.min.js（public 静态 SDK）
+        "/tos/": {
           target: VITE_APP_TOS_NATIVE_URL,
           changeOrigin: true,
           secure: false,
-          rewrite: (p) => p.replace(/^\/tos/, '')
+          rewrite: (p) => p.replace(/^\/tos/, ""),
         },
       },
     },

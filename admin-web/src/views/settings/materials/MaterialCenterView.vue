@@ -110,8 +110,12 @@ function openUpload() {
   uploadVisible.value = true;
 }
 
-function onUploadConfirm(_payload: { groupId: string; files: File[] }) {
-  // 实际上传由后续 TOS 逻辑接入
+function onUploadConfirm(_payload: {
+  groupId: string;
+  files: File[];
+  results: unknown[];
+}) {
+  // 列表落库后续迭代；本阶段上传结果仅在弹窗内展示
 }
 
 function auditLabel(s: AuditStatus) {
