@@ -26,7 +26,12 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      port: 5173,
+      // 微信网站应用 redirect_uri 不宜带 :5173；本地用 80 使
+      // http://wx.qktz.com.cn/api/auth/wechat/callback 无端口（需管理员权限绑 80）
+      host: true,
+      port: 80,
+      strictPort: true,
+      allowedHosts: ["wx.qktz.com.cn", "localhost"],
       proxy: {
         "/api": {
           target: "http://127.0.0.1:8081",

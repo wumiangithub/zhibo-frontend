@@ -1,9 +1,16 @@
 import { createRouter, createWebHistory } from "vue-router";
 import DefaultLayout from "@/layouts/DefaultLayout.vue";
+import { isLoggedIn } from "@/utils/authSession";
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    {
+      path: "/login",
+      name: "login",
+      component: () => import("@/views/login/LoginView.vue"),
+      meta: { public: true },
+    },
     {
       path: "/",
       component: DefaultLayout,
@@ -48,6 +55,24 @@ const router = createRouter({
       ],
     },
   ],
+});
+
+router.beforeEach((to) => {
+  const publicRoute = to.meta.public === true;
+  if (publicRoute) {
+    if (to.name === "login" && isLoggedIn()) {
+      const redirect = typeof to.query.redirect === "string" ? to.query.redirect : "/";
+      return redirect || "/";
+    }
+    return true;
+  }
+  if (!isLoggedIn()) {
+    return {
+      path: "/login",
+      query: { redirect: to.fullPath },
+    };
+  }
+  return true;
 });
 
 export default router;

@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import { ElMessageBox } from "element-plus";
 import SideIcon from "@/components/SideIcon.vue";
 import { useToast } from "@/composables/useToast";
+import { useAuthStore } from "@/stores/auth";
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const { message, visible, toast } = useToast();
 
 const topNav = [
@@ -122,6 +125,20 @@ function onSideClick(item: { key: string; label: string }) {
 function goHome() {
   void router.push("/");
 }
+
+async function onAccountClick() {
+  try {
+    await ElMessageBox.confirm("确定退出登录？", "退出登录", {
+      confirmButtonText: "退出",
+      cancelButtonText: "取消",
+      type: "warning",
+    });
+  } catch {
+    return;
+  }
+  auth.logout();
+  void router.replace("/login");
+}
 </script>
 
 <template>
@@ -190,9 +207,23 @@ function goHome() {
         <button
           type="button"
           class="flex items-center gap-2 rounded-full border-0 bg-transparent py-1 pl-1 pr-2 text-[13px] text-[#333] outline-none transition-colors hover:bg-[#f0f0f0]"
-          @click="onShellClick('账号')"
+          title="退出登录"
+          @click="onAccountClick"
         >
-          <span class="flex h-7 w-7 items-center justify-center rounded-full bg-[#bfbfbf] text-white">
+          <span
+            v-if="auth.user?.avatar"
+            class="h-7 w-7 overflow-hidden rounded-full bg-[#bfbfbf]"
+          >
+            <img
+              :src="auth.user.avatar"
+              alt=""
+              class="h-full w-full object-cover"
+            >
+          </span>
+          <span
+            v-else
+            class="flex h-7 w-7 items-center justify-center rounded-full bg-[#bfbfbf] text-white"
+          >
             <svg
               class="h-3.5 w-3.5"
               fill="currentColor"
@@ -201,7 +232,7 @@ function goHome() {
               <path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" />
             </svg>
           </span>
-          <span>管理员</span>
+          <span>{{ auth.displayName }}</span>
           <svg
             class="h-3 w-3 text-[#999]"
             fill="none"

@@ -1,4 +1,5 @@
 import axios, { type AxiosRequestConfig } from "axios";
+import { clearSession, getAccessToken } from "@/utils/authSession";
 
 export interface ApiResult<T> {
   code: number;
@@ -20,17 +21,49 @@ const instance = axios.create({
   timeout: 15000,
 });
 
+let redirectingToLogin = false;
+
+function redirectToLogin() {
+  if (redirectingToLogin) return;
+  const path = window.location.pathname + window.location.search;
+  if (path.startsWith("/login")) return;
+  redirectingToLogin = true;
+  clearSession();
+  const redirect = encodeURIComponent(path || "/");
+  window.location.assign(`/login?redirect=${redirect}`);
+}
+
+instance.interceptors.request.use((config) => {
+  const token = getAccessToken();
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 instance.interceptors.response.use(
   (resp): any => {
     const body = resp.data as ApiResult<unknown>;
     if (body && body.code === 0) {
       return body.data;
     }
+    if (body?.code === 401) {
+      redirectToLogin();
+      return Promise.reject(new ApiError(body?.msg ?? "未登录", 401));
+    }
     return Promise.reject(
       new ApiError(body?.msg ?? "请求失败", body?.code ?? -1),
     );
   },
-  (err) => Promise.reject(new ApiError(err?.message ?? "网络错误", -1)),
+  (err) => {
+    const status = err?.response?.status;
+    if (status === 401) {
+      redirectToLogin();
+      return Promise.reject(new ApiError("未登录", 401));
+    }
+    return Promise.reject(new ApiError(err?.message ?? "网络错误", -1));
+  },
 );
 
 export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {

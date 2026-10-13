@@ -11,6 +11,7 @@ import {
   type LiveProvider,
 } from "@/api/activity";
 import { useToast } from "@/composables/useToast";
+import { getAccessToken } from "@/utils/authSession";
 import UiButton from "@/components/ui/UiButton.vue";
 import ShareDialog from "@/components/share/ShareDialog.vue";
 import BasicSettingsTab from "./detail/BasicSettingsTab.vue";
@@ -121,7 +122,7 @@ async function shareWatch() {
 }
 
 function goConsole() {
-  const token = ""; // 本站鉴权以后再补
+  const token = getAccessToken() ?? "";
   const url = `http://localhost:5174/console/${id.value}?token=${encodeURIComponent(token)}`;
   window.open(url, "_blank", "noopener");
 }
