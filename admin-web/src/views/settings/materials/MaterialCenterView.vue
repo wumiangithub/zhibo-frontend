@@ -257,7 +257,7 @@ async function onEditName(row: MaterialListItem) {
             >
               <template #default="{ row }">
                 <MaterialAssetCell
-                  :row="row"
+                  :row="(row as MaterialListItem)"
                   :material-type="materialType"
                   @edit-name="onEditName"
                   @thumb-click="onThumbClick"

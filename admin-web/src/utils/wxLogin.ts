@@ -26,10 +26,10 @@ export function resolveWechatSelfRedirect(): boolean {
   return !import.meta.env.DEV;
 }
 
-/** 拼开放平台扫码页 URL */
+/** 拼开放平台扫码页 URL（appid / redirect_uri 仅来自 VITE_WECHAT_*，禁止硬编码） */
 export function buildWechatQrConnectUrl(state: string): string {
-  const appid = import.meta.env.VITE_WECHAT_APPID;
-  const redirectUri = import.meta.env.VITE_WECHAT_REDIRECT_URI;
+  const appid = import.meta.env.VITE_WECHAT_APPID?.trim();
+  const redirectUri = import.meta.env.VITE_WECHAT_REDIRECT_URI?.trim();
   if (!appid || !redirectUri) {
     throw new Error("未配置 VITE_WECHAT_APPID / VITE_WECHAT_REDIRECT_URI");
   }

@@ -12,7 +12,6 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     ElIcon: typeof import('element-plus/es')['ElIcon']
-    ElImageViewer: typeof import('element-plus/es')['ElImageViewer']
     ElRadioButton: typeof import('element-plus/es')['ElRadioButton']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

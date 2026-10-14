@@ -11,6 +11,8 @@ export default defineConfig({
     },
   },
   server: {
+    // 与 admin-web 一致：同时听 IPv4，避免仅 ::1 时 127.0.0.1 打不开
+    host: true,
     port: 5174,
     proxy: {
       // 观看 / 进出 / 中控台名单一律 live-service
