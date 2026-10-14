@@ -109,6 +109,7 @@ async function fetchDetail() {
 }
 
 async function goLive() {
+  if (!detail.value?.canBroadcast) return;
   try {
     const { hostUrl } = await getHostUrl(id.value);
     window.open(hostUrl, "_blank", "noopener");
@@ -190,9 +191,10 @@ watch(id, fetchDetail);
               </UiButton>
               <UiButton
                 variant="link"
+                :disabled="!detail.canBroadcast"
                 @click="goLive"
               >
-                去直播
+                开播
               </UiButton>
               <UiButton
                 variant="link"
@@ -257,6 +259,7 @@ watch(id, fetchDetail);
           <BroadcastSettingsTab
             v-else-if="activeTab === 'broadcast'"
             :activity-id="id"
+            :can-broadcast="!!detail.canBroadcast"
             @error="pageError = $event"
           />
           <OperationSettingsTab

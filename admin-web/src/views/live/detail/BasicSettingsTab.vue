@@ -186,7 +186,7 @@ defineExpose({
       />
       <CoverSection :form="form" />
       <DetailSection :form="form" />
-      <div class="placeholder-tip">角色 / 回放 / 归属人本迭代暂不保存</div>
+      <div class="placeholder-tip">角色 / 回放本迭代暂不保存；归属人仅新建时落库，详情本版不可改</div>
       <RoleSection :form="form" />
       <PlaybackSection :form="form" />
       <OwnerSection :form="form" />
@@ -198,7 +198,7 @@ defineExpose({
     </div>
 
     <div class="card">
-      <p class="placeholder-tip">商品信息本迭代暂不保存</p>
+      <p class="placeholder-tip">售卖 / 商品仅新建时落库，详情本版不可改；分组 / 隐藏 / 停售不落库</p>
       <ProductSection :form="form" />
     </div>
 

@@ -1,5 +1,5 @@
 import { reactive, ref } from "vue";
-import type { LiveProvider } from "@/api/activity";
+import type { ActivityProduct, LiveProvider, SellType } from "@/api/activity";
 
 export type LiveMode = "video" | "recorded" | "voice";
 export type ViewerStyle = "traditional" | "immersive";
@@ -42,10 +42,13 @@ export interface LiveFormState {
   playbackSpeed: "allow" | "forbid";
   fastForward: "allow" | "forbid";
   replayProtection: boolean;
-  owner: string;
+  /** 归属人员工 id（rs_mainkey_id 十进制字符串） */
+  ownerIds: string[];
+  /** 关联商品快照 */
+  products: ActivityProduct[];
   courseId: string;
   sellAlone: boolean;
-  sellType: "free" | "paid" | "encrypted" | "specified";
+  sellType: SellType;
   validity: string;
   productGroup: string;
   shelfType: "now" | "scheduled" | "none";
@@ -90,11 +93,12 @@ export function useLiveForm() {
     playbackSpeed: "allow",
     fastForward: "allow",
     replayProtection: false,
-    owner: "",
+    ownerIds: [],
+    products: [],
     courseId: "",
     sellAlone: true,
     sellType: "free",
-    validity: "长期有效，暂不支持修改",
+    validity: "长期有效",
     productGroup: "",
     shelfType: "now",
     shelfTime: "",

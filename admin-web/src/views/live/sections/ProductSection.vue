@@ -1,9 +1,53 @@
 <script setup lang="ts">
-import { ElCheckbox, ElRadioGroup, ElRadioButton, ElSelect, ElOption, ElDatePicker } from "element-plus";
+import { onMounted, ref } from "vue";
+import {
+  ElCheckbox,
+  ElDatePicker,
+  ElMessage,
+  ElOption,
+  ElRadioButton,
+  ElRadioGroup,
+  ElSelect,
+} from "element-plus";
+import { listSalerProducts, type OrderCenterProduct } from "@/api/orderCenter";
 import FormRow from "../components/FormRow.vue";
 import type { LiveFormState } from "../composables/useLiveForm";
 
-defineProps<{ form: LiveFormState }>();
+const props = defineProps<{ form: LiveFormState }>();
+const form = props.form;
+
+const loading = ref(false);
+const productError = ref("");
+const options = ref<OrderCenterProduct[]>([]);
+
+async function loadProducts() {
+  loading.value = true;
+  productError.value = "";
+  try {
+    options.value = await listSalerProducts();
+  } catch (e) {
+    productError.value = e instanceof Error ? e.message : "拉取商品列表失败";
+    options.value = [];
+    ElMessage.error(productError.value);
+  } finally {
+    loading.value = false;
+  }
+}
+
+function onProductChange(spuIds: string[]) {
+  const map = new Map(options.value.map((p) => [p.spuId, p]));
+  for (const p of form.products) map.set(p.spuId, p);
+  form.products = spuIds
+    .map((id) => {
+      const hit = map.get(id);
+      return hit ? { spuId: hit.spuId, productName: hit.productName } : null;
+    })
+    .filter((p): p is { spuId: string; productName: string } => !!p);
+}
+
+onMounted(() => {
+  void loadProducts();
+});
 </script>
 
 <template>
@@ -20,7 +64,7 @@ defineProps<{ form: LiveFormState }>();
           <ElRadioButton value="free">免费</ElRadioButton>
           <ElRadioButton value="paid">付费</ElRadioButton>
           <ElRadioButton value="encrypted">加密</ElRadioButton>
-          <ElRadioButton value="specified">指定用户</ElRadioButton>
+          <ElRadioButton value="specified">指定学员</ElRadioButton>
         </ElRadioGroup>
       </div>
       <div class="validity-box">
@@ -29,9 +73,51 @@ defineProps<{ form: LiveFormState }>();
           :model-value="'long'"
           disabled
         >
-          <ElRadioButton value="long">{{ form.validity }}</ElRadioButton>
+          <ElRadioButton value="long">长期有效</ElRadioButton>
         </ElRadioGroup>
       </div>
+    </div>
+  </FormRow>
+
+  <FormRow label="关联商品:">
+    <div>
+      <div class="flex items-center gap-3">
+        <ElSelect
+          :model-value="form.products.map((p) => p.spuId)"
+          multiple
+          filterable
+          clearable
+          collapse-tags
+          collapse-tags-tooltip
+          :loading="loading"
+          placeholder="从订单中心选择商品（可选）"
+          style="width: 360px"
+          @update:model-value="onProductChange"
+        >
+          <ElOption
+            v-for="p in options"
+            :key="p.spuId"
+            :label="p.productName"
+            :value="p.spuId"
+          />
+        </ElSelect>
+        <a
+          class="link"
+          @click.prevent="loadProducts"
+        >刷新</a>
+      </div>
+      <p
+        v-if="productError"
+        class="hint is-err"
+      >
+        {{ productError }}（可不选商品继续保存）
+      </p>
+      <p
+        v-else
+        class="hint"
+      >
+        商品名称按保存时快照写入本站；拉取失败仍可无商品保存
+      </p>
     </div>
   </FormRow>
 
@@ -47,9 +133,7 @@ defineProps<{ form: LiveFormState }>();
           value="default"
         />
       </ElSelect>
-      <a class="link">刷新</a>
-      <a class="link">前往商品分组</a>
-      <a class="link">查看教程</a>
+      <span class="hint">本迭代不落库</span>
     </div>
   </FormRow>
 
@@ -72,6 +156,7 @@ defineProps<{ form: LiveFormState }>();
           placeholder="请设置时间"
           style="width: 200px"
         />
+        <span class="hint">定时本版不调度，保存时按「暂不上架」处理</span>
       </div>
     </div>
   </FormRow>
@@ -82,6 +167,7 @@ defineProps<{ form: LiveFormState }>();
         <ElCheckbox v-model="form.hidden">隐藏</ElCheckbox>
         <ElCheckbox v-model="form.stopped">停售</ElCheckbox>
       </div>
+      <p class="hint">隐藏 / 停售本迭代不落库</p>
     </div>
   </FormRow>
 </template>
@@ -117,6 +203,14 @@ defineProps<{ form: LiveFormState }>();
 }
 .link:hover {
   opacity: 0.8;
+}
+.hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #999;
+}
+.hint.is-err {
+  color: #cf1322;
 }
 :deep(.form-row) {
   margin-bottom: 18px;

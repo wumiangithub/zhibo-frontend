@@ -4,7 +4,10 @@ import { getHostUrl, type ActivityId } from "@/api/activity";
 import { useToast } from "@/composables/useToast";
 import UiButton from "@/components/ui/UiButton.vue";
 
-const props = defineProps<{ activityId: ActivityId }>();
+const props = withDefaults(
+  defineProps<{ activityId: ActivityId; canBroadcast?: boolean }>(),
+  { canBroadcast: false },
+);
 const emit = defineEmits<{ error: [msg: string] }>();
 
 const { toast } = useToast();
@@ -27,6 +30,7 @@ function onSubTab(key: (typeof subTabs)[number]["key"]) {
 }
 
 async function openHost() {
+  if (!props.canBroadcast) return;
   opening.value = true;
   try {
     const { hostUrl } = await getHostUrl(props.activityId);
@@ -124,11 +128,17 @@ async function openHost() {
               <div class="host-card__actions">
                 <UiButton
                   variant="primary"
-                  :disabled="opening"
+                  :disabled="opening || !canBroadcast"
                   @click="openHost"
                 >
                   {{ opening ? "打开中…" : "网页开播" }}
                 </UiButton>
+                <p
+                  v-if="!canBroadcast"
+                  class="host-card__hint"
+                >
+                  需风控已通过、已上架，且直播状态为预告或已结束
+                </p>
               </div>
             </div>
           </div>
@@ -221,6 +231,11 @@ async function openHost() {
   font-size: 12px;
   color: var(--color-text-placeholder);
   line-height: 1.5;
+}
+.host-card__hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #999;
 }
 .host-card__actions {
   display: flex;

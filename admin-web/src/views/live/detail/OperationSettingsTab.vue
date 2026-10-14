@@ -35,6 +35,7 @@ const confirmAction = ref<"end" | "delete" | null>(null);
 const actionLoading = ref(false);
 
 const canEnd = computed(() => props.detail.state === 1 || props.detail.state === 2);
+const canBroadcast = computed(() => !!props.detail.canBroadcast);
 
 function toDateTimeLocal(s: string): string {
   if (!s) return "";
@@ -57,6 +58,7 @@ async function copy(text: string, label: string) {
 }
 
 async function openHost() {
+  if (!canBroadcast.value) return;
   try {
     const { hostUrl } = await getHostUrl(props.activityId);
     window.open(hostUrl, "_blank", "noopener");
@@ -66,6 +68,7 @@ async function openHost() {
 }
 
 async function copyHost() {
+  if (!canBroadcast.value) return;
   try {
     const { hostUrl } = await getHostUrl(props.activityId);
     await copy(hostUrl, "开播链接已复制，可粘贴到有摄像头的电脑打开");
@@ -225,12 +228,14 @@ async function confirmDelete() {
       <button
         type="button"
         class="btn-success"
+        :disabled="!canBroadcast"
         @click="openHost"
       >
         主持人开播（新窗口）
       </button>
       <UiButton
         variant="default"
+        :disabled="!canBroadcast"
         @click="copyHost"
       >
         复制开播链接
@@ -301,8 +306,8 @@ async function confirmDelete() {
           <p class="modal-desc">
             {{
               confirmAction === "end"
-                ? "确定要结束这场直播吗？结束后无法重新开播。"
-                : "确定要删除这个活动吗？此操作不可撤销。"
+                ? "确定要结束这场直播吗？结束后若仍满足开播条件（风控已通过、已上架），仍可再次开播。"
+                : "删除后不可恢复"
             }}
           </p>
           <p

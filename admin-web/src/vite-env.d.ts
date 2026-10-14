@@ -19,6 +19,8 @@ interface ImportMetaEnv {
    */
   readonly VITE_WECHAT_SELF_REDIRECT?: string;
   readonly VITE_AUTH_PASSWORD_AES_KEY_BASE64: string;
+  /** 订单中心根地址；开发态作 Vite 代理 target，构建态作请求前缀 */
+  readonly VITE_ORDER_CENTER_BASE_URL?: string;
 }
 
 interface ImportMeta {

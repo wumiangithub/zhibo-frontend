@@ -28,7 +28,13 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   "update:modelValue": [boolean];
-  success: [payload: { accessToken: string; user: import("@/api/auth").AuthUser }];
+  success: [
+    payload: {
+      accessToken: string;
+      refreshToken: string | null;
+      user: import("@/api/auth").AuthUser;
+    },
+  ];
   abandoned: [];
 }>();
 
@@ -94,7 +100,11 @@ async function pollOnce() {
     }
     if (data.status === 1 && data.accessToken && data.user) {
       stopPoll({ clearPending: true });
-      emit("success", { accessToken: data.accessToken, user: data.user });
+      emit("success", {
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken ?? null,
+        user: data.user,
+      });
       emit("update:modelValue", false);
       return;
     }

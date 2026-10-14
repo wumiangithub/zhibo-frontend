@@ -180,14 +180,17 @@ function clearWxDoneQuery() {
 
 async function onWechatSuccess(payload: {
   accessToken: string;
+  refreshToken: string | null;
   user: import("@/api/auth").AuthUser;
 }) {
   clearWxLoginPending();
   wechatResumeOnly.value = false;
   clearWxDoneQuery();
   // 勾选记住 → localStorage 下次免登；不勾 → sessionStorage，关浏览器需重登
+  // access + refresh 写入同一 storage（D43）
   auth.applySession(payload.accessToken, payload.user, {
     persist: form.remember,
+    refreshToken: payload.refreshToken,
   });
   const redirect = typeof route.query.redirect === "string" ? route.query.redirect : "/";
   void router.replace(redirect || "/");

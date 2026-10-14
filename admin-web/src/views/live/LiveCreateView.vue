@@ -39,6 +39,8 @@ function buildPayload(): CreateActivityPayload {
     viewerStyle: form.viewerStyle,
     ultraLowLatency: form.ultraLowLatency,
     virtualAvatar: form.virtualAvatar,
+    listed: form.shelfType === "now",
+    sellType: form.sellType,
   };
   const intro = form.intro.trim();
   if (intro) payload.introduction = intro;
@@ -55,6 +57,13 @@ function buildPayload(): CreateActivityPayload {
   }
   if (form.promoCover) payload.promoCoverUrl = form.promoCover;
   if (form.detailHtml?.trim()) payload.detailHtml = form.detailHtml;
+  if (form.ownerIds.length) payload.ownerIds = [...form.ownerIds];
+  if (form.products.length) {
+    payload.products = form.products.map((p) => ({
+      spuId: String(p.spuId),
+      productName: p.productName.trim(),
+    }));
+  }
   return payload;
 }
 
@@ -90,7 +99,7 @@ async function onSave() {
         <BasicInfoSection :form="form" />
         <CoverSection :form="form" />
         <DetailSection :form="form" />
-        <div class="placeholder-tip">以下区块本迭代暂不保存，请勿依赖其提交</div>
+        <div class="placeholder-tip">角色 / 回放本迭代暂不保存</div>
         <RoleSection :form="form" />
         <PlaybackSection :form="form" />
         <OwnerSection :form="form" />
@@ -102,7 +111,9 @@ async function onSave() {
       </div>
 
       <div class="card">
-        <p class="placeholder-tip">商品信息本迭代暂不保存</p>
+        <p class="placeholder-tip">
+          售卖方式、上架设置、归属人、关联商品将落库；商品分组 / 隐藏 / 停售 / 定时上架时间本迭代不落库
+        </p>
         <ProductSection :form="form" />
       </div>
     </div>

@@ -23,7 +23,16 @@ export interface LoginQueryData {
   errorMsg: string | null;
   accessToken: string | null;
   expiresIn: number | null;
+  refreshToken: string | null;
+  refreshExpiresIn: number | null;
   user: AuthUser | null;
+}
+
+export interface RefreshTokenData {
+  accessToken: string;
+  expiresIn: number;
+  refreshToken: string;
+  refreshExpiresIn: number;
 }
 
 export interface LoginBody {

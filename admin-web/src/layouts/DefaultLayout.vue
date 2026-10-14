@@ -82,8 +82,13 @@ const activeSide = computed(() => {
   }
   if (isLiveModule.value) {
     if (route.name === "live-create") return "create";
-    // 列表 / 详情均高亮「直播管理」
-    if (route.name === "live-manage" || route.name === "live-detail" || route.path === "/live") {
+    // 列表 / 详情 / 去审核均高亮「直播管理」
+    if (
+      route.name === "live-manage" ||
+      route.name === "live-detail" ||
+      route.name === "live-audit" ||
+      route.path === "/live"
+    ) {
       return "manage";
     }
     return "";

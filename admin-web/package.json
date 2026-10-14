@@ -18,7 +18,8 @@
     "element-plus": "2.14.6",
     "pinia": "2.3.1",
     "vue": "3.5.42",
-    "vue-router": "4.6.4"
+    "vue-router": "4.6.4",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@types/node": "22.20.3",

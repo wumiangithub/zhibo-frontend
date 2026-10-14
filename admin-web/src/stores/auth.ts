@@ -7,6 +7,7 @@ import {
   getAuthUser,
   setSession,
 } from "@/utils/authSession";
+import { onAccessTokenUpdated } from "@/utils/authRefresh";
 
 export const useAuthStore = defineStore("auth", () => {
   const accessToken = ref<string | null>(getAccessToken());
@@ -17,10 +18,14 @@ export const useAuthStore = defineStore("auth", () => {
     () => user.value?.userName || user.value?.userAccount || "管理员",
   );
 
+  onAccessTokenUpdated((token) => {
+    accessToken.value = token;
+  });
+
   function applySession(
     token: string,
     nextUser: AuthUser | null,
-    options?: { persist?: boolean },
+    options?: { persist?: boolean; refreshToken?: string | null },
   ) {
     setSession(token, nextUser, options);
     accessToken.value = token;
@@ -38,7 +43,7 @@ export const useAuthStore = defineStore("auth", () => {
     if (!accessToken.value) return null;
     const me = await fetchMe();
     user.value = me;
-    // 不传 persist：沿用当前 token 所在 storage
+    // 不传 persist / refreshToken：沿用当前 storage 与 refresh
     setSession(accessToken.value, me);
     return me;
   }

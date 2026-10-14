@@ -5,6 +5,7 @@ import {
 } from "@/utils/passwordAes";
 
 const TOKEN_KEY = "admin_access_token";
+const REFRESH_KEY = "admin_refresh_token";
 const USER_KEY = "admin_auth_user";
 const REMEMBER_ACCOUNT_KEY = "admin_remember_account";
 const REMEMBER_PASSWORD_KEY = "admin_remember_password_cipher";
@@ -21,8 +22,18 @@ function resolvePersist(explicit?: boolean): boolean {
   return true;
 }
 
-function writeSession(storage: Storage, token: string, user: AuthUser | null) {
+function writeSession(
+  storage: Storage,
+  token: string,
+  user: AuthUser | null,
+  refreshToken: string | null,
+) {
   storage.setItem(TOKEN_KEY, token);
+  if (refreshToken) {
+    storage.setItem(REFRESH_KEY, refreshToken);
+  } else {
+    storage.removeItem(REFRESH_KEY);
+  }
   if (user) {
     storage.setItem(USER_KEY, JSON.stringify(user));
   } else {
@@ -32,11 +43,16 @@ function writeSession(storage: Storage, token: string, user: AuthUser | null) {
 
 function clearStorageSession(storage: Storage) {
   storage.removeItem(TOKEN_KEY);
+  storage.removeItem(REFRESH_KEY);
   storage.removeItem(USER_KEY);
 }
 
 export function getAccessToken(): string | null {
   return readStorageItem(TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  return readStorageItem(REFRESH_KEY);
 }
 
 export function getAuthUser(): AuthUser | null {
@@ -54,17 +70,32 @@ export function getAuthUser(): AuthUser | null {
  * - `persist: true`（勾选记住）→ localStorage，关浏览器仍登录
  * - `persist: false` → sessionStorage，关标签/浏览器需重登
  * - 省略 persist：保持当前所在 storage（如 refreshMe）
+ * - `refreshToken`：传入则覆盖；省略则保留已有 refresh（换 storage 时一并迁移）
  */
 export function setSession(
   token: string,
   user: AuthUser | null,
-  options?: { persist?: boolean },
+  options?: { persist?: boolean; refreshToken?: string | null },
 ) {
   const persist = resolvePersist(options?.persist);
   const primary = persist ? localStorage : sessionStorage;
   const other = persist ? sessionStorage : localStorage;
+  const nextRefresh =
+    options && "refreshToken" in options
+      ? (options.refreshToken ?? null)
+      : getRefreshToken();
   clearStorageSession(other);
-  writeSession(primary, token, user);
+  writeSession(primary, token, user, nextRefresh);
+}
+
+/** 仅更新两张票（静默换票）；user / persist 不动 */
+export function setTokens(accessToken: string, refreshToken: string) {
+  const persist = resolvePersist();
+  const primary = persist ? localStorage : sessionStorage;
+  const other = persist ? sessionStorage : localStorage;
+  const user = getAuthUser();
+  clearStorageSession(other);
+  writeSession(primary, accessToken, user, refreshToken);
 }
 
 /** 清会话；默认保留「记住密码」密文（仅取消勾选时清） */
