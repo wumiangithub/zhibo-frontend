@@ -85,11 +85,13 @@ async function fillPasswordIfRememberedAccount() {
 }
 
 function onAccountBlur() {
-  accountError.value = form.userAccount.trim() ? "" : "请输入账号";
+  form.userAccount = form.userAccount.trim();
+  accountError.value = form.userAccount ? "" : "请输入账号";
   void fillPasswordIfRememberedAccount();
 }
 
 function onPasswordBlur() {
+  form.password = form.password.trim();
   passwordError.value = form.password ? "" : "请输入密码";
 }
 
@@ -109,6 +111,8 @@ watch(
 );
 
 async function submit() {
+  form.userAccount = form.userAccount.trim();
+  form.password = form.password.trim();
   onAccountBlur();
   onPasswordBlur();
   if (accountError.value || passwordError.value) return;
@@ -136,7 +140,7 @@ async function submit() {
       return;
     }
     const data = await postLogin({
-      userAccount: form.userAccount.trim(),
+      userAccount: form.userAccount,
       password: encrypted,
       captchaId: captchaId.value,
       captchaCode: form.captchaCode.trim(),
@@ -144,9 +148,9 @@ async function submit() {
     // 账号密码登录成功即写入/清除「记住」；不等微信二次验证
     if (form.remember) {
       try {
-        await saveRememberedCredentials(form.userAccount.trim(), form.password);
+        await saveRememberedCredentials(form.userAccount, form.password);
         rememberedCache.value = {
-          userAccount: form.userAccount.trim(),
+          userAccount: form.userAccount,
           password: form.password,
         };
       } catch (e) {
