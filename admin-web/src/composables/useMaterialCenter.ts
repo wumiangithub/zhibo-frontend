@@ -8,6 +8,8 @@ import {
   listMaterials,
   renameMaterial,
   renameMaterialGroup,
+  updateMaterialAiAudit,
+  updateMaterialRiskAudit,
   type CreateMaterialItem,
   type MaterialGroup,
   type MaterialListItem,
@@ -21,7 +23,16 @@ function errMsg(err: unknown, fallback: string) {
   return fallback;
 }
 
-export function useMaterialCenter() {
+export type UseMaterialCenterOptions = {
+  /**
+   * true：列表请求带 `selectableOnly=true`（封面/课件选择弹窗）。
+   * 默认 false：素材中心主列表不带该参数。
+   */
+  selectableOnly?: boolean;
+};
+
+export function useMaterialCenter(options: UseMaterialCenterOptions = {}) {
+  const selectableOnly = options.selectableOnly === true;
   const materialType = ref<MaterialType>("image");
   const groupKeyword = ref("");
   const nameKeyword = ref("");
@@ -82,6 +93,7 @@ export function useMaterialCenter() {
         type: materialType.value,
         groupId: activeGroupId.value === "all" ? undefined : activeGroupId.value,
         keyword: nameKeyword.value.trim() || undefined,
+        selectableOnly: selectableOnly || undefined,
         page: page.value,
         pageSize: pageSize.value,
       });
@@ -178,17 +190,23 @@ export function useMaterialCenter() {
     }
   }
 
-  async function registerAfterUpload(groupId: string, items: CreateMaterialItem[]) {
-    if (!items.length) return;
+  /** 登记成功后刷新列表；返回接口 `list`（选择弹窗可 merge 进本会话展示） */
+  async function registerAfterUpload(
+    groupId: string,
+    items: CreateMaterialItem[],
+  ): Promise<MaterialListItem[]> {
+    if (!items.length) return [];
     try {
-      await createMaterials({
+      const data = await createMaterials({
         type: materialType.value,
         groupId,
         items,
       });
       await refreshAll();
+      return data.list ?? [];
     } catch (err: unknown) {
       ElMessage.error(errMsg(err, "素材登记失败"));
+      return [];
     }
   }
 
@@ -206,15 +224,42 @@ export function useMaterialCenter() {
     if (next === item.name) return;
     try {
       const updated = await renameMaterial(item.id, next);
-      const idx = list.value.findIndex((row) => row.id === item.id);
-      if (idx >= 0) {
-        list.value[idx] = { ...list.value[idx], ...updated, name: updated.name ?? next };
-      } else {
-        await loadList();
-      }
+      patchListItem(item.id, updated);
       ElMessage.success("已修改名称");
     } catch (err: unknown) {
       ElMessage.error(errMsg(err, "修改名称失败"));
+    }
+  }
+
+  function patchListItem(id: string, updated: MaterialListItem) {
+    const idx = list.value.findIndex((row) => row.id === id);
+    if (idx >= 0) {
+      list.value[idx] = { ...list.value[idx], ...updated };
+    } else {
+      void loadList();
+    }
+  }
+
+  /** passed → 驳回；否则 → 通过 */
+  async function toggleAiAudit(item: MaterialListItem) {
+    const next = item.aiAuditStatus === "passed" ? "rejected" : "passed";
+    try {
+      const updated = await updateMaterialAiAudit(item.id, next);
+      patchListItem(item.id, updated);
+      ElMessage.success(next === "passed" ? "AI 审核已通过" : "AI 审核已驳回");
+    } catch (err: unknown) {
+      ElMessage.error(errMsg(err, "更新 AI 审核失败"));
+    }
+  }
+
+  async function toggleRiskAudit(item: MaterialListItem) {
+    const next = item.riskAuditStatus === "passed" ? "rejected" : "passed";
+    try {
+      const updated = await updateMaterialRiskAudit(item.id, next);
+      patchListItem(item.id, updated);
+      ElMessage.success(next === "passed" ? "风控合规已通过" : "风控合规已驳回");
+    } catch (err: unknown) {
+      ElMessage.error(errMsg(err, "更新风控合规失败"));
     }
   }
 
@@ -243,5 +288,7 @@ export function useMaterialCenter() {
     removeGroup,
     registerAfterUpload,
     renameMaterialItem,
+    toggleAiAudit,
+    toggleRiskAudit,
   };
 }

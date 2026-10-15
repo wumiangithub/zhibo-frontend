@@ -79,10 +79,26 @@ function handleCreated(editor: any) {
   count.value = getTextLength(editor);
 }
 
+/** 空内容常见等价形态，避免聚焦时规范化 HTML 误回写 */
+function normalizeEmptyHtml(v: string): string {
+  const t = (v ?? "").trim();
+  if (!t || t === "<p><br></p>" || t === "<p></p>" || t === "<br>" || t === "<p><br/></p>") {
+    return "";
+  }
+  return v;
+}
+
+/**
+ * wangEditor 初始化 / setHtml 会触发 onChange，常把 "" 规范成 `<p><br></p>` 等。
+ * 仅在编辑器聚焦且内容相对外层有实质变化时回写。
+ */
 function handleChange(editor: any) {
-  const v = editor.getHtml();
-  emit("update:modelValue", v);
+  const v = editor.getHtml() ?? "";
   count.value = getTextLength(editor);
+  if (!editor.isFocused?.()) return;
+  if (normalizeEmptyHtml(v) === normalizeEmptyHtml(props.modelValue)) return;
+  if (v === props.modelValue) return;
+  emit("update:modelValue", v);
 }
 
 watch(

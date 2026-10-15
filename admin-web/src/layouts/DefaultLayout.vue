@@ -154,11 +154,11 @@ async function onAccountClick() {
         class="group mr-7 flex flex-none items-center gap-2.5 border-0 bg-transparent p-0 outline-none"
         @click="goHome"
       >
-        <span
-          class="flex h-7 w-7 items-center justify-center rounded-full bg-[#e54d42] text-[11px] font-bold text-white transition-opacity group-hover:opacity-90"
+        <img
+          src="/favicon.svg"
+          alt="钱坤"
+          class="h-7 w-7 flex-none rounded-full transition-opacity group-hover:opacity-90"
         >
-          钱坤
-        </span>
         <span class="text-[15px] font-semibold text-[#1a1a1a] transition-colors group-hover:text-[var(--color-primary)]">
           钱坤云直播平台
         </span>

@@ -22,7 +22,8 @@ import {
 } from "./mock";
 import MaterialUploadFileTable from "./MaterialUploadFileTable.vue";
 import MaterialUploadThumbList from "./MaterialUploadThumbList.vue";
-import type { FileTableItem, MaterialRegisterItem } from "./materialUploadTypes";
+import type { FileTableItem, MaterialRegisterItem, UploadItem } from "./materialUploadTypes";
+import ImageCropDialog from "@/views/live/components/ImageCropDialog.vue";
 import { useToast } from "@/composables/useToast";
 import { useMaterialUpload } from "@/composables/useMaterialUpload";
 import type { TosUploadResult } from "@/utils/upload";
@@ -58,6 +59,8 @@ const {
   syncItemsFromFileList,
   removeItem,
   cancelUpload,
+  replaceItemFile,
+  addCroppedItem,
   resetSession,
   ensureStsOnOpen,
   startUpload,
@@ -72,6 +75,13 @@ const visible = computed({
 const useFileTable = computed(
   () => props.materialType === "video" || props.materialType === "document",
 );
+
+const cropVisible = ref(false);
+const cropSrc = ref("");
+/** replace：waiting/error 原地替换；add：success 新增 waiting */
+const cropMode = ref<"replace" | "add">("replace");
+const cropTargetUid = ref<number | null>(null);
+const cropBaseName = ref("image");
 
 const groupOptions = computed(() => props.groups.filter((g) => g.id !== "all"));
 
@@ -119,6 +129,37 @@ function onRemoveItem(item: FileTableItem) {
 
 function onCancelItem(item: FileTableItem) {
   fileList.value = cancelUpload(item, fileList.value);
+}
+
+function onCropItem(item: UploadItem) {
+  if (item.status === "uploading") return;
+  if (item.status !== "waiting" && item.status !== "success" && item.status !== "error") return;
+  cropTargetUid.value = item.uid;
+  cropMode.value = item.status === "success" ? "add" : "replace";
+  cropBaseName.value = (item.name || "image").replace(/\.[^.]+$/, "") || "image";
+  cropSrc.value = item.previewUrl;
+  cropVisible.value = true;
+}
+
+function onCropVisible(v: boolean) {
+  cropVisible.value = v;
+  if (!v) {
+    cropSrc.value = "";
+    cropTargetUid.value = null;
+  }
+}
+
+function onCropConfirm(file: File) {
+  const named = new File([file], `${cropBaseName.value}_裁剪.jpg`, {
+    type: "image/jpeg",
+  });
+  if (cropMode.value === "add") {
+    fileList.value = addCroppedItem(named, fileList.value);
+  } else if (cropTargetUid.value != null) {
+    fileList.value = replaceItemFile(cropTargetUid.value, named, fileList.value);
+  }
+  cropSrc.value = "";
+  cropTargetUid.value = null;
 }
 
 function close() {
@@ -256,6 +297,8 @@ function onOpenNewWindow() {
       <MaterialUploadThumbList
         v-else-if="!useFileTable && items.length"
         :items="items"
+        @crop="onCropItem"
+        @remove="onRemoveItem"
       />
 
       <div
@@ -303,6 +346,16 @@ function onOpenNewWindow() {
       </div>
     </template>
   </ElDialog>
+
+  <ImageCropDialog
+    v-if="!useFileTable"
+    :visible="cropVisible"
+    :src="cropSrc"
+    aspect="16:9"
+    :aspect-selectable="true"
+    @update:visible="onCropVisible"
+    @confirm="onCropConfirm"
+  />
 </template>
 
 <style scoped>

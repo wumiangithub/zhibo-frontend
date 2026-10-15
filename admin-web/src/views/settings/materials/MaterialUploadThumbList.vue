@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { ElProgress, ElIcon } from "element-plus";
-import { CircleCheckFilled } from "@element-plus/icons-vue";
+import { CircleCheckFilled, Crop, Delete } from "@element-plus/icons-vue";
 import type { UploadItem } from "./materialUploadTypes";
 
 defineProps<{
   items: UploadItem[];
+}>();
+
+const emit = defineEmits<{
+  crop: [item: UploadItem];
+  remove: [item: UploadItem];
 }>();
 
 function overlayLabel(item: UploadItem) {
@@ -12,6 +17,19 @@ function overlayLabel(item: UploadItem) {
   if (item.status === "error") return "上传失败";
   if (item.status === "cancelled") return "已取消";
   return `${item.percent.toFixed(1)}%`;
+}
+
+/** 上传中禁用裁剪/删除；失败/等待/成功可裁；取消仅删 */
+function canCrop(item: UploadItem) {
+  return item.status === "waiting" || item.status === "success" || item.status === "error";
+}
+
+function canRemove(item: UploadItem) {
+  return item.status !== "uploading";
+}
+
+function showHoverActions(item: UploadItem) {
+  return canCrop(item) || canRemove(item);
 }
 </script>
 
@@ -47,6 +65,31 @@ function overlayLabel(item: UploadItem) {
           :color="item.status === 'error' ? 'var(--el-color-danger)' : '#fff'"
           class="overlay-progress"
         />
+      </div>
+      <div
+        v-if="showHoverActions(item)"
+        class="thumb-hover"
+      >
+        <button
+          v-if="canCrop(item)"
+          type="button"
+          class="hover-btn"
+          title="裁剪"
+          @click.stop="emit('crop', item)"
+        >
+          <ElIcon :size="16"><Crop /></ElIcon>
+          <span>裁剪</span>
+        </button>
+        <button
+          v-if="canRemove(item)"
+          type="button"
+          class="hover-btn"
+          title="删除"
+          @click.stop="emit('remove', item)"
+        >
+          <ElIcon :size="16"><Delete /></ElIcon>
+          <span>删除</span>
+        </button>
       </div>
     </li>
   </ul>
@@ -93,6 +136,7 @@ function overlayLabel(item: UploadItem) {
   color: var(--color-success);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   pointer-events: none;
+  z-index: 1;
 }
 
 .thumb-img {
@@ -112,6 +156,7 @@ function overlayLabel(item: UploadItem) {
   gap: 8px;
   padding: 0 10px;
   background: rgba(0, 0, 0, 0.45);
+  z-index: 1;
 }
 
 .overlay-label {
@@ -126,5 +171,41 @@ function overlayLabel(item: UploadItem) {
 
 .overlay-progress :deep(.el-progress-bar__outer) {
   background-color: rgba(255, 255, 255, 0.35);
+}
+
+.thumb-hover {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.thumb-item:hover .thumb-hover {
+  opacity: 1;
+}
+
+.hover-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 40px;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.hover-btn:hover {
+  color: var(--color-primary-light, #a0cfff);
 }
 </style>

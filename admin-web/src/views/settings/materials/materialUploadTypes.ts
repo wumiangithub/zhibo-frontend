@@ -31,4 +31,6 @@ export interface MaterialRegisterItem {
   objectKey: string;
   fileSize: number;
   mimeType?: string;
+  /** 图片 `宽*高` / 视频时长；文档可空 */
+  meta?: string;
 }

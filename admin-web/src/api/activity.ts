@@ -82,12 +82,27 @@ export type ActivityId = string;
 export interface ActivityOwner {
   id: string;
   userName: string;
+  /** 头像 URL，可选 */
+  avatar?: string;
 }
+
+/** 主播与归属人同形 */
+export type ActivityHost = ActivityOwner;
 
 export interface ActivityProduct {
   spuId: string;
   productName: string;
 }
+
+export interface ActivityCourseware {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+}
+
+export type AccessValidityType = "long" | "days";
+export type PlaybackValidityType = "forever" | "days";
 
 export interface ActivityListItem {
   id: ActivityId;
@@ -125,6 +140,21 @@ export interface ActivityDetail extends ActivityListItem {
   warmupUrl?: string;
   promoCoverUrl?: string;
   detailHtml?: string;
+  autoList?: boolean;
+  hosts?: ActivityHost[];
+  coursewares?: ActivityCourseware[];
+  sellAlone?: boolean;
+  price?: number | string;
+  linePrice?: number | string;
+  /** 加密售卖：管理端详情回显明文 6 位 */
+  password?: string;
+  accessValidityType?: AccessValidityType;
+  accessValidityDays?: number;
+  playbackEnabled?: boolean;
+  playbackValidityType?: PlaybackValidityType;
+  playbackValidityDays?: number;
+  playbackSpeedAllow?: boolean;
+  playbackFastForwardAllow?: boolean;
 }
 
 export interface ActivityListData {
@@ -152,17 +182,18 @@ export interface CreateActivityPayload {
   introduction?: string;
   endTime?: string;
   viewerStyle?: string;
+  /** 创建默认 true；UI 可不展示 */
   ultraLowLatency?: boolean;
-  virtualAvatar?: boolean;
   coverUrl?: string;
-  warmupType?: string;
-  warmupUrl?: string;
-  promoCoverUrl?: string;
   detailHtml?: string;
-  listed: boolean;
-  sellType: SellType;
+  /** 是否自动上架（审核通过后）；替代 listed */
+  autoList: boolean;
+  /** 主播员工 id，1～20 */
+  hostIds: string[];
   ownerIds?: string[];
   products?: ActivityProduct[];
+  /** 课件素材 UUID，最多 100 */
+  coursewareMaterialIds?: string[];
 }
 
 export function createActivity(payload: CreateActivityPayload) {
@@ -221,18 +252,62 @@ export interface UpdateActivityPayload {
   startTime?: string;
   introduction?: string;
   endTime?: string;
-  viewerStyle?: string;
-  ultraLowLatency?: boolean;
-  virtualAvatar?: boolean;
   coverUrl?: string;
-  warmupType?: string;
-  warmupUrl?: string;
-  promoCoverUrl?: string;
   detailHtml?: string;
+  autoList?: boolean;
+  hostIds?: string[];
+  ownerIds?: string[];
+  products?: ActivityProduct[];
+  coursewareMaterialIds?: string[];
 }
 
 export function updateActivity(id: ActivityId, payload: UpdateActivityPayload) {
   return put<{ id: ActivityId }>(`/activities/${id}`, payload);
+}
+
+export interface UpdatePlaybackPayload {
+  playbackEnabled: boolean;
+  playbackValidityType?: PlaybackValidityType;
+  playbackValidityDays?: number;
+  playbackSpeedAllow?: boolean;
+  playbackFastForwardAllow?: boolean;
+}
+
+export function updateActivityPlayback(id: ActivityId, payload: UpdatePlaybackPayload) {
+  return put<{ id: ActivityId }>(`/activities/${id}/playback`, payload);
+}
+
+export interface UpdateSalesPayload {
+  sellAlone: boolean;
+  sellType: SellType;
+  price?: number | string;
+  linePrice?: number | string;
+  password?: string;
+  accessValidityType?: AccessValidityType;
+  accessValidityDays?: number;
+}
+
+export function updateActivitySales(id: ActivityId, payload: UpdateSalesPayload) {
+  return put<{ id: ActivityId; sellType: SellType; validityLabel: string }>(
+    `/activities/${id}/sales`,
+    payload,
+  );
+}
+
+export interface ActivityRecordItem {
+  id: string;
+  title: string;
+  duration?: string;
+  createdAt?: string;
+  coverUrl?: string;
+  /** 本轮可能无下载直链 */
+  downloadUrl?: string;
+}
+
+export function listActivityRecords(id: ActivityId) {
+  return get<{ total: number; list: ActivityRecordItem[] }>(
+    `/activities/${encodeURIComponent(id)}/records`,
+  );
 }
 
 export function endActivity(id: ActivityId) {
@@ -275,6 +350,8 @@ export function submitActivityAudit(
 export interface EmployeeItem {
   id: string;
   userName: string;
+  /** 头像 URL，可选 */
+  avatar?: string;
 }
 
 export function listEmployees(keyword?: string) {

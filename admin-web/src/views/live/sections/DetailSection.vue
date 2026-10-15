@@ -1,17 +1,24 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { ElDialog } from "element-plus";
+import { useMarkDirty } from "@/composables/useLeaveConfirm";
 import FormRow from "../components/FormRow.vue";
 import RichTextEditor from "../components/RichTextEditor.vue";
 import type { LiveFormState } from "../composables/useLiveForm";
 import detailExample from "@/assets/images/live/detail-example.png";
 
-defineProps<{ form: LiveFormState }>();
+const props = defineProps<{ form: LiveFormState }>();
+const markDirty = useMarkDirty();
 
 const exampleVisible = ref(false);
 
 function openExample() {
   exampleVisible.value = true;
+}
+
+function onDetailHtmlChange(html: string) {
+  props.form.detailHtml = html;
+  markDirty();
 }
 </script>
 
@@ -19,11 +26,12 @@ function openExample() {
   <FormRow label="直播详情:">
     <div class="detail-row">
       <RichTextEditor
-        v-model="form.detailHtml"
+        :model-value="form.detailHtml"
         class="detail-row__editor"
         :height="'340px'"
         :max-length="10000"
         placeholder="请输入内容"
+        @update:model-value="onDetailHtmlChange"
       />
       <a
         class="detail-row__link"

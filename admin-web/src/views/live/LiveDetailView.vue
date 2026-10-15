@@ -4,28 +4,23 @@ import { onBeforeRouteLeave, useRoute, useRouter, RouterLink } from "vue-router"
 import {
   getActivity,
   getHostUrl,
-  PROVIDER_LABEL,
-  STATE_LABEL,
   type ActivityDetail,
   type ActivityId,
-  type LiveProvider,
 } from "@/api/activity";
-import { useToast } from "@/composables/useToast";
 import { getAccessToken } from "@/utils/authSession";
 import UiButton from "@/components/ui/UiButton.vue";
 import ShareDialog from "@/components/share/ShareDialog.vue";
 import BasicSettingsTab from "./detail/BasicSettingsTab.vue";
 import BroadcastSettingsTab from "./detail/BroadcastSettingsTab.vue";
-import OperationSettingsTab from "./detail/OperationSettingsTab.vue";
 import LiveDataTab from "./detail/LiveDataTab.vue";
+import PlaceholderModuleTab from "./detail/PlaceholderModuleTab.vue";
 
-type TabKey = "basic" | "broadcast" | "operation" | "data";
+type TabKey = "basic" | "broadcast" | "commerce" | "userOps" | "data";
 
-const TAB_KEYS: TabKey[] = ["basic", "broadcast", "operation", "data"];
+const TAB_KEYS: TabKey[] = ["basic", "broadcast", "commerce", "userOps", "data"];
 
 const route = useRoute();
 const router = useRouter();
-const { toast } = useToast();
 
 const id = computed<ActivityId>(() => String(route.params.id));
 const loading = ref(true);
@@ -38,26 +33,15 @@ const shareVisible = ref(false);
 const sideNav = [
   { key: "basic" as const, label: "基本设置" },
   { key: "broadcast" as const, label: "开播设置" },
-  { key: "operation" as const, label: "运营设置" },
+  { key: "commerce" as const, label: "直播带货" },
+  { key: "userOps" as const, label: "用户运营" },
   { key: "data" as const, label: "直播数据" },
 ];
 
 const activeTab = computed<TabKey>(() => {
   const q = String(route.query.tab ?? "");
   if (TAB_KEYS.includes(q as TabKey)) return q as TabKey;
-  return "broadcast";
-});
-
-const statusLabel = computed(() => {
-  if (!detail.value) return "";
-  const map: Record<number, string> = {
-    1: "直播中",
-    2: "未开始",
-    3: "已结束",
-    4: "点播",
-    5: "回放",
-  };
-  return map[detail.value.state] ?? STATE_LABEL[detail.value.state] ?? String(detail.value.state);
+  return "basic";
 });
 
 const timeRange = computed(() => {
@@ -68,12 +52,6 @@ const timeRange = computed(() => {
       ? detail.value.endTime
       : "";
   return end ? `${start} 至 ${end}` : start;
-});
-
-const providerLabel = computed(() => {
-  const p = detail.value?.provider as LiveProvider | undefined;
-  if (!p) return "";
-  return PROVIDER_LABEL[p] ?? p;
 });
 
 async function confirmLeaveBasicIfNeeded(): Promise<boolean> {
@@ -88,10 +66,9 @@ async function confirmLeaveBasicIfNeeded(): Promise<boolean> {
 async function setTab(key: TabKey) {
   if (key === activeTab.value) return;
   if (!(await confirmLeaveBasicIfNeeded())) return;
-  void router.replace({
-    path: route.path,
-    query: key === "broadcast" ? {} : { tab: key },
-  });
+  const query: Record<string, string> = {};
+  if (key !== "basic") query.tab = key;
+  void router.replace({ path: route.path, query });
 }
 
 onBeforeRouteLeave(async () => confirmLeaveBasicIfNeeded());
@@ -118,10 +95,6 @@ async function goLive() {
   }
 }
 
-async function shareWatch() {
-  shareVisible.value = true;
-}
-
 function goConsole() {
   const token = getAccessToken() ?? "";
   const url = `http://localhost:5174/console/${id.value}?token=${encodeURIComponent(token)}`;
@@ -139,10 +112,17 @@ watch(id, fetchDetail);
         to="/live"
         class="crumb-link"
       >
+        直播
+      </RouterLink>
+      <span class="crumb-sep">/</span>
+      <RouterLink
+        to="/live"
+        class="crumb-link"
+      >
         直播管理
       </RouterLink>
       <span class="crumb-sep">/</span>
-      <span>详情</span>
+      <span>直播设置</span>
     </div>
 
     <p
@@ -159,58 +139,32 @@ watch(id, fetchDetail);
     </p>
 
     <template v-else-if="detail">
-      <div class="hero card">
-        <div class="hero-main">
+      <div class="summary card">
+        <div class="summary-main">
           <div class="cover">
             <img
               v-if="detail.coverUrl"
               :src="detail.coverUrl"
               alt=""
               class="cover-img"
-            />
+            >
             <span
               v-else
               class="cover-placeholder"
-            >直播</span>
-            <span class="cover-badge">{{ statusLabel }}</span>
+            >封面</span>
           </div>
-          <div class="hero-info">
-            <h1 class="hero-title">{{ detail.title }}</h1>
-            <p class="hero-meta">
-              <span v-if="providerLabel">服务商：{{ providerLabel }}</span>
-              <span v-if="providerLabel">·</span>
-              <span>ID：{{ detail.id }}</span>
-            </p>
-            <p class="hero-time">直播时间：{{ timeRange }}</p>
-            <div class="hero-links">
-              <UiButton
-                variant="link"
-                @click="toast('「下架」暂未开放')"
-              >
-                下架
-              </UiButton>
-              <UiButton
-                variant="link"
-                :disabled="!detail.canBroadcast"
-                @click="goLive"
-              >
-                开播
-              </UiButton>
-              <UiButton
-                variant="link"
-                @click="toast('「更多」暂未开放')"
-              >
-                更多
-              </UiButton>
-            </div>
+          <div class="summary-info">
+            <h1 class="summary-title">{{ detail.title }}</h1>
+            <p class="summary-time">直播时间: {{ timeRange }}</p>
           </div>
         </div>
-        <div class="hero-actions">
+        <div class="summary-actions">
           <UiButton
             variant="default"
-            @click="toast('「数据大屏」暂未开放')"
+            :disabled="!detail.canBroadcast"
+            @click="goLive"
           >
-            数据大屏
+            开播
           </UiButton>
           <UiButton
             variant="default"
@@ -220,7 +174,7 @@ watch(id, fetchDetail);
           </UiButton>
           <UiButton
             variant="primary"
-            @click="shareWatch"
+            @click="shareVisible = true"
           >
             分享
           </UiButton>
@@ -262,11 +216,13 @@ watch(id, fetchDetail);
             :can-broadcast="!!detail.canBroadcast"
             @error="pageError = $event"
           />
-          <OperationSettingsTab
-            v-else-if="activeTab === 'operation'"
-            :activity-id="id"
-            :detail="detail"
-            @refreshed="fetchDetail"
+          <PlaceholderModuleTab
+            v-else-if="activeTab === 'commerce'"
+            title="直播带货"
+          />
+          <PlaceholderModuleTab
+            v-else-if="activeTab === 'userOps'"
+            title="用户运营"
           />
           <LiveDataTab
             v-else
@@ -323,7 +279,7 @@ watch(id, fetchDetail);
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
-.hero {
+.summary {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -331,16 +287,15 @@ watch(id, fetchDetail);
   padding: 16px 20px;
   margin-bottom: 12px;
 }
-.hero-main {
+.summary-main {
   display: flex;
   gap: 14px;
   min-width: 0;
 }
 .cover {
-  position: relative;
   flex: none;
-  width: 96px;
-  height: 72px;
+  width: 120px;
+  height: 68px;
   border-radius: 6px;
   overflow: hidden;
   background: #f0f0f0;
@@ -359,41 +314,19 @@ watch(id, fetchDetail);
   font-size: 12px;
   color: var(--color-text-placeholder);
 }
-.cover-badge {
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  padding: 1px 6px;
-  background: var(--color-primary);
-  color: #fff;
-  font-size: 11px;
-  line-height: 1.4;
-}
-.hero-title {
+.summary-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--color-text);
+  line-height: 1.4;
 }
-.hero-meta {
-  margin: 6px 0 0;
-  font-size: 12px;
-  color: var(--color-text-placeholder);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.hero-time {
-  margin: 6px 0 10px;
+.summary-time {
+  margin: 8px 0 0;
   font-size: 13px;
   color: var(--color-text-secondary);
 }
-.hero-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-.hero-actions {
+.summary-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

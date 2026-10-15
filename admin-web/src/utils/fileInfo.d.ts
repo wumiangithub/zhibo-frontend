@@ -2,6 +2,17 @@
 
 export function getTosPreviewUrl(url: string, width: number, height: number): string;
 
+export function getImageInfo(file: File): Promise<{
+  width: number;
+  height: number;
+}>;
+
+export function getVideoInfo(file: File): Promise<{
+  duration: number;
+  width: number;
+  height: number;
+}>;
+
 export function getTosImageInfo(imageUrl: string): Promise<{
   width: number;
   height: number;

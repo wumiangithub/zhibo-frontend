@@ -1,28 +1,29 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { ElCheckbox, ElButton, ElMessage, ElIcon } from "element-plus";
 import { ArrowRight } from "@element-plus/icons-vue";
 import { createActivity, type CreateActivityPayload } from "@/api/activity";
 import { useLeaveConfirm } from "@/composables/useLeaveConfirm";
-import { MODE_TO_TYPE, useLiveForm } from "./composables/useLiveForm";
+import { useAuthStore } from "@/stores/auth";
+import {
+  MODE_TO_TYPE,
+  resolveDefaultOwner,
+  useLiveForm,
+} from "./composables/useLiveForm";
 import BasicInfoSection from "./sections/BasicInfoSection.vue";
-import CoverSection from "./sections/CoverSection.vue";
-import DetailSection from "./sections/DetailSection.vue";
-import RoleSection from "./sections/RoleSection.vue";
-import PlaybackSection from "./sections/PlaybackSection.vue";
-import OwnerSection from "./sections/OwnerSection.vue";
-import CourseSection from "./sections/CourseSection.vue";
-import ProductSection from "./sections/ProductSection.vue";
+import ProviderModeSection from "./sections/ProviderModeSection.vue";
+import RelatedBusinessSection from "./sections/RelatedBusinessSection.vue";
 
 const router = useRouter();
-const { form, submitting, validate } = useLiveForm();
+const auth = useAuthStore();
+const { form, submitting, validateCreate } = useLiveForm();
 const leave = useLeaveConfirm();
-const { takeSnapshot } = leave.trackForm(form);
 
-onMounted(() => {
-  takeSnapshot();
-});
+/** 仅新建：归属人默认当前登录用户，可改选；编辑页走详情回显 */
+const { ownerIds: defaultOwnerIds, knownOwners } = resolveDefaultOwner(auth.user);
+if (defaultOwnerIds.length) {
+  form.ownerIds = [...defaultOwnerIds];
+}
 
 async function onCancel() {
   if (!(await leave.confirmLeave())) return;
@@ -37,10 +38,9 @@ function buildPayload(): CreateActivityPayload {
     startTime: `${form.startDate} ${form.startTime}:00`,
     type: MODE_TO_TYPE[form.mode],
     viewerStyle: form.viewerStyle,
-    ultraLowLatency: form.ultraLowLatency,
-    virtualAvatar: form.virtualAvatar,
-    listed: form.shelfType === "now",
-    sellType: form.sellType,
+    ultraLowLatency: true,
+    autoList: form.autoList,
+    hostIds: form.hostIds.slice(0, 1),
   };
   const intro = form.intro.trim();
   if (intro) payload.introduction = intro;
@@ -51,11 +51,6 @@ function buildPayload(): CreateActivityPayload {
     payload.recordId = form.recordId.trim();
   }
   if (form.detailCover) payload.coverUrl = form.detailCover;
-  if (form.warmupType === "image" && form.warmupImage) {
-    payload.warmupType = "image";
-    payload.warmupUrl = form.warmupImage;
-  }
-  if (form.promoCover) payload.promoCoverUrl = form.promoCover;
   if (form.detailHtml?.trim()) payload.detailHtml = form.detailHtml;
   if (form.ownerIds.length) payload.ownerIds = [...form.ownerIds];
   if (form.products.length) {
@@ -64,11 +59,14 @@ function buildPayload(): CreateActivityPayload {
       productName: p.productName.trim(),
     }));
   }
+  if (form.coursewareMaterialIds.length) {
+    payload.coursewareMaterialIds = [...form.coursewareMaterialIds];
+  }
   return payload;
 }
 
 async function onSave() {
-  const err = validate();
+  const err = validateCreate();
   if (err) {
     ElMessage.warning(err);
     return;
@@ -78,7 +76,7 @@ async function onSave() {
     const data = await createActivity(buildPayload());
     ElMessage.success("创建成功");
     leave.allowNextNavigation();
-    void router.push(`/live/${data.id}`);
+    void router.push({ path: `/live/${data.id}`, query: { tab: "basic" } });
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : "创建失败");
   } finally {
@@ -97,29 +95,19 @@ async function onSave() {
     <div class="live-create__form">
       <div class="card">
         <BasicInfoSection :form="form" />
-        <CoverSection :form="form" />
-        <DetailSection :form="form" />
-        <div class="placeholder-tip">角色 / 回放本迭代暂不保存</div>
-        <RoleSection :form="form" />
-        <PlaybackSection :form="form" />
-        <OwnerSection :form="form" />
-      </div>
-
-      <div class="card">
-        <p class="placeholder-tip">所属课程本迭代暂不保存</p>
-        <CourseSection :form="form" />
-      </div>
-
-      <div class="card">
-        <p class="placeholder-tip">
-          售卖方式、上架设置、归属人、关联商品将落库；商品分组 / 隐藏 / 停售 / 定时上架时间本迭代不落库
-        </p>
-        <ProductSection :form="form" />
+        <ProviderModeSection :form="form" />
+        <RelatedBusinessSection
+          :form="form"
+          :known-owners="knownOwners"
+        />
       </div>
     </div>
 
     <div class="live-create__footer">
-      <ElCheckbox v-model="form.agreed">
+      <ElCheckbox
+        v-model="form.agreed"
+        @change="leave.markDirty"
+      >
         我已阅读并同意遵守
         <a class="link">《钱坤直播运营规范》</a>
       </ElCheckbox>
@@ -130,7 +118,7 @@ async function onSave() {
           :loading="submitting"
           @click="onSave"
         >
-          保存
+          确定
         </ElButton>
       </div>
     </div>
@@ -164,15 +152,6 @@ async function onSave() {
   border-radius: 8px;
   padding: 20px 24px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-.placeholder-tip {
-  margin: 8px 0 12px;
-  padding: 8px 12px;
-  border-radius: 4px;
-  background: #fffbe6;
-  border: 1px solid #ffe58f;
-  font-size: 12px;
-  color: #ad6800;
 }
 .live-create__footer {
   position: fixed;

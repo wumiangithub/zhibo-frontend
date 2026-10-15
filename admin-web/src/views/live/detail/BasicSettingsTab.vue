@@ -1,27 +1,18 @@
 <script setup lang="ts">
-import { nextTick, watch } from "vue";
-import { ElMessage } from "element-plus";
-import {
-  updateActivity,
-  TYPE_LABEL,
-  VERIFY_LABEL,
-  PROVIDER_LABEL,
-  type ActivityDetail,
-  type ActivityId,
-  type LiveProvider,
-  type UpdateActivityPayload,
-} from "@/api/activity";
-import { useLeaveConfirm } from "@/composables/useLeaveConfirm";
-import { useLiveForm, type LiveMode } from "../composables/useLiveForm";
-import BasicInfoSection from "../sections/BasicInfoSection.vue";
-import CoverSection from "../sections/CoverSection.vue";
-import DetailSection from "../sections/DetailSection.vue";
-import RoleSection from "../sections/RoleSection.vue";
-import PlaybackSection from "../sections/PlaybackSection.vue";
-import OwnerSection from "../sections/OwnerSection.vue";
-import CourseSection from "../sections/CourseSection.vue";
-import ProductSection from "../sections/ProductSection.vue";
-import UiButton from "@/components/ui/UiButton.vue";
+import { computed, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import type { ActivityDetail, ActivityId } from "@/api/activity";
+import BasicInfoSettingsTab from "./BasicInfoSettingsTab.vue";
+import PlaybackSettingsTab from "./PlaybackSettingsTab.vue";
+import SalesSettingsTab from "./SalesSettingsTab.vue";
+
+type SubTab = "info" | "playback" | "sales";
+
+const SUB_TABS: { key: SubTab; label: string }[] = [
+  { key: "info", label: "基本信息" },
+  { key: "playback", label: "回放设置" },
+  { key: "sales", label: "售卖设置" },
+];
 
 const props = defineProps<{
   activityId: ActivityId;
@@ -30,244 +21,131 @@ const props = defineProps<{
 
 const emit = defineEmits<{ refreshed: [] }>();
 
-const { form, submitting } = useLiveForm();
-/** 子组件不能拦路由，只做脏检测 + beforeunload；路由离开由 LiveDetailView 处理 */
-const leave = useLeaveConfirm({ routeLeave: false });
-const { takeSnapshot } = leave.trackForm(form);
+const route = useRoute();
+const router = useRouter();
 
-const TYPE_TO_MODE: Record<number, LiveMode> = {
-  1: "voice",
-  2: "video",
-  3: "video",
-  4: "recorded",
-};
+const infoRef = ref<InstanceType<typeof BasicInfoSettingsTab> | null>(null);
+const playbackRef = ref<InstanceType<typeof PlaybackSettingsTab> | null>(null);
+const salesRef = ref<InstanceType<typeof SalesSettingsTab> | null>(null);
 
-function hydrate(d: ActivityDetail) {
-  form.provider = (d.provider as LiveProvider) || "vhall";
-  form.name = d.title;
-  form.intro = d.introduction ?? "";
-  form.mode = TYPE_TO_MODE[d.type] ?? "video";
-  form.viewerStyle = d.viewerStyle === "immersive" ? "immersive" : "traditional";
-  form.ultraLowLatency = d.ultraLowLatency ?? true;
-  form.virtualAvatar = d.virtualAvatar ?? false;
-  const [datePart, timePart] = (d.startTime || "").split(" ");
-  form.startDate = datePart ?? "";
-  form.startTime = timePart ? timePart.slice(0, 5) : "";
-  if (d.endTime && !d.endTime.startsWith("0000")) {
-    const [ed, et] = d.endTime.split(" ");
-    form.endDate = ed ?? "";
-    form.endTime = et ? et.slice(0, 5) : "";
-  } else {
-    form.endDate = "";
-    form.endTime = "";
-  }
-  form.detailCover = d.coverUrl ?? "";
-  form.warmupType = d.warmupType === "video" ? "video" : "image";
-  form.warmupImage = d.warmupUrl ?? "";
-  form.promoCover = d.promoCoverUrl ?? "";
-  form.detailHtml = d.detailHtml ?? "";
-  form.agreed = true;
-  void nextTick(() => takeSnapshot());
+const activeSub = computed<SubTab>(() => {
+  const q = String(route.query.sub ?? "");
+  if (q === "playback" || q === "sales" || q === "info") return q;
+  return "info";
+});
+
+function currentTabApi() {
+  if (activeSub.value === "playback") return playbackRef.value;
+  if (activeSub.value === "sales") return salesRef.value;
+  return infoRef.value;
+}
+
+async function confirmLeaveCurrent(): Promise<boolean> {
+  const tab = currentTabApi() as
+    | { isDirty: () => boolean; confirmLeave: () => Promise<boolean> }
+    | null
+    | undefined;
+  if (!tab?.isDirty?.()) return true;
+  return tab.confirmLeave();
+}
+
+async function setSub(key: SubTab) {
+  if (key === activeSub.value) return;
+  if (!(await confirmLeaveCurrent())) return;
+  const query: Record<string, string> = { tab: "basic" };
+  if (key !== "info") query.sub = key;
+  void router.replace({ path: route.path, query });
 }
 
 watch(
-  () => props.detail,
-  (d) => hydrate(d),
-  { immediate: true },
+  () => props.activityId,
+  () => {
+    /* sub tabs remount via key on parent if needed */
+  },
 );
 
-async function onSave() {
-  if (!form.name.trim()) {
-    ElMessage.warning("请填写直播名称");
-    return;
-  }
-  if (form.name.trim().length > 64) {
-    ElMessage.warning("直播名称不能超过 64 字");
-    return;
-  }
-  if (form.provider === "vhall" && form.mode === "recorded" && !form.intro.trim()) {
-    ElMessage.warning("微吼录播请填写直播简介");
-    return;
-  }
-  if (form.intro.trim().length > 256) {
-    ElMessage.warning("直播简介不能超过 256 字");
-    return;
-  }
-  if (!form.startDate || !form.startTime) {
-    ElMessage.warning("请选择开始时间");
-    return;
-  }
-  if (form.endDate && form.endTime) {
-    const startAt = new Date(`${form.startDate} ${form.startTime}:00`).getTime();
-    const endAt = new Date(`${form.endDate} ${form.endTime}:00`).getTime();
-    if (endAt <= startAt) {
-      ElMessage.warning("结束时间必须大于开始时间");
-      return;
-    }
-  }
-
-  submitting.value = true;
-  try {
-    const payload: UpdateActivityPayload = {
-      title: form.name.trim(),
-      startTime: `${form.startDate} ${form.startTime}:00`,
-      introduction: form.intro.trim() || undefined,
-      // 模式 / 观看端样式 / 超低延迟：创建后不可改，编辑不回传
-      virtualAvatar: form.virtualAvatar,
-      coverUrl: form.detailCover || undefined,
-      warmupType: form.warmupType === "image" && form.warmupImage ? "image" : undefined,
-      warmupUrl: form.warmupType === "image" && form.warmupImage ? form.warmupImage : undefined,
-      promoCoverUrl: form.promoCover || undefined,
-      detailHtml: form.detailHtml?.trim() || undefined,
-    };
-    if (form.endDate && form.endTime) {
-      payload.endTime = `${form.endDate} ${form.endTime}:00`;
-    }
-    await updateActivity(props.activityId, payload);
-    ElMessage.success("已保存");
-    takeSnapshot();
-    emit("refreshed");
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : "保存失败");
-  } finally {
-    submitting.value = false;
-  }
-}
-
 defineExpose({
-  isDirty: () => leave.dirty.value,
-  confirmLeave: leave.confirmLeave,
+  isDirty: () => {
+    const tab = currentTabApi() as { isDirty?: () => boolean } | null | undefined;
+    return !!tab?.isDirty?.();
+  },
+  confirmLeave: confirmLeaveCurrent,
 });
 </script>
 
 <template>
-  <div class="basic-tab">
-    <div class="meta card">
-      <h3 class="meta-title">活动信息</h3>
-      <dl class="meta-grid">
-        <div>
-          <dt>ID</dt>
-          <dd>{{ detail.id }}</dd>
-        </div>
-        <div>
-          <dt>服务商</dt>
-          <dd>{{ PROVIDER_LABEL[detail.provider] ?? detail.provider }}（不可改）</dd>
-        </div>
-        <div v-if="detail.providerRoomId">
-          <dt>外部房间号</dt>
-          <dd>{{ detail.providerRoomId }}</dd>
-        </div>
-        <div>
-          <dt>类型</dt>
-          <dd>{{ TYPE_LABEL[detail.type] ?? detail.type }}（不可改）</dd>
-        </div>
-        <div v-if="detail.verify !== undefined">
-          <dt>观看限制</dt>
-          <dd>{{ VERIFY_LABEL[detail.verify] ?? detail.verify }}</dd>
-        </div>
-        <div v-if="detail.pv !== undefined">
-          <dt>热度</dt>
-          <dd>{{ detail.pv }}</dd>
-        </div>
-        <div v-if="detail.createdAt">
-          <dt>创建时间</dt>
-          <dd>{{ detail.createdAt }}</dd>
-        </div>
-      </dl>
-    </div>
-
-    <div class="card">
-      <BasicInfoSection
-        :form="form"
-        provider-readonly
-        mode-readonly
-        viewer-style-readonly
-        ultra-low-latency-readonly
-      />
-      <CoverSection :form="form" />
-      <DetailSection :form="form" />
-      <div class="placeholder-tip">角色 / 回放本迭代暂不保存；归属人仅新建时落库，详情本版不可改</div>
-      <RoleSection :form="form" />
-      <PlaybackSection :form="form" />
-      <OwnerSection :form="form" />
-    </div>
-
-    <div class="card">
-      <p class="placeholder-tip">所属课程本迭代暂不保存</p>
-      <CourseSection :form="form" />
-    </div>
-
-    <div class="card">
-      <p class="placeholder-tip">售卖 / 商品仅新建时落库，详情本版不可改；分组 / 隐藏 / 停售不落库</p>
-      <ProductSection :form="form" />
-    </div>
-
-    <div class="save-bar">
-      <p class="save-hint">可保存名称/简介/时间/封面等本站字段；服务商、模式、观看端样式、超低延迟创建后不可改</p>
-      <UiButton
-        variant="primary"
-        :disabled="submitting"
-        @click="onSave"
+  <div class="basic-settings">
+    <div class="sub-tabs">
+      <button
+        v-for="t in SUB_TABS"
+        :key="t.key"
+        type="button"
+        class="sub-tab"
+        :class="{ 'is-active': activeSub === t.key }"
+        @click="setSub(t.key)"
       >
-        {{ submitting ? "保存中…" : "保存" }}
-      </UiButton>
+        {{ t.label }}
+      </button>
     </div>
+
+    <BasicInfoSettingsTab
+      v-if="activeSub === 'info'"
+      ref="infoRef"
+      :activity-id="activityId"
+      :detail="detail"
+      @refreshed="emit('refreshed')"
+    />
+    <PlaybackSettingsTab
+      v-else-if="activeSub === 'playback'"
+      ref="playbackRef"
+      :activity-id="activityId"
+      :detail="detail"
+      @refreshed="emit('refreshed')"
+    />
+    <SalesSettingsTab
+      v-else
+      ref="salesRef"
+      :activity-id="activityId"
+      :detail="detail"
+      @refreshed="emit('refreshed')"
+    />
   </div>
 </template>
 
 <style scoped>
-.basic-tab {
+.basic-settings {
+  min-height: 320px;
+}
+.sub-tabs {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  gap: 24px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-border-light);
 }
-.card {
-  background: #fff;
-  border-radius: 8px;
-  padding: 16px 20px;
-  border: 1px solid var(--color-border-light);
+.sub-tab {
+  position: relative;
+  border: 0;
+  background: transparent;
+  padding: 0 0 12px;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  outline: none;
 }
-.meta-title {
-  margin: 0 0 12px;
-  font-size: 15px;
+.sub-tab:hover {
+  color: var(--color-primary);
+}
+.sub-tab.is-active {
+  color: var(--color-primary);
   font-weight: 600;
-  color: var(--color-text);
 }
-.meta-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 24px;
-  margin: 0;
-}
-.meta-grid dt {
-  font-size: 12px;
-  color: var(--color-text-placeholder);
-}
-.meta-grid dd {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: var(--color-text);
-  word-break: break-all;
-}
-.placeholder-tip {
-  margin: 8px 0 12px;
-  padding: 8px 12px;
-  border-radius: 4px;
-  background: #fffbe6;
-  border: 1px solid #ffe58f;
-  font-size: 12px;
-  color: #ad6800;
-}
-.save-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 0 4px;
-}
-.save-hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--color-text-placeholder);
+.sub-tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--color-primary);
 }
 </style>

@@ -9,7 +9,8 @@ export interface OrderCenterProduct {
 }
 
 interface OrderCenterListBody {
-  code?: number;
+  /** 订单中心可能返回 number 或数字字符串 */
+  code?: number | string;
   msg?: string;
   message?: string;
   data?: {
@@ -29,6 +30,20 @@ function stringifySpuIds(raw: string): string {
   return raw.replace(/"spuId"\s*:\s*(\d+)/g, '"spuId":"$1"');
 }
 
+/**
+ * 订单中心业务成功码（独立判断，不走本站 http 拦截器）。
+ * 真实返回：`{ code: 0, message: "成功", data: { list } }`。
+ * 须用 `=== 0` / `=== 200`，禁止 `if (!code)`（0 会被当成失败，
+ * 再 ElMessage.error(message) 就会红底弹出「成功」）。
+ */
+function isOrderCenterSuccess(code: unknown): boolean {
+  if (code == null || code === "") return false;
+  const n = typeof code === "number" ? code : Number(code);
+  if (Number.isNaN(n)) return false;
+  // 联调确认成功为 0；兼容偶发 200
+  return n === 0 || n === 200;
+}
+
 function mapProduct(row: unknown): OrderCenterProduct | null {
   if (!row || typeof row !== "object") return null;
   const o = row as Record<string, unknown>;
@@ -46,7 +61,8 @@ function mapProduct(row: unknown): OrderCenterProduct | null {
 
 /**
  * 业务员端商品列表（不经本站后端；开发态经 Vite `/order-center` 代理）。
- * 成功码为 200；头 Authorization-Live-Saler: Bearer <管理端 JWT>。
+ * 成功：`code === 0`（见 isOrderCenterSuccess），列表取 `data.list`。
+ * 独立 axios + Authorization-Live-Saler；不混用 admin `http.ts`。
  */
 export async function listSalerProducts(): Promise<OrderCenterProduct[]> {
   // 与本站 axios 同一套换票；只把新 access 给订单中心，不传 refresh
@@ -77,7 +93,7 @@ export async function listSalerProducts(): Promise<OrderCenterProduct[]> {
   });
 
   const body = resp.data as OrderCenterListBody;
-  if (body?.code !== 200) {
+  if (!isOrderCenterSuccess(body?.code)) {
     throw new Error(body?.msg || body?.message || "拉取商品列表失败");
   }
   const list = body.data?.list ?? [];

@@ -1,21 +1,40 @@
 import { reactive, ref } from "vue";
-import type { ActivityProduct, LiveProvider, SellType } from "@/api/activity";
+import type { AuthUser } from "@/api/auth";
+import type {
+  AccessValidityType,
+  ActivityCourseware,
+  ActivityProduct,
+  EmployeeItem,
+  LiveProvider,
+  PlaybackValidityType,
+  SellType,
+} from "@/api/activity";
+
+/**
+ * 新建页专用：归属人默认当前登录用户。
+ * 编辑/设置页勿调用——已有 owners 以详情为准，不能被当前用户覆盖。
+ * 若该用户暂不在 /employees 列表，仍写入 ownerIds，并由 knownOwners 带姓名回显。
+ */
+export function resolveDefaultOwner(user: AuthUser | null | undefined): {
+  ownerIds: string[];
+  knownOwners: EmployeeItem[];
+} {
+  if (user?.id == null) return { ownerIds: [], knownOwners: [] };
+  const id = String(user.id);
+  const userName = (user.userName || user.userAccount || id).trim() || id;
+  const avatar = user.avatar?.trim() || undefined;
+  return { ownerIds: [id], knownOwners: [{ id, userName, avatar }] };
+}
 
 export type LiveMode = "video" | "recorded" | "voice";
 export type ViewerStyle = "traditional" | "immersive";
-
-export interface PlaybackPeriod {
-  /** 开始时间，空表示「直播结束时」 */
-  start: string;
-  end: string;
-}
 
 export interface LiveFormState {
   provider: LiveProvider;
   mode: LiveMode;
   viewerStyle: ViewerStyle;
+  /** 创建默认 true；UI 可不展示 */
   ultraLowLatency: boolean;
-  virtualAvatar: boolean;
   name: string;
   intro: string;
   startDate: string;
@@ -29,32 +48,33 @@ export interface LiveFormState {
   /** 选择来源：素材视频 / 微吼直播回放 */
   recordSource: "" | "video" | "live";
   detailCover: string;
-  warmupType: "image" | "video";
-  warmupImage: string;
-  promoCover: string;
   detailHtml: string;
-  roles: string[];
-  playbackEnabled: boolean;
-  playbackValidity: "forever" | "days" | "period";
-  playbackDays: number;
-  /** 指定时段有效，最多 5 条 */
-  playbackPeriods: PlaybackPeriod[];
-  playbackSpeed: "allow" | "forbid";
-  fastForward: "allow" | "forbid";
-  replayProtection: boolean;
-  /** 归属人员工 id（rs_mainkey_id 十进制字符串） */
+  /** 主播员工 id；UI 单选，提交时长度为 0 或 1 的数组 */
+  hostIds: string[];
+  /** 归属人员工 id */
   ownerIds: string[];
   /** 关联商品快照 */
   products: ActivityProduct[];
-  courseId: string;
+  /** 课件素材 id（有序） */
+  coursewareMaterialIds: string[];
+  /** 课件展示快照（详情回显 / 新建选中后本地展示） */
+  coursewares: ActivityCourseware[];
+  /** 是否自动上架 */
+  autoList: boolean;
+  /** 售卖（设置页售卖 Tab；新建不提交） */
   sellAlone: boolean;
   sellType: SellType;
-  validity: string;
-  productGroup: string;
-  shelfType: "now" | "scheduled" | "none";
-  shelfTime: string;
-  hidden: boolean;
-  stopped: boolean;
+  price: string;
+  linePrice: string;
+  password: string;
+  accessValidityType: AccessValidityType;
+  accessValidityDays: number;
+  /** 回放（设置页回放 Tab） */
+  playbackEnabled: boolean;
+  playbackValidityType: PlaybackValidityType;
+  playbackValidityDays: number;
+  playbackSpeedAllow: boolean;
+  playbackFastForwardAllow: boolean;
   agreed: boolean;
 }
 
@@ -70,7 +90,6 @@ export function useLiveForm() {
     mode: "video",
     viewerStyle: "traditional",
     ultraLowLatency: true,
-    virtualAvatar: false,
     name: "",
     intro: "",
     startDate: "",
@@ -81,35 +100,32 @@ export function useLiveForm() {
     recordLabel: "",
     recordSource: "",
     detailCover: "",
-    warmupType: "image",
-    warmupImage: "",
-    promoCover: "",
     detailHtml: "",
-    roles: [],
-    playbackEnabled: true,
-    playbackValidity: "forever",
-    playbackDays: 7,
-    playbackPeriods: [{ start: "", end: "" }],
-    playbackSpeed: "allow",
-    fastForward: "allow",
-    replayProtection: false,
+    hostIds: [],
     ownerIds: [],
     products: [],
-    courseId: "",
+    coursewareMaterialIds: [],
+    coursewares: [],
+    autoList: true,
     sellAlone: true,
     sellType: "free",
-    validity: "长期有效",
-    productGroup: "",
-    shelfType: "now",
-    shelfTime: "",
-    hidden: false,
-    stopped: false,
+    price: "",
+    linePrice: "",
+    password: "",
+    accessValidityType: "long",
+    accessValidityDays: 7,
+    playbackEnabled: true,
+    playbackValidityType: "forever",
+    playbackValidityDays: 7,
+    playbackSpeedAllow: true,
+    playbackFastForwardAllow: true,
     agreed: false,
   });
 
   const submitting = ref(false);
 
-  function validate(): string | null {
+  /** 新建页校验 */
+  function validateCreate(): string | null {
     if (!form.provider) return "请选择直播服务商";
     const title = form.name.trim();
     if (!title) return "请填写直播名称";
@@ -133,9 +149,18 @@ export function useLiveForm() {
     if (form.mode === "recorded" && form.provider === "vhall" && !form.recordId.trim()) {
       return "录播模式请选择视频或直播回放资源";
     }
+    if (!form.hostIds.length) return "请选择主播";
+    if (form.ownerIds.length > 20) return "归属人最多选择 20 人";
+    if (form.products.length > 20) return "关联商品最多 20 个";
+    if (form.coursewareMaterialIds.length > 100) return "课件资料最多 100 个";
     if (!form.agreed) return "请先阅读并同意《直播运营规范》";
     return null;
   }
 
-  return { form, submitting, validate };
+  /** @deprecated 用 validateCreate */
+  function validate(): string | null {
+    return validateCreate();
+  }
+
+  return { form, submitting, validate, validateCreate };
 }

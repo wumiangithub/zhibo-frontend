@@ -11,6 +11,9 @@ import {
   ElTag,
   ElMessageBox,
   ElMessage,
+  ElDropdown,
+  ElDropdownMenu,
+  ElDropdownItem,
 } from "element-plus";
 import { RefreshRight } from "@element-plus/icons-vue";
 import MaterialUploadDialog from "./MaterialUploadDialog.vue";
@@ -27,8 +30,13 @@ import {
   UPLOAD_BTN,
   type AuditStatus,
 } from "./mock";
-import type { MaterialListItem } from "@/api/materials";
+import {
+  isMaterialSelectable,
+  materialAvailabilityLabel,
+  type MaterialListItem,
+} from "@/api/materials";
 import type { MaterialRegisterItem } from "./materialUploadTypes";
+import { formatUploadSize } from "./materialUploadFormat";
 import { useToast } from "@/composables/useToast";
 import { useMaterialCenter } from "@/composables/useMaterialCenter";
 
@@ -56,9 +64,11 @@ const {
   removeGroup,
   registerAfterUpload,
   renameMaterialItem,
+  toggleAiAudit,
+  toggleRiskAudit,
 } = useMaterialCenter();
 
-/** 审核筛选本迭代占位（契约无此字段） */
+/** 审核筛选：本迭代仅 UI 占位，不进列表 API */
 const auditFilter = ref<"" | AuditStatus>("");
 const uploadVisible = ref(false);
 
@@ -118,23 +128,44 @@ function onThumbClick(row: MaterialListItem) {
   }
 }
 
-function auditLabel(s: AuditStatus) {
+function auditLabel(s?: AuditStatus | null) {
   if (s === "passed") return "已通过";
   if (s === "rejected") return "已驳回";
   return "待审核";
 }
 
-function auditTagType(s: AuditStatus): "success" | "danger" | "info" {
+function auditTagType(s?: AuditStatus | null): "success" | "danger" | "info" {
   if (s === "passed") return "success";
   if (s === "rejected") return "danger";
   return "info";
 }
 
-/** 本迭代占位 */
-const PLACEHOLDER_AUDIT: AuditStatus = "pending";
+function normalizeAudit(s?: AuditStatus | null): AuditStatus {
+  if (s === "passed" || s === "rejected") return s;
+  return "pending";
+}
 
 function shell(label: string) {
   toast(`「${label}」暂未开放`);
+}
+
+function onMoreCommand(cmd: string, row: MaterialListItem) {
+  if (cmd === "ai") {
+    void toggleAiAudit(row);
+    return;
+  }
+  if (cmd === "risk") {
+    void toggleRiskAudit(row);
+  }
+}
+
+function sizeText(row: MaterialListItem) {
+  return typeof row.fileSize === "number" ? formatUploadSize(row.fileSize) : "—";
+}
+
+function displayOrDash(value?: string | null) {
+  const t = value?.trim();
+  return t ? t : "—";
 }
 
 async function onEditName(row: MaterialListItem) {
@@ -265,15 +296,25 @@ async function onEditName(row: MaterialListItem) {
               </template>
             </ElTableColumn>
             <ElTableColumn
+              label="大小"
+              width="100"
+            >
+              <template #default="{ row }">
+                {{ sizeText(row as MaterialListItem) }}
+              </template>
+            </ElTableColumn>
+            <ElTableColumn
               :label="COL_STATUS_LABEL[materialType]"
               width="110"
             >
               <template #default="{ row }">
                 <span
                   class="status-dot"
-                  :class="row.status === 'available' ? 'is-ok' : 'is-off'"
+                  :class="
+                    isMaterialSelectable(row as MaterialListItem) ? 'is-ok' : 'is-off'
+                  "
                 >
-                  {{ row.status === "available" ? "可用" : "不可用" }}
+                  {{ materialAvailabilityLabel(row as MaterialListItem) }}
                 </span>
               </template>
             </ElTableColumn>
@@ -286,25 +327,29 @@ async function onEditName(row: MaterialListItem) {
               label="上传人"
               width="100"
             >
-              <template #default>—</template>
+              <template #default="{ row }">
+                {{ displayOrDash((row as MaterialListItem).uploaderName) }}
+              </template>
             </ElTableColumn>
             <ElTableColumn
               label="所在部门"
-              width="120"
+              width="140"
             >
-              <template #default>—</template>
+              <template #default="{ row }">
+                {{ displayOrDash((row as MaterialListItem).departmentName) }}
+              </template>
             </ElTableColumn>
             <ElTableColumn
               label="AI审核状态"
               width="120"
             >
-              <template #default>
+              <template #default="{ row }">
                 <ElTag
                   size="small"
-                  :type="auditTagType(PLACEHOLDER_AUDIT)"
+                  :type="auditTagType(normalizeAudit((row as MaterialListItem).aiAuditStatus))"
                   effect="light"
                 >
-                  {{ auditLabel(PLACEHOLDER_AUDIT) }}
+                  {{ auditLabel(normalizeAudit((row as MaterialListItem).aiAuditStatus)) }}
                 </ElTag>
               </template>
             </ElTableColumn>
@@ -312,29 +357,60 @@ async function onEditName(row: MaterialListItem) {
               label="风控合规审核"
               width="130"
             >
-              <template #default>
+              <template #default="{ row }">
                 <ElTag
                   size="small"
-                  :type="auditTagType(PLACEHOLDER_AUDIT)"
+                  :type="auditTagType(normalizeAudit((row as MaterialListItem).riskAuditStatus))"
                   effect="light"
                 >
-                  {{ auditLabel(PLACEHOLDER_AUDIT) }}
+                  {{ auditLabel(normalizeAudit((row as MaterialListItem).riskAuditStatus)) }}
                 </ElTag>
               </template>
             </ElTableColumn>
             <ElTableColumn
               label="操作"
-              width="100"
+              width="120"
               fixed="right"
             >
-              <template #default>
-                <button
-                  type="button"
-                  class="op-link"
-                  @click="shell('审核记录')"
-                >
-                  审核记录
-                </button>
+              <template #default="{ row }">
+                <div class="op-row">
+                  <button
+                    type="button"
+                    class="op-link"
+                    @click="shell('审核记录')"
+                  >
+                    审核记录
+                  </button>
+                  <ElDropdown
+                    trigger="click"
+                    @command="(cmd: string) => onMoreCommand(cmd, row as MaterialListItem)"
+                  >
+                    <button
+                      type="button"
+                      class="op-more"
+                    >
+                      ···
+                    </button>
+                    <template #dropdown>
+                      <ElDropdownMenu>
+                        <ElDropdownItem command="ai">
+                          {{
+                            normalizeAudit((row as MaterialListItem).aiAuditStatus) === "passed"
+                              ? "AI审核驳回"
+                              : "AI审核通过"
+                          }}
+                        </ElDropdownItem>
+                        <ElDropdownItem command="risk">
+                          {{
+                            normalizeAudit((row as MaterialListItem).riskAuditStatus) === "passed"
+                              ? "风控合规驳回"
+                              : "风控合规通过"
+                          }}
+                        </ElDropdownItem>
+                      </ElDropdownMenu>
+                    </template>
+                  </ElDropdown>
+                </div>
               </template>
             </ElTableColumn>
           </ElTable>
@@ -514,6 +590,12 @@ async function onEditName(row: MaterialListItem) {
   background: var(--color-success);
 }
 
+.op-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .op-link {
   border: 0;
   padding: 0;
@@ -521,10 +603,25 @@ async function onEditName(row: MaterialListItem) {
   color: var(--color-primary);
   font-size: 13px;
   cursor: pointer;
+  line-height: 1.3;
 }
 
 .op-link:hover {
   color: var(--color-primary-hover);
+}
+
+.op-more {
+  border: 0;
+  background: transparent;
+  padding: 0 4px;
+  font-size: 14px;
+  color: #999;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.op-more:hover {
+  color: var(--color-primary);
 }
 
 .pager {

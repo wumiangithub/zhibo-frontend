@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { EditPen, VideoPlay } from "@element-plus/icons-vue";
 import type { MaterialListItem, MaterialType } from "@/api/materials";
 import { getMaterialFileIcon } from "./materialFileIcons";
-import { formatUploadSize } from "./materialUploadFormat";
 import { getTosPreviewUrl } from "@/utils/fileInfo";
+import { formatImageMetaDisplay } from "./materialUploadFormat";
 
 const props = defineProps<{
   row: MaterialListItem;
@@ -15,6 +16,15 @@ const emit = defineEmits<{
   "thumb-click": [row: MaterialListItem];
 }>();
 
+/** 图片：宽*高 (比例)；视频等：有 meta 原样，旧数据 -- */
+const subText = computed(() => {
+  if (props.materialType === "image") {
+    return formatImageMetaDisplay(props.row.meta);
+  }
+  const meta = props.row.meta?.trim();
+  return meta || "--";
+});
+
 function thumbSrc(row: MaterialListItem) {
   if (props.materialType === "document") {
     return getMaterialFileIcon(row.name);
@@ -22,14 +32,6 @@ function thumbSrc(row: MaterialListItem) {
   const base = row.thumbUrl || row.url;
   if (!base) return "";
   return getTosPreviewUrl(base, 160, 90);
-}
-
-function metaText(row: MaterialListItem) {
-  if (row.meta) return row.meta;
-  if (typeof row.fileSize === "number" && row.fileSize > 0) {
-    return formatUploadSize(row.fileSize);
-  }
-  return "";
 }
 
 function onThumbClick(e: MouseEvent, row: MaterialListItem) {
@@ -88,7 +90,7 @@ function onThumbClick(e: MouseEvent, row: MaterialListItem) {
           <el-icon><EditPen /></el-icon>
         </button>
       </div>
-      <div class="asset-sub">{{ metaText(row) }}</div>
+      <div class="asset-sub">{{ subText }}</div>
     </div>
   </div>
 </template>

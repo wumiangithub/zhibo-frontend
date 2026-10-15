@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, reactive, ref } from "vue";
 import { ElMessage } from "element-plus";
-import type { UploadUserFile } from "element-plus";
+import type { UploadRawFile, UploadUserFile } from "element-plus";
 import type {
   FileTableItem,
   MaterialRegisterItem,
@@ -8,11 +8,35 @@ import type {
 } from "@/views/settings/materials/materialUploadTypes";
 import {
   buildMaterialObjectKey,
+  formatDuration,
+  formatImageMeta,
   resolveMaterialAccessUrl,
   type MaterialObjectKind,
 } from "@/views/settings/materials/materialUploadFormat";
 import { useMaterialsStore } from "@/stores/materials";
 import { handleUpload, type TosUploadResult } from "@/utils/upload";
+import { getImageInfo, getVideoInfo } from "@/utils/fileInfo";
+
+function toUploadRawFile(file: File, uid: number): UploadRawFile {
+  const raw = file as UploadRawFile;
+  raw.uid = uid;
+  return raw;
+}
+
+async function buildRegisterMeta(
+  materialType: MaterialObjectKind,
+  file: File,
+): Promise<string | undefined> {
+  if (materialType === "image") {
+    const { width, height } = await getImageInfo(file);
+    return formatImageMeta(width, height) || undefined;
+  }
+  if (materialType === "video") {
+    const { duration } = await getVideoInfo(file);
+    return duration > 0 ? formatDuration(duration) : undefined;
+  }
+  return undefined;
+}
 
 export function useMaterialUpload() {
   const materialsStore = useMaterialsStore();
@@ -89,6 +113,59 @@ export function useMaterialUpload() {
       abortFlags[full.uid] = true;
     }
     return fileList;
+  }
+
+  /** 裁剪后替换当前项（waiting / error → waiting），revoke 旧 blob */
+  function replaceItemFile(uid: number, file: File, fileList: UploadUserFile[]) {
+    const full = findItem(uid);
+    if (!full) return fileList;
+    if (full.status === "uploading" || full.status === "success") return fileList;
+    if (full.previewUrl.startsWith("blob:")) URL.revokeObjectURL(full.previewUrl);
+    const raw = toUploadRawFile(file, uid);
+    full.file = file;
+    full.name = file.name;
+    full.previewUrl = URL.createObjectURL(file);
+    full.status = "waiting";
+    full.percent = 0;
+    full.speedBps = 0;
+    delete full.resultUrl;
+    delete full.objectKey;
+    delete abortFlags[full.uid];
+    return fileList.map((f) =>
+      f.uid === uid
+        ? { ...f, name: file.name, size: file.size, raw, status: "ready" as const }
+        : f,
+    );
+  }
+
+  /** 成功项裁剪：新增一条 waiting，不覆盖已成功项 */
+  function addCroppedItem(file: File, fileList: UploadUserFile[]) {
+    const maxUid = Math.max(0, ...items.value.map((i) => i.uid), ...fileList.map((f) => f.uid ?? 0));
+    const uid = maxUid + 1;
+    const raw = toUploadRawFile(file, uid);
+    const previewUrl = URL.createObjectURL(file);
+    items.value = [
+      ...items.value,
+      {
+        uid,
+        name: file.name,
+        file,
+        previewUrl,
+        status: "waiting",
+        percent: 0,
+        speedBps: 0,
+      },
+    ];
+    return [
+      ...fileList,
+      {
+        uid,
+        name: file.name,
+        size: file.size,
+        raw,
+        status: "ready" as const,
+      },
+    ];
   }
 
   function resetSession() {
@@ -175,12 +252,14 @@ export function useMaterialUpload() {
             key,
           );
           item.resultUrl = url;
+          const meta = await buildRegisterMeta(materialType, item.file);
           registerItems.push({
             name: item.file.name,
             url,
             objectKey: key,
             fileSize: item.file.size,
             mimeType: item.file.type || undefined,
+            meta,
           });
         } else {
           item.status = "error";
@@ -228,6 +307,8 @@ export function useMaterialUpload() {
     syncItemsFromFileList,
     removeItem,
     cancelUpload,
+    replaceItemFile,
+    addCroppedItem,
     resetSession,
     ensureStsOnOpen,
     startUpload,

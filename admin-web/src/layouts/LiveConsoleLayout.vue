@@ -23,11 +23,11 @@ function onShellClick(label: string) {
   <div class="flex h-dvh flex-col overflow-hidden bg-[#f5f6f8] text-[#333] antialiased">
     <header class="z-20 flex h-[52px] flex-none items-center justify-between border-b border-[#ebebeb] bg-white px-5">
       <div class="flex items-center gap-2.5">
-        <span
-          class="flex h-7 w-7 items-center justify-center rounded-full bg-[#e54d42] text-[11px] font-bold text-white"
+        <img
+          src="/favicon.svg"
+          alt="钱坤"
+          class="h-7 w-7 flex-none rounded-full"
         >
-          钱坤
-        </span>
         <span class="text-[15px] font-semibold text-[#1a1a1a]">直播中控台</span>
       </div>
       <div class="flex items-center gap-2 text-[13px] text-[#666]">
