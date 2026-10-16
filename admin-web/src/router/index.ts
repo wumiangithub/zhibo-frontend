@@ -50,6 +50,11 @@ const router = createRouter({
           name: "settings-employees",
           component: () => import("@/views/settings/employees/EmployeeOrgView.vue"),
         },
+        {
+          path: "settings/roles",
+          name: "settings-roles",
+          component: () => import("@/views/settings/roles/RoleManageView.vue"),
+        },
       ],
     },
     /** 直播中控台列表：侧栏新窗口打开，独立壳，不套 DefaultLayout */

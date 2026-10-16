@@ -4,7 +4,9 @@ import {
   ElButton,
   ElInput,
   ElMessage,
+  ElOption,
   ElPagination,
+  ElSelect,
   ElTable,
   ElTableColumn,
   ElTree,
@@ -12,11 +14,13 @@ import {
 import {
   fetchDeptTree,
   fetchOrgEmployees,
+  fetchRoles,
   hqStatusLabel,
   ORG_DEPT_ALL,
   setLiveEnabled,
   type DeptTreeNode,
   type OrgEmployeeItem,
+  type RoleListItem,
 } from "@/api/org";
 
 const ALL_NODE: DeptTreeNode = {
@@ -34,6 +38,8 @@ const treeRef = ref<InstanceType<typeof ElTree>>();
 const selectedDeptId = ref(ORG_DEPT_ALL);
 
 const nameKeyword = ref("");
+const selectedRoleId = ref("");
+const roles = ref<RoleListItem[]>([]);
 const listLoading = ref(false);
 const list = ref<OrgEmployeeItem[]>([]);
 const page = ref(1);
@@ -42,7 +48,16 @@ const total = ref(0);
 
 onMounted(() => {
   void loadTree();
+  void loadRoles();
 });
+
+async function loadRoles() {
+  try {
+    roles.value = await fetchRoles();
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "加载角色失败");
+  }
+}
 
 async function loadTree() {
   treeLoading.value = true;
@@ -73,6 +88,7 @@ async function loadList() {
     const data = await fetchOrgEmployees({
       deptId: selectedDeptId.value,
       userName: nameKeyword.value.trim() || undefined,
+      roleId: selectedRoleId.value || undefined,
       page: page.value,
       pageSize: pageSize.value,
     });
@@ -94,8 +110,17 @@ function onSearch() {
 
 function onReset() {
   nameKeyword.value = "";
+  selectedRoleId.value = "";
   page.value = 1;
   void loadList();
+}
+
+function hasRole(row: OrgEmployeeItem) {
+  return Boolean(row.roleNames);
+}
+
+function onAssignRole() {
+  ElMessage.info("请在主系统操作");
 }
 
 async function onToggleLive(row: OrgEmployeeItem) {
@@ -162,6 +187,26 @@ function onPageSizeChange(size: number) {
               @keyup.enter="onSearch"
             />
           </label>
+          <label class="filter-item">
+            <span>角色</span>
+            <ElSelect
+              v-model="selectedRoleId"
+              clearable
+              placeholder="全部角色"
+              style="width: 180px"
+            >
+              <ElOption
+                label="全部角色"
+                value=""
+              />
+              <ElOption
+                v-for="role in roles"
+                :key="role.id"
+                :label="role.name"
+                :value="role.id"
+              />
+            </ElSelect>
+          </label>
           <ElButton type="primary" @click="onSearch">查询</ElButton>
           <ElButton @click="onReset">重置</ElButton>
         </div>
@@ -176,6 +221,11 @@ function onPageSizeChange(size: number) {
         >
           <ElTableColumn prop="userName" label="姓名" min-width="120" />
           <ElTableColumn prop="departmentName" label="所属组织架构" min-width="180" />
+          <ElTableColumn label="角色" min-width="140">
+            <template #default="{ row }">
+              {{ row.roleNames || "--" }}
+            </template>
+          </ElTableColumn>
           <ElTableColumn label="直播账号状态" min-width="120">
             <template #default="{ row }">
               <span class="status-dot" :class="row.liveEnabled ? 'is-on' : 'is-off'" />
@@ -187,8 +237,11 @@ function onPageSizeChange(size: number) {
               {{ hqStatusLabel(row.hqStatus) }}
             </template>
           </ElTableColumn>
-          <ElTableColumn label="操作" min-width="100" fixed="right">
+          <ElTableColumn label="操作" min-width="220" fixed="right">
             <template #default="{ row }">
+              <button type="button" class="link-btn" @click="onAssignRole">
+                {{ hasRole(row) ? "更换角色" : "赋予角色" }}
+              </button>
               <button type="button" class="link-btn" @click="onToggleLive(row)">
                 {{ row.liveEnabled ? "禁用" : "启用" }}
               </button>
@@ -307,6 +360,8 @@ function onPageSizeChange(size: number) {
   gap: 8px;
   font-size: 13px;
   color: #4e5969;
+  white-space: nowrap;
+  flex: none;
 }
 
 .emp-table {
@@ -342,6 +397,7 @@ function onPageSizeChange(size: number) {
   color: #165dff;
   cursor: pointer;
   padding: 0;
+  margin-right: 12px;
   font-size: 13px;
 }
 

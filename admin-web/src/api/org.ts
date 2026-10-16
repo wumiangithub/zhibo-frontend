@@ -14,6 +14,7 @@ export interface OrgEmployeeItem {
   id: string;
   userName: string;
   departmentName: string;
+  roleNames: string;
   liveEnabled: boolean;
   hqStatus: HqStatus;
 }
@@ -36,6 +37,8 @@ export function fetchOrgEmployees(params: {
   /** 空 / all = 全部员工；否则仅该部门 */
   deptId?: string;
   userName?: string;
+  /** 空 = 全部角色 */
+  roleId?: string;
   page?: number;
   pageSize?: number;
 }) {
@@ -44,6 +47,7 @@ export function fetchOrgEmployees(params: {
     params: {
       deptId: all ? undefined : params.deptId,
       userName: params.userName || undefined,
+      roleId: params.roleId || undefined,
       page: params.page ?? 1,
       pageSize: params.pageSize ?? 20,
     },
@@ -54,6 +58,49 @@ export function setLiveEnabled(id: string, enabled: boolean) {
   return put<{ id: string; liveEnabled: boolean }>(`/org/employees/${id}/live-enabled`, {
     enabled,
   });
+}
+
+export interface RoleListItem {
+  id: string;
+  name: string;
+}
+
+export interface RoleMenuNode {
+  code: string;
+  name: string;
+  children: RoleMenuNode[];
+}
+
+export interface RoleMemberItem {
+  id: string;
+  userName: string;
+  departmentName: string;
+}
+
+export interface RoleDetail {
+  id: string;
+  name: string;
+  remark: string;
+  members: RoleMemberItem[];
+  menus: RoleMenuNode[];
+  menuCodes: string[];
+}
+
+export function fetchRoles() {
+  return get<RoleListItem[]>("/org/roles");
+}
+
+export function fetchRoleDetail(id: string) {
+  return get<RoleDetail>(`/org/roles/${id}`);
+}
+
+export function saveRoleMenus(id: string, menuCodes: string[]) {
+  return put<RoleDetail>(`/org/roles/${id}/menus`, { menuCodes });
+}
+
+export function memberLabel(member: RoleMemberItem): string {
+  if (member.departmentName) return `${member.userName}(${member.departmentName})`;
+  return member.userName;
 }
 
 export function hqStatusLabel(status: HqStatus): string {

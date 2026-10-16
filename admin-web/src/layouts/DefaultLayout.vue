@@ -53,6 +53,7 @@ const liveSideNav = [
 const settingsSideNav = [
   { key: "materials", label: "素材中心", icon: "grid", to: "/settings/materials" },
   { key: "employees", label: "员工管理", icon: "people", to: "/settings/employees" },
+  { key: "roles", label: "角色管理", icon: "user", to: "/settings/roles" },
 ] as const;
 
 const isLiveModule = computed(() => {
@@ -80,6 +81,7 @@ const activeSide = computed(() => {
   if (isSettingsModule.value) {
     if (route.name === "settings-materials") return "materials";
     if (route.name === "settings-employees") return "employees";
+    if (route.name === "settings-roles") return "roles";
     return "";
   }
   if (isLiveModule.value) {
@@ -337,7 +339,7 @@ async function onAccountClick() {
       <main
         class="min-h-0 min-w-0 flex-1 p-5"
         :class="
-          route.name === 'settings-employees'
+          route.name === 'settings-employees' || route.name === 'settings-roles'
             ? 'flex flex-col overflow-hidden'
             : 'overflow-y-auto'
         "
