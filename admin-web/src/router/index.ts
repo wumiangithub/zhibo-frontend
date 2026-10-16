@@ -45,6 +45,11 @@ const router = createRouter({
           name: "settings-materials",
           component: () => import("@/views/settings/materials/MaterialCenterView.vue"),
         },
+        {
+          path: "settings/employees",
+          name: "settings-employees",
+          component: () => import("@/views/settings/employees/EmployeeOrgView.vue"),
+        },
       ],
     },
     /** 直播中控台列表：侧栏新窗口打开，独立壳，不套 DefaultLayout */

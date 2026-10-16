@@ -52,6 +52,7 @@ const liveSideNav = [
 /** 设置模块侧栏 */
 const settingsSideNav = [
   { key: "materials", label: "素材中心", icon: "grid", to: "/settings/materials" },
+  { key: "employees", label: "员工管理", icon: "people", to: "/settings/employees" },
 ] as const;
 
 const isLiveModule = computed(() => {
@@ -78,6 +79,7 @@ const activeTop = computed(() => {
 const activeSide = computed(() => {
   if (isSettingsModule.value) {
     if (route.name === "settings-materials") return "materials";
+    if (route.name === "settings-employees") return "employees";
     return "";
   }
   if (isLiveModule.value) {
@@ -332,7 +334,14 @@ async function onAccountClick() {
         </div>
       </aside>
 
-      <main class="min-h-0 min-w-0 flex-1 overflow-y-auto p-5">
+      <main
+        class="min-h-0 min-w-0 flex-1 p-5"
+        :class="
+          route.name === 'settings-employees'
+            ? 'flex flex-col overflow-hidden'
+            : 'overflow-y-auto'
+        "
+      >
         <RouterView />
       </main>
     </div>
