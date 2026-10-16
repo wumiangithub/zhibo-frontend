@@ -46,6 +46,16 @@ const router = createRouter({
           component: () => import("@/views/settings/materials/MaterialCenterView.vue"),
         },
         {
+          path: "settings/materials/articles/new",
+          name: "settings-article-create",
+          component: () => import("@/views/settings/materials/ArticleCreateView.vue"),
+        },
+        {
+          path: "settings/materials/articles/:id",
+          name: "settings-article-edit",
+          component: () => import("@/views/settings/materials/ArticleCreateView.vue"),
+        },
+        {
           path: "settings/employees",
           name: "settings-employees",
           component: () => import("@/views/settings/employees/EmployeeOrgView.vue"),

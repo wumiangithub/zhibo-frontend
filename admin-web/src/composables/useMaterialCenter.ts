@@ -12,8 +12,8 @@ import {
   updateMaterialRiskAudit,
   type CreateMaterialItem,
   type MaterialGroup,
+  type MaterialCenterType,
   type MaterialListItem,
-  type MaterialType,
 } from "@/api/materials";
 import { ALL_GROUP_LABEL } from "@/views/settings/materials/mock";
 import { ApiError } from "@/api/http";
@@ -29,11 +29,13 @@ export type UseMaterialCenterOptions = {
    * 默认 false：素材中心主列表不带该参数。
    */
   selectableOnly?: boolean;
+  /** 素材中心从新建文章返回时带回 `type=article` */
+  initialType?: MaterialCenterType;
 };
 
 export function useMaterialCenter(options: UseMaterialCenterOptions = {}) {
   const selectableOnly = options.selectableOnly === true;
-  const materialType = ref<MaterialType>("image");
+  const materialType = ref<MaterialCenterType>(options.initialType ?? "image");
   const groupKeyword = ref("");
   const nameKeyword = ref("");
   const activeGroupId = ref("all");

@@ -161,12 +161,19 @@ function onCancel() {
   open.value = false;
 }
 
+const remoteSrc = computed(() => /^https?:\/\//i.test(props.src));
+
 function onConfirm() {
   if (!cropper) return;
-  const canvas = cropper.getCroppedCanvas({
-    imageSmoothingEnabled: true,
-    imageSmoothingQuality: "high",
-  });
+  let canvas: HTMLCanvasElement | null;
+  try {
+    canvas = cropper.getCroppedCanvas({
+      imageSmoothingEnabled: true,
+      imageSmoothingQuality: "high",
+    });
+  } catch {
+    return;
+  }
   if (!canvas) return;
   canvas.toBlob(
     (blob) => {
@@ -219,6 +226,7 @@ function onConfirm() {
       <img
         ref="imgRef"
         :src="src"
+        :crossorigin="remoteSrc ? 'anonymous' : undefined"
         alt="待裁剪图片"
         class="crop-stage__img"
       >

@@ -19,6 +19,9 @@ export function fetchTosSts() {
 
 export type MaterialType = "image" | "video" | "document";
 
+/** 素材中心 Tab。文章不是文件，不进封面/课件选择弹窗。 */
+export type MaterialCenterType = MaterialType | "article";
+
 /** 展示/可用态：两审都通过才 available（以后端返回为准，前端用审核字段兜底） */
 export type MaterialStatus = "available" | "unavailable";
 
@@ -82,7 +85,7 @@ export interface MaterialListData {
 }
 
 export interface MaterialListQuery {
-  type: MaterialType;
+  type: MaterialCenterType;
   groupId?: string;
   keyword?: string;
   /**
@@ -110,12 +113,12 @@ export interface CreateMaterialsPayload {
 }
 
 /** GET /api/materials/groups?type= */
-export function listMaterialGroups(type: MaterialType) {
+export function listMaterialGroups(type: MaterialCenterType) {
   return get<MaterialGroup[]>("/materials/groups", { params: { type } });
 }
 
 /** POST /api/materials/groups */
-export function createMaterialGroup(type: MaterialType, name: string) {
+export function createMaterialGroup(type: MaterialCenterType, name: string) {
   return post<MaterialGroup>("/materials/groups", { type, name });
 }
 
@@ -142,6 +145,62 @@ export function listMaterials(query: MaterialListQuery) {
       pageSize: query.pageSize ?? 20,
     },
   });
+}
+
+export interface CreateArticlePayload {
+  groupId: string;
+  title: string;
+  author: string;
+  content: string;
+}
+
+/** POST /api/materials/articles 新建文章 */
+export function createArticle(payload: CreateArticlePayload) {
+  return post<MaterialListItem>("/materials/articles", payload);
+}
+
+export interface ArticleDetail {
+  id: string;
+  groupId: string;
+  title: string;
+  author: string;
+  content: string;
+  aiAuditStatus: MaterialAuditStatus;
+  riskAuditStatus: MaterialAuditStatus;
+}
+
+/** GET /api/materials/articles/{id} */
+export function getArticle(id: string) {
+  return get<ArticleDetail>(`/materials/articles/${id}`);
+}
+
+/** PUT /api/materials/articles/{id} 编辑。待审核 400。成功后两审回到 pending。 */
+export function updateArticle(
+  id: string,
+  payload: Pick<CreateArticlePayload, "title" | "author" | "content">,
+) {
+  return put<MaterialListItem>(`/materials/articles/${id}`, payload);
+}
+
+/** PUT /api/materials/{id}/group 移动分组，不改审核 */
+export function moveMaterial(id: string, groupId: string) {
+  return put<MaterialListItem>(`/materials/${id}/group`, { groupId });
+}
+
+/** PUT /api/materials/{id}/image 裁剪替换。待审核 400。成功后两审回到 pending。 */
+export function replaceMaterialImage(
+  id: string,
+  payload: { url: string; objectKey: string; fileSize?: number; meta?: string },
+) {
+  return put<MaterialListItem>(`/materials/${id}/image`, payload);
+}
+
+/** 两审任一为待审核或空，内容不可改。 */
+export function isMaterialAuditPending(
+  item: Pick<MaterialListItem, "aiAuditStatus" | "riskAuditStatus">,
+): boolean {
+  const pending = (s?: string | null) => !s || s === "pending";
+  return pending(item.aiAuditStatus) || pending(item.riskAuditStatus);
 }
 
 /** POST /api/materials 批量登记 */

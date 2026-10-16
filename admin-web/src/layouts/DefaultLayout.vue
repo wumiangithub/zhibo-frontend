@@ -79,7 +79,7 @@ const activeTop = computed(() => {
 
 const activeSide = computed(() => {
   if (isSettingsModule.value) {
-    if (route.name === "settings-materials") return "materials";
+    if (route.path.startsWith("/settings/materials")) return "materials";
     if (route.name === "settings-employees") return "employees";
     if (route.name === "settings-roles") return "roles";
     return "";

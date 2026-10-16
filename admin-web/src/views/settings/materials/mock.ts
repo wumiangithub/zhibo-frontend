@@ -1,6 +1,6 @@
 /** 素材中心 UI 常量（列表/分组数据走 API） */
 
-import type { MaterialType } from "@/api/materials";
+import type { MaterialCenterType, MaterialType } from "@/api/materials";
 
 export type { MaterialType };
 export type { MaterialGroup } from "@/api/materials";
@@ -13,6 +13,12 @@ export const TYPE_TABS: { key: MaterialType; label: string }[] = [
   { key: "document", label: "文档" },
 ];
 
+/** 素材中心主列表 Tab。选择弹窗仍只用 {@link TYPE_TABS}。 */
+export const CENTER_TYPE_TABS: { key: MaterialCenterType; label: string }[] = [
+  ...TYPE_TABS,
+  { key: "article", label: "文章" },
+];
+
 export const AUDIT_OPTIONS: { value: "" | AuditStatus; label: string }[] = [
   { value: "", label: "全部状态" },
   { value: "passed", label: "已通过" },
@@ -20,10 +26,11 @@ export const AUDIT_OPTIONS: { value: "" | AuditStatus; label: string }[] = [
   { value: "pending", label: "待审核" },
 ];
 
-export const ALL_GROUP_LABEL: Record<MaterialType, string> = {
+export const ALL_GROUP_LABEL: Record<MaterialCenterType, string> = {
   image: "全部图片",
   video: "全部视频",
   document: "全部文档",
+  article: "全部文章",
 };
 
 export const UPLOAD_ACCEPT: Record<MaterialType, string> = {
@@ -67,20 +74,28 @@ export const UPLOAD_BTN: Record<MaterialType, string> = {
   document: "上传文档",
 };
 
-export const NAME_FILTER_LABEL: Record<MaterialType, string> = {
+export const NAME_FILTER_LABEL: Record<MaterialCenterType, string> = {
   image: "图片名称",
   video: "视频名称",
   document: "文档名称",
+  article: "文章名称",
 };
 
-export const COL_ASSET_LABEL: Record<MaterialType, string> = {
+export const COL_ASSET_LABEL: Record<MaterialCenterType, string> = {
   image: "图片",
   video: "视频",
   document: "文档",
+  article: "文章",
 };
 
-export const COL_STATUS_LABEL: Record<MaterialType, string> = {
+export const COL_STATUS_LABEL: Record<MaterialCenterType, string> = {
   image: "图片状态",
   video: "视频状态",
   document: "文档状态",
+  article: "图文状态",
 };
+
+/** 上传弹窗只接受文件类。文章 Tab 不会进选择弹窗。 */
+export function asFileMaterialType(type: MaterialCenterType): MaterialType {
+  return type === "article" ? "image" : type;
+}

@@ -76,7 +76,10 @@ async function onDownload(index: number) {
   if (downloading.value) return;
   downloading.value = true;
   try {
-    const res = await downloadFiles([{ fileUrl: item.url, fileName: item.name || "image" }]);
+    const res = await downloadFiles(
+      [{ fileUrl: item.url, fileName: item.name || "image" }],
+      { useLink: true },
+    );
     if (!res.success) {
       ElMessage.error("下载失败");
     }

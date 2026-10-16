@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import {
   ElInput,
   ElSelect,
@@ -14,33 +15,53 @@ import {
   ElDropdown,
   ElDropdownMenu,
   ElDropdownItem,
+  ElDialog,
 } from "element-plus";
-import { RefreshRight } from "@element-plus/icons-vue";
+import { Plus, RefreshRight } from "@element-plus/icons-vue";
+import ImageCropDialog from "@/views/live/components/ImageCropDialog.vue";
+import { downloadFiles } from "@/utils/downloadFile";
+import { handleUpload } from "@/utils/upload";
+import { useMaterialsStore } from "@/stores/materials";
 import MaterialUploadDialog from "./MaterialUploadDialog.vue";
 import MaterialGroupSidebar from "./MaterialGroupSidebar.vue";
 import MaterialVideoPreviewDialog from "./MaterialVideoPreviewDialog.vue";
 import MaterialImageViewer from "./MaterialImageViewer.vue";
 import MaterialAssetCell from "./MaterialAssetCell.vue";
 import {
+  asFileMaterialType,
   AUDIT_OPTIONS,
+  CENTER_TYPE_TABS,
   COL_ASSET_LABEL,
   COL_STATUS_LABEL,
   NAME_FILTER_LABEL,
-  TYPE_TABS,
   UPLOAD_BTN,
   type AuditStatus,
 } from "./mock";
 import {
+  isMaterialAuditPending,
   isMaterialSelectable,
   materialAvailabilityLabel,
+  moveMaterial,
+  replaceMaterialImage,
   type MaterialListItem,
 } from "@/api/materials";
 import type { MaterialRegisterItem } from "./materialUploadTypes";
-import { formatUploadSize } from "./materialUploadFormat";
+import { buildMaterialObjectKey, formatUploadSize, resolveMaterialAccessUrl } from "./materialUploadFormat";
 import { useToast } from "@/composables/useToast";
 import { useMaterialCenter } from "@/composables/useMaterialCenter";
+import type { MaterialCenterType } from "@/api/materials";
 
 const { toast } = useToast();
+const route = useRoute();
+const router = useRouter();
+
+function initialCenterType(): MaterialCenterType {
+  const raw = route.query.type;
+  if (raw === "image" || raw === "video" || raw === "document" || raw === "article") {
+    return raw;
+  }
+  return "image";
+}
 
 const {
   materialType,
@@ -66,7 +87,14 @@ const {
   renameMaterialItem,
   toggleAiAudit,
   toggleRiskAudit,
-} = useMaterialCenter();
+} = useMaterialCenter({ initialType: initialCenterType() });
+
+const primaryLabel = computed(() =>
+  materialType.value === "article" ? "新增文章" : UPLOAD_BTN[materialType.value],
+);
+const namePlaceholder = computed(() =>
+  materialType.value === "article" ? "请输入文章名称" : "请输入",
+);
 
 /** 审核筛选：本迭代仅 UI 占位，不进列表 API */
 const auditFilter = ref<"" | AuditStatus>("");
@@ -91,6 +119,14 @@ onMounted(() => {
 });
 
 function openUpload() {
+  if (materialType.value === "article") {
+    const groupId = activeGroupId.value === "all" ? undefined : activeGroupId.value;
+    void router.push({
+      name: "settings-article-create",
+      query: groupId ? { groupId } : {},
+    });
+    return;
+  }
   uploadVisible.value = true;
 }
 
@@ -149,7 +185,39 @@ function shell(label: string) {
   toast(`「${label}」暂未开放`);
 }
 
+const moveVisible = ref(false);
+const moveSaving = ref(false);
+const moveRow = ref<MaterialListItem | null>(null);
+const moveTargetId = ref("");
+
+const moveOptions = computed(() =>
+  uploadGroups.value.filter(
+    (g) => g.id !== "all" && g.id !== moveRow.value?.groupId,
+  ),
+);
+
+const cropVisible = ref(false);
+const cropSrc = ref("");
+const cropRow = ref<MaterialListItem | null>(null);
+const cropSaving = ref(false);
+
 function onMoreCommand(cmd: string, row: MaterialListItem) {
+  if (cmd === "move") {
+    openMove(row);
+    return;
+  }
+  if (cmd === "crop") {
+    openCrop(row);
+    return;
+  }
+  if (cmd === "download") {
+    void downloadRow(row);
+    return;
+  }
+  if (cmd === "edit") {
+    openArticleEdit(row);
+    return;
+  }
   if (cmd === "ai") {
     void toggleAiAudit(row);
     return;
@@ -157,6 +225,103 @@ function onMoreCommand(cmd: string, row: MaterialListItem) {
   if (cmd === "risk") {
     void toggleRiskAudit(row);
   }
+}
+
+function openMove(row: MaterialListItem) {
+  moveRow.value = row;
+  const options = uploadGroups.value.filter((g) => g.id !== "all" && g.id !== row.groupId);
+  if (!options.length) {
+    ElMessage.warning("没有其他分组");
+    return;
+  }
+  moveTargetId.value = options[0].id;
+  moveVisible.value = true;
+}
+
+async function confirmMove() {
+  const row = moveRow.value;
+  if (!row || !moveTargetId.value || moveSaving.value) return;
+  moveSaving.value = true;
+  try {
+    await moveMaterial(row.id, moveTargetId.value);
+    ElMessage.success("已移动");
+    moveVisible.value = false;
+    await refreshAll();
+  } catch (err: unknown) {
+    ElMessage.error(err instanceof Error ? err.message : "移动失败");
+  } finally {
+    moveSaving.value = false;
+  }
+}
+
+function openCrop(row: MaterialListItem) {
+  if (isMaterialAuditPending(row)) {
+    ElMessage.warning("审核中不可编辑");
+    return;
+  }
+  if (!row.url) {
+    ElMessage.warning("暂无图片地址");
+    return;
+  }
+  cropRow.value = row;
+  cropSrc.value = row.url;
+  cropVisible.value = true;
+}
+
+async function onCropConfirm(file: File) {
+  const row = cropRow.value;
+  if (!row || cropSaving.value) return;
+  cropSaving.value = true;
+  try {
+    const config = await useMaterialsStore().ensureTosConfig();
+    const objectKey = buildMaterialObjectKey("image", file.name);
+    const result = await handleUpload({
+      ...config,
+      name: objectKey,
+      file,
+      fileSize: file.size,
+    });
+    if (!result || result.cancelled) throw new Error("裁剪上传已取消");
+    const url = resolveMaterialAccessUrl(
+      typeof result.Location === "string" ? result.Location : undefined,
+      objectKey,
+    );
+    await replaceMaterialImage(row.id, {
+      url,
+      objectKey,
+      fileSize: file.size,
+    });
+    ElMessage.success("已裁剪，重新进入审核");
+    await refreshAll();
+  } catch (err: unknown) {
+    ElMessage.error(err instanceof Error ? err.message : "裁剪失败");
+  } finally {
+    cropSaving.value = false;
+  }
+}
+
+async function downloadRow(row: MaterialListItem) {
+  if (!row.url) {
+    ElMessage.warning("暂无下载地址");
+    return;
+  }
+  try {
+    const res = await downloadFiles(
+      [{ fileUrl: row.url, fileName: row.name || "download" }],
+      { useLink: true },
+    );
+    if (!res.success) ElMessage.error("下载失败");
+  } catch {
+    ElMessage.error("下载失败");
+  }
+}
+
+function openArticleEdit(row: MaterialListItem) {
+  if (isMaterialAuditPending(row)) {
+    ElMessage.warning("审核中不可编辑");
+    return;
+  }
+  void router.push({ name: "settings-article-edit", params: { id: row.id } });
 }
 
 function sizeText(row: MaterialListItem) {
@@ -203,7 +368,7 @@ async function onEditName(row: MaterialListItem) {
 
     <div class="type-tabs">
       <button
-        v-for="tab in TYPE_TABS"
+        v-for="tab in CENTER_TYPE_TABS"
         :key="tab.key"
         type="button"
         class="type-tab"
@@ -228,22 +393,24 @@ async function onEditName(row: MaterialListItem) {
         <div class="toolbar">
           <ElButton
             type="primary"
+            :icon="materialType === 'article' ? Plus : undefined"
             @click="openUpload"
           >
-            {{ UPLOAD_BTN[materialType] }}
+            {{ primaryLabel }}
           </ElButton>
           <div class="filters">
             <span class="filter-label">{{ NAME_FILTER_LABEL[materialType] }}</span>
             <ElInput
               v-model="nameKeyword"
               clearable
-              placeholder="请输入"
-              style="width: 180px"
+              :placeholder="namePlaceholder"
+              :style="{ width: materialType === 'article' ? '220px' : '180px' }"
               @keyup.enter="search"
             />
             <span class="filter-label">审核状态</span>
             <ElSelect
               v-model="auditFilter"
+              placeholder="全部状态"
               style="width: 140px"
             >
               <ElOption
@@ -287,15 +454,22 @@ async function onEditName(row: MaterialListItem) {
               min-width="220"
             >
               <template #default="{ row }">
+                <span
+                  v-if="materialType === 'article'"
+                  class="article-title"
+                  :title="(row as MaterialListItem).name"
+                >{{ (row as MaterialListItem).name }}</span>
                 <MaterialAssetCell
+                  v-else
                   :row="(row as MaterialListItem)"
-                  :material-type="materialType"
+                  :material-type="asFileMaterialType(materialType)"
                   @edit-name="onEditName"
                   @thumb-click="onThumbClick"
                 />
               </template>
             </ElTableColumn>
             <ElTableColumn
+              v-if="materialType !== 'article'"
               label="大小"
               width="100"
             >
@@ -393,6 +567,29 @@ async function onEditName(row: MaterialListItem) {
                     </button>
                     <template #dropdown>
                       <ElDropdownMenu>
+                        <ElDropdownItem command="move">
+                          移动
+                        </ElDropdownItem>
+                        <ElDropdownItem
+                          v-if="materialType === 'image'"
+                          command="crop"
+                          :disabled="isMaterialAuditPending(row as MaterialListItem)"
+                        >
+                          裁剪
+                        </ElDropdownItem>
+                        <ElDropdownItem
+                          v-if="materialType === 'image' || materialType === 'video' || materialType === 'document'"
+                          command="download"
+                        >
+                          下载
+                        </ElDropdownItem>
+                        <ElDropdownItem
+                          v-if="materialType === 'article'"
+                          command="edit"
+                          :disabled="isMaterialAuditPending(row as MaterialListItem)"
+                        >
+                          编辑
+                        </ElDropdownItem>
                         <ElDropdownItem command="ai">
                           {{
                             normalizeAudit((row as MaterialListItem).aiAuditStatus) === "passed"
@@ -433,7 +630,7 @@ async function onEditName(row: MaterialListItem) {
 
     <MaterialUploadDialog
       v-model="uploadVisible"
-      :material-type="materialType"
+      :material-type="asFileMaterialType(materialType)"
       :groups="uploadGroups"
       :default-group-id="activeGroupId"
       @confirm="onUploadConfirm"
@@ -449,6 +646,46 @@ async function onEditName(row: MaterialListItem) {
       v-model="videoPreviewVisible"
       :url="videoPreviewUrl"
       :title="videoPreviewTitle"
+    />
+
+    <ElDialog
+      v-model="moveVisible"
+      title="移动到分组"
+      width="420px"
+      align-center
+      append-to-body
+    >
+      <ElSelect
+        v-model="moveTargetId"
+        placeholder="请选择分组"
+        style="width: 100%"
+      >
+        <ElOption
+          v-for="g in moveOptions"
+          :key="g.id"
+          :label="g.name"
+          :value="g.id"
+        />
+      </ElSelect>
+      <template #footer>
+        <ElButton @click="moveVisible = false">
+          取消
+        </ElButton>
+        <ElButton
+          type="primary"
+          :loading="moveSaving"
+          @click="confirmMove"
+        >
+          确定
+        </ElButton>
+      </template>
+    </ElDialog>
+
+    <ImageCropDialog
+      v-model:visible="cropVisible"
+      :src="cropSrc"
+      aspect-selectable
+      @confirm="onCropConfirm"
     />
   </div>
 </template>
@@ -622,6 +859,15 @@ async function onEditName(row: MaterialListItem) {
 
 .op-more:hover {
   color: var(--color-primary);
+}
+
+.article-title {
+  display: block;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--color-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pager {

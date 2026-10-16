@@ -38,7 +38,7 @@ export function fetchOrgEmployees(params: {
   deptId?: string;
   userName?: string;
   /** 空 = 全部角色 */
-  roleId?: string;
+  roleId?: number;
   page?: number;
   pageSize?: number;
 }) {
@@ -61,7 +61,7 @@ export function setLiveEnabled(id: string, enabled: boolean) {
 }
 
 export interface RoleListItem {
-  id: string;
+  id: number;
   name: string;
 }
 
@@ -78,7 +78,7 @@ export interface RoleMemberItem {
 }
 
 export interface RoleDetail {
-  id: string;
+  id: number;
   name: string;
   remark: string;
   members: RoleMemberItem[];
@@ -90,11 +90,11 @@ export function fetchRoles() {
   return get<RoleListItem[]>("/org/roles");
 }
 
-export function fetchRoleDetail(id: string) {
+export function fetchRoleDetail(id: number) {
   return get<RoleDetail>(`/org/roles/${id}`);
 }
 
-export function saveRoleMenus(id: string, menuCodes: string[]) {
+export function saveRoleMenus(id: number, menuCodes: string[]) {
   return put<RoleDetail>(`/org/roles/${id}/menus`, { menuCodes });
 }
 

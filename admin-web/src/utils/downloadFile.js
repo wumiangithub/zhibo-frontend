@@ -32,8 +32,8 @@ const isDev = import.meta.env.VITE_APP_ENV === 'dev'
  * @param {Array} fileList - 文件列表 [{fileUrl, fileName}]
  * @param {Object} options - 下载选项
  * @param {number} [options.startIndex=0] - 当前批次起始索引
- * @param {boolean} [options.useStream=false] - 是否使用流式下载（飞书等内置浏览器环境请使用 false）
- * @param {boolean} [options.useLink=false] - 是否使用 a 标签下载（不从火山下载，从后端加载适用）
+ * @param {boolean} [options.useStream=false] - 是否使用流式下载
+ * @param {boolean} [options.useLink=false] - 是否使用 a 标签下载
  * @returns {Promise<{success: boolean, successCount: number, failedFiles: Array}>}
  */
 export async function downloadFiles(fileList, options = {}) {

@@ -38,7 +38,7 @@ const treeRef = ref<InstanceType<typeof ElTree>>();
 const selectedDeptId = ref(ORG_DEPT_ALL);
 
 const nameKeyword = ref("");
-const selectedRoleId = ref("");
+const selectedRoleId = ref<number | undefined>(undefined);
 const roles = ref<RoleListItem[]>([]);
 const listLoading = ref(false);
 const list = ref<OrgEmployeeItem[]>([]);
@@ -88,7 +88,7 @@ async function loadList() {
     const data = await fetchOrgEmployees({
       deptId: selectedDeptId.value,
       userName: nameKeyword.value.trim() || undefined,
-      roleId: selectedRoleId.value || undefined,
+      roleId: typeof selectedRoleId.value === "number" ? selectedRoleId.value : undefined,
       page: page.value,
       pageSize: pageSize.value,
     });
@@ -110,7 +110,7 @@ function onSearch() {
 
 function onReset() {
   nameKeyword.value = "";
-  selectedRoleId.value = "";
+  selectedRoleId.value = undefined;
   page.value = 1;
   void loadList();
 }
@@ -120,7 +120,7 @@ function hasRole(row: OrgEmployeeItem) {
 }
 
 function onAssignRole() {
-  ElMessage.info("请在主系统操作");
+  ElMessage.info("请在钱坤云CRM主系统操作");
 }
 
 async function onToggleLive(row: OrgEmployeeItem) {
@@ -195,10 +195,6 @@ function onPageSizeChange(size: number) {
               placeholder="全部角色"
               style="width: 180px"
             >
-              <ElOption
-                label="全部角色"
-                value=""
-              />
               <ElOption
                 v-for="role in roles"
                 :key="role.id"

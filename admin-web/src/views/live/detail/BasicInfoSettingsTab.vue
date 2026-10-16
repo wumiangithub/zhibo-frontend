@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { watch } from "vue";
+import { computed, watch } from "vue";
 import { ElMessage } from "element-plus";
 import {
   updateActivity,
@@ -24,6 +24,12 @@ const emit = defineEmits<{ refreshed: [] }>();
 
 const { form, submitting } = useLiveForm();
 const leave = useLeaveConfirm({ routeLeave: false });
+
+/** 待审核或未写风控状态时，基本信息不可改。 */
+const auditLocked = computed(() => {
+  const status = props.detail.riskStatus;
+  return !status || status === "pending";
+});
 
 const TYPE_TO_MODE: Record<number, LiveMode> = {
   1: "voice",
@@ -95,6 +101,10 @@ function validateBasic(): string | null {
 }
 
 async function onSave() {
+  if (auditLocked.value) {
+    ElMessage.warning("审核中不可编辑");
+    return;
+  }
   const err = validateBasic();
   if (err) {
     ElMessage.warning(err);
@@ -121,7 +131,7 @@ async function onSave() {
       payload.endTime = `${form.endDate} ${form.endTime}:00`;
     }
     await updateActivity(props.activityId, payload);
-    ElMessage.success("保存成功");
+    ElMessage.success("保存成功，重新进入审核");
     leave.markClean();
     emit("refreshed");
   } catch (e) {
@@ -139,24 +149,32 @@ defineExpose({
 
 <template>
   <div class="tab-panel">
-    <BasicInfoSection :form="form" />
-    <ProviderModeSection
-      :form="form"
-      hide-provider
-      provider-readonly
-      mode-readonly
-      viewer-style-readonly
-    />
-    <RelatedBusinessSection
-      :form="form"
-      :known-hosts="detail.hosts"
-      :known-owners="detail.owners"
-    />
+    <p
+      v-if="auditLocked"
+      class="lock-tip"
+    >
+      审核中不可编辑
+    </p>
+    <div :class="{ 'is-locked': auditLocked }">
+      <BasicInfoSection :form="form" />
+      <ProviderModeSection
+        :form="form"
+        hide-provider
+        provider-readonly
+        mode-readonly
+        viewer-style-readonly
+      />
+      <RelatedBusinessSection
+        :form="form"
+        :known-hosts="detail.hosts"
+        :known-owners="detail.owners"
+      />
+    </div>
 
     <div class="save-bar">
       <UiButton
         variant="primary"
-        :disabled="submitting"
+        :disabled="submitting || auditLocked"
         @click="onSave"
       >
         {{ submitting ? "保存中…" : "保存" }}
@@ -172,6 +190,17 @@ defineExpose({
   gap: 4px;
   padding-bottom: 24px;
 }
+.lock-tip {
+  margin: 0 0 8px;
+  color: var(--color-danger, #f56c6c);
+  font-size: 13px;
+}
+
+.is-locked {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
 .save-bar {
   display: flex;
   justify-content: center;

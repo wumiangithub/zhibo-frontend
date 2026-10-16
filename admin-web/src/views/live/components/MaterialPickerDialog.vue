@@ -23,6 +23,7 @@ import MaterialUploadDialog from "@/views/settings/materials/MaterialUploadDialo
 import MaterialImageViewer from "@/views/settings/materials/MaterialImageViewer.vue";
 import MaterialVideoPreviewDialog from "@/views/settings/materials/MaterialVideoPreviewDialog.vue";
 import {
+  asFileMaterialType,
   COL_ASSET_LABEL,
   COL_STATUS_LABEL,
   NAME_FILTER_LABEL,
@@ -437,7 +438,7 @@ watch(displayList, () => {
             type="primary"
             @click="openUpload"
           >
-            {{ UPLOAD_BTN[materialType] }}
+            {{ UPLOAD_BTN[asFileMaterialType(materialType)] }}
           </ElButton>
           <div class="filters">
             <span class="filter-label">{{ NAME_FILTER_LABEL[materialType] }}</span>
@@ -486,7 +487,7 @@ watch(displayList, () => {
               <template #default="{ row }">
                 <MaterialAssetCell
                   :row="(row as MaterialListItem)"
-                  :material-type="materialType"
+                  :material-type="asFileMaterialType(materialType)"
                   @edit-name="onEditName"
                   @thumb-click="onThumbClick"
                 />
@@ -579,7 +580,7 @@ watch(displayList, () => {
 
   <MaterialUploadDialog
     v-model="uploadVisible"
-    :material-type="materialType"
+    :material-type="asFileMaterialType(materialType)"
     :groups="uploadGroups"
     :default-group-id="activeGroupId"
     @confirm="onUploadConfirm"

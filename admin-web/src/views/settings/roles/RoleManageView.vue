@@ -12,7 +12,7 @@ import {
 } from "@/api/org";
 
 const roles = ref<RoleListItem[]>([]);
-const activeId = ref("");
+const activeId = ref<number | null>(null);
 const detail = ref<RoleDetail | null>(null);
 const loading = ref(false);
 const saving = ref(false);
@@ -30,7 +30,7 @@ async function loadRoles() {
   loading.value = true;
   try {
     roles.value = await fetchRoles();
-    if (roles.value.length && !activeId.value) {
+    if (roles.value.length && activeId.value == null) {
       await selectRole(roles.value[0].id);
     }
   } catch (e) {
@@ -40,7 +40,7 @@ async function loadRoles() {
   }
 }
 
-async function selectRole(id: string) {
+async function selectRole(id: number) {
   activeId.value = id;
   loading.value = true;
   try {
@@ -67,7 +67,7 @@ function leafCodes(nodes: RoleMenuNode[], checked: Set<string>): string[] {
 }
 
 async function onSave() {
-  if (!activeId.value || !treeRef.value) return;
+  if (activeId.value == null || !treeRef.value) return;
   const menuCodes = treeRef.value.getCheckedKeys(true).map(String);
   saving.value = true;
   try {
