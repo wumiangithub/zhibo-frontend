@@ -40,7 +40,7 @@ function decodeAesKey(keyBase64: string): Uint8Array {
 }
 
 /** UUID v4（不依赖 crypto.randomUUID，兼容非 secure context） */
-function randomUuid(): string {
+export function randomUuid(): string {
   const b = randomBytes(16);
   b[6] = (b[6]! & 0x0f) | 0x40;
   b[8] = (b[8]! & 0x3f) | 0x80;

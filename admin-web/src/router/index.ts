@@ -21,6 +21,31 @@ const router = createRouter({
           component: () => import("@/views/dashboard/DashboardView.vue"),
         },
         {
+          path: "live-reports",
+          name: "live-report-list",
+          component: () => import("@/views/liveReport/LiveReportListView.vue"),
+        },
+        {
+          path: "live-reports/new",
+          name: "live-report-create",
+          component: () => import("@/views/liveReport/LiveReportFormView.vue"),
+        },
+        {
+          path: "live-reports/:id/edit",
+          name: "live-report-edit",
+          component: () => import("@/views/liveReport/LiveReportFormView.vue"),
+        },
+        {
+          path: "live-reports/:id/audit",
+          name: "live-report-audit",
+          component: () => import("@/views/liveReport/LiveReportAuditView.vue"),
+        },
+        {
+          path: "live-reports/:id",
+          name: "live-report-detail",
+          component: () => import("@/views/liveReport/LiveReportDetailView.vue"),
+        },
+        {
           path: "live",
           name: "live-manage",
           component: () => import("@/views/live/LiveManageView.vue"),

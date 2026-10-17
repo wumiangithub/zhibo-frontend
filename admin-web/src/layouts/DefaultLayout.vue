@@ -41,6 +41,7 @@ const workbenchSideNav = [
 
 /** 直播模块侧栏：无图标，贴近截图 */
 const liveSideNav = [
+  { key: "report", label: "直播报备", to: "/live-reports" },
   { key: "create", label: "新建直播", to: "/live/create" },
   { key: "manage", label: "直播管理", to: "/live" },
   { key: "data", label: "直播数据" },
@@ -60,6 +61,7 @@ const isLiveModule = computed(() => {
   const name = route.name;
   return (
     name === "live-manage" ||
+    route.path.startsWith("/live-reports") ||
     name === "live-create" ||
     name === "live-detail" ||
     route.path.startsWith("/live")
@@ -85,6 +87,7 @@ const activeSide = computed(() => {
     return "";
   }
   if (isLiveModule.value) {
+    if (route.path.startsWith("/live-reports")) return "report";
     if (route.name === "live-create") return "create";
     // 列表 / 详情 / 去审核均高亮「直播管理」
     if (
