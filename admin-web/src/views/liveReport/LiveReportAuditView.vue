@@ -45,6 +45,7 @@ async function submitAudit() {
 function auditResult(row: ReportAudit) {
   if (row.action === "submit") return "发起申请";
   if (row.action === "resubmit") return "重新提交";
+  if (row.action === "append") return "追加计划时间";
   return row.result === "passed" ? "已通过" : "已驳回";
 }
 
@@ -76,7 +77,7 @@ onMounted(loadAll);
         <ElTable :data="audits" empty-text="暂无记录">
           <ElTableColumn prop="createdAt" label="时间" min-width="170" />
           <ElTableColumn prop="operatorName" label="审核人" min-width="120" />
-          <ElTableColumn label="结果" min-width="100"><template #default="{ row }">{{ auditResult(row) }}</template></ElTableColumn>
+          <ElTableColumn label="结果" min-width="100"><template #default="{ row }">{{ auditResult(row as ReportAudit) }}</template></ElTableColumn>
           <ElTableColumn label="理由" min-width="200"><template #default="{ row }">{{ row.reason || "--" }}</template></ElTableColumn>
         </ElTable>
       </div>
