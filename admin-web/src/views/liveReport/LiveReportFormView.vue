@@ -22,6 +22,7 @@ import { listEmployees, type EmployeeItem } from "@/api/activity";
 import type { MaterialListItem } from "@/api/materials";
 import { useMaterialsStore } from "@/stores/materials";
 import { handleUpload } from "@/utils/upload";
+import { downloadFiles } from "@/utils/downloadFile";
 import { resolveMaterialAccessUrl } from "@/views/settings/materials/materialUploadFormat";
 import { randomUuid } from "@/utils/uuid";
 import { getMaterialFileIcon } from "@/views/settings/materials/materialFileIcons";
@@ -48,10 +49,12 @@ const form = reactive({
   coverObjectKey: "",
   coverFileSize: 0,
   coverMimeType: "",
+  coverMaterialId: "",
   hostId: "",
   attachments: [] as ReportAttachment[],
 });
 const employees = ref<EmployeeItem[]>([]);
+const hostLoading = ref(false);
 const saving = ref(false);
 const uploading = ref(false);
 const loading = ref(false);
@@ -96,22 +99,57 @@ function onCoverConfirm(items: MaterialListItem[]) {
     ElMessage.warning("封面仅支持 JPG/PNG 图片素材");
     return;
   }
-  if ((item.fileSize ?? 0) > MAX_COVER_SIZE) {
+  if (!item.fileSize || item.fileSize <= 0) {
+    ElMessage.warning("该图片缺少大小信息，请重新选择");
+    return;
+  }
+  if (item.fileSize > MAX_COVER_SIZE) {
     ElMessage.warning("封面图片不能超过 5MB");
     return;
   }
   Object.assign(form, {
     coverUrl: item.url,
     coverObjectKey: item.objectKey,
-    coverFileSize: item.fileSize || 1,
+    coverFileSize: item.fileSize,
     coverMimeType: /\.png$/i.test(item.name) ? "image/png" : "image/jpeg",
+    coverMaterialId: item.id,
   });
   selectedCoverId.value = item.id;
 }
 
 function removeCover() {
-  Object.assign(form, { coverUrl: "", coverObjectKey: "", coverFileSize: 0, coverMimeType: "" });
+  Object.assign(form, {
+    coverUrl: "",
+    coverObjectKey: "",
+    coverFileSize: 0,
+    coverMimeType: "",
+    coverMaterialId: "",
+  });
   selectedCoverId.value = "";
+}
+
+async function downloadAttachment(f: ReportAttachment) {
+  const res = await downloadFiles([{ fileUrl: f.url, fileName: f.name }], { useLink: true });
+  if (!res.success) ElMessage.error("下载失败");
+}
+
+async function loadEmployees(keyword?: string) {
+  hostLoading.value = true;
+  try {
+    const data = await listEmployees(keyword);
+    const list = data.list ?? [];
+    const map = new Map<string, EmployeeItem>();
+    for (const o of list) map.set(o.id, o);
+    if (form.hostId && !map.has(form.hostId)) {
+      const keep = employees.value.find((x) => x.id === form.hostId);
+      if (keep) map.set(keep.id, keep);
+    }
+    employees.value = [...map.values()];
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "加载员工失败");
+  } finally {
+    hostLoading.value = false;
+  }
 }
 
 async function onFiles(e: Event) {
@@ -165,7 +203,7 @@ function validate() {
   if (form.planTimes.some((x) => new Date(x.endTime.replace(" ", "T")) > max))
     return "报备计划截止日期不能超过未来第 7 天";
   if (passedAppendOnly.value) return "";
-  if (!form.coverUrl) return "请上传报备封面";
+  if (!form.coverUrl || !form.coverMaterialId) return "请上传报备封面";
   if (!form.hostId) return "请选择主播";
   if (!form.attachments.length) return "请上传直播报备材料";
   return "";
@@ -198,7 +236,6 @@ async function save() {
 async function init() {
   loading.value = true;
   try {
-    employees.value = (await listEmployees()).list;
     if (editing.value) {
       const d = await getLiveReport(id.value);
       status.value = d.status;
@@ -211,15 +248,19 @@ async function init() {
         coverObjectKey: d.coverObjectKey,
         coverFileSize: d.coverFileSize,
         coverMimeType: d.coverMimeType,
+        coverMaterialId: d.coverMaterialId || "",
         hostId: d.host.id,
         attachments: d.attachments.map((x) => ({ ...x })),
       });
+      selectedCoverId.value = d.coverMaterialId || "";
+      employees.value = [{ id: d.host.id, userName: d.host.userName, avatar: d.host.avatar }];
       originalCount.value = d.status === "passed" ? d.planTimes.length : 0;
       if (d.status === "pending" || d.boundLiveCount > 0) {
         ElMessage.warning("当前报备不可编辑");
         void router.replace(`/live-reports/${id.value}`);
       }
     }
+    await loadEmployees();
   } finally {
     loading.value = false;
   }
@@ -304,7 +345,15 @@ onMounted(init);
         </div>
         <div class="field">
           <label><i>*</i> 主播</label>
-          <ElSelect v-model="form.hostId" filterable placeholder="请选择主播">
+          <ElSelect
+            v-model="form.hostId"
+            filterable
+            remote
+            :remote-method="loadEmployees"
+            :loading="hostLoading"
+            placeholder="请输入主播姓名搜索"
+            @visible-change="(open: boolean) => open && loadEmployees()"
+          >
             <ElOption v-for="x in employees" :key="x.id" :label="x.userName" :value="x.id" />
           </ElSelect>
         </div>
@@ -321,7 +370,7 @@ onMounted(init);
               <b>{{ f.name }}</b>
               <span>{{ (f.fileSize / 1024 / 1024).toFixed(2) }}MB</span>
               <button type="button" @click="previewDocument()">预览</button>
-              <a :href="f.url" :download="f.name">下载</a>
+              <button type="button" @click="downloadAttachment(f)">下载</button>
               <button type="button" @click="form.attachments.splice(i, 1)">删除</button>
             </div>
           </div>

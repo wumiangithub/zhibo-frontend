@@ -5,9 +5,12 @@ import {
   getLiveReport,
   REPORT_STATUS_LABEL,
   type LiveReport,
+  type ReportAttachment,
 } from "@/api/liveReport";
+import { ElMessage } from "element-plus";
 import { getMaterialFileIcon } from "@/views/settings/materials/materialFileIcons";
 import { previewDocument } from "@/utils/documentPreview";
+import { downloadFiles } from "@/utils/downloadFile";
 import UiButton from "@/components/ui/UiButton.vue";
 import ReportAuditDrawer from "./ReportAuditDrawer.vue";
 
@@ -27,6 +30,11 @@ async function load() {
   } finally {
     loading.value = false;
   }
+}
+
+async function downloadAttachment(f: ReportAttachment) {
+  const res = await downloadFiles([{ fileUrl: f.url, fileName: f.name }], { useLink: true });
+  if (!res.success) ElMessage.error("下载失败");
 }
 
 onMounted(load);
@@ -78,7 +86,7 @@ onMounted(load);
               <b>{{ f.name }}</b>
               <span>{{ (f.fileSize / 1024 / 1024).toFixed(2) }}MB</span>
               <button type="button" @click="previewDocument()">预览</button>
-              <a :href="f.url" :download="f.name">下载</a>
+              <button type="button" @click="downloadAttachment(f)">下载</button>
             </div>
           </dd>
         </dl>
