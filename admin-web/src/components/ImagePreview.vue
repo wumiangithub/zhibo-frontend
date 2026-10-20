@@ -11,7 +11,8 @@ import {
 } from "@element-plus/icons-vue";
 import { downloadFiles } from "@/utils/downloadFile";
 
-export interface MaterialImagePreviewItem {
+/** 图片预览项（素材中心列表 / 封面点击放大等共用） */
+export interface ImagePreviewItem {
   url: string;
   name: string;
 }
@@ -19,7 +20,7 @@ export interface MaterialImagePreviewItem {
 const props = withDefaults(
   defineProps<{
     modelValue: boolean;
-    items: MaterialImagePreviewItem[];
+    items: ImagePreviewItem[];
     initialIndex?: number;
   }>(),
   { initialIndex: 0 },

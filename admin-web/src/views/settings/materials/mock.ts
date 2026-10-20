@@ -1,11 +1,18 @@
 /** 素材中心 UI 常量（列表/分组数据走 API） */
 
-import type { MaterialCenterType, MaterialType } from "@/api/materials";
+import {
+  MaterialAudit,
+  MATERIAL_AUDIT_LABEL,
+  type MaterialAuditStatus,
+  type MaterialCenterType,
+  type MaterialType,
+} from "@/api/materials";
 
 export type { MaterialType };
 export type { MaterialGroup } from "@/api/materials";
 
-export type AuditStatus = "passed" | "rejected" | "pending";
+/** 与 D55 / {@link MaterialAudit} 一致：0 待审 / 1 通过 / 2 驳回 */
+export type AuditStatus = MaterialAuditStatus;
 
 export const TYPE_TABS: { key: MaterialType; label: string }[] = [
   { key: "image", label: "图片" },
@@ -21,9 +28,9 @@ export const CENTER_TYPE_TABS: { key: MaterialCenterType; label: string }[] = [
 
 export const AUDIT_OPTIONS: { value: "" | AuditStatus; label: string }[] = [
   { value: "", label: "全部状态" },
-  { value: "passed", label: "已通过" },
-  { value: "rejected", label: "已驳回" },
-  { value: "pending", label: "待审核" },
+  { value: MaterialAudit.PASSED, label: MATERIAL_AUDIT_LABEL[MaterialAudit.PASSED] },
+  { value: MaterialAudit.REJECTED, label: MATERIAL_AUDIT_LABEL[MaterialAudit.REJECTED] },
+  { value: MaterialAudit.PENDING, label: MATERIAL_AUDIT_LABEL[MaterialAudit.PENDING] },
 ];
 
 export const ALL_GROUP_LABEL: Record<MaterialCenterType, string> = {

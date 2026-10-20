@@ -2,14 +2,24 @@
 import { computed } from "vue";
 import { ElDrawer, ElEmpty, ElIcon, ElImage } from "element-plus";
 import { CircleCheckFilled } from "@element-plus/icons-vue";
+import AuditActorTag from "./AuditActorTag.vue";
+import {
+  resolveAuditActorTag,
+  type AuditActorChannel,
+} from "./resolveAuditActorTag";
 
 /** 审核记录时间线条目：各业务映射后传入，抽屉只负责展示。 */
 export interface AuditTimelineNode {
   id: string;
   /** apply：发起/提交类；audit：有结论的审核 */
   variant: "apply" | "audit";
-  /** 左侧标签，如「发起申请」「重新提交」 */
-  tag: string;
+  /**
+   * 左侧标签。apply 传「发起申请」等；audit 可省略，由 channel/部门/姓名推导。
+   */
+  tag?: string;
+  /** 素材 AI / 风控；人工审不传 */
+  channel?: AuditActorChannel | null;
+  departmentName?: string | null;
   operatorName: string;
   createdTime: string;
   result?: "passed" | "rejected" | null;
@@ -33,6 +43,14 @@ const visible = computed({
 
 function operatorLabel(node: AuditTimelineNode) {
   return node.operatorLabel ?? (node.variant === "apply" ? "操作人" : "审核人");
+}
+
+function actorTag(node: AuditTimelineNode) {
+  if (node.tag?.trim()) return node.tag.trim();
+  return resolveAuditActorTag({
+    channel: node.channel,
+    departmentName: node.departmentName,
+  });
 }
 </script>
 
@@ -84,7 +102,7 @@ function operatorLabel(node: AuditTimelineNode) {
         <div class="tl-card">
           <template v-if="node.variant === 'apply'">
             <div class="tl-head">
-              <span class="dept-tag">{{ node.tag }}</span>
+              <AuditActorTag :text="actorTag(node)" />
             </div>
             <div class="tl-row">
               <span>{{ operatorLabel(node) }}：{{ node.operatorName }}</span>
@@ -102,7 +120,7 @@ function operatorLabel(node: AuditTimelineNode) {
 
           <template v-else>
             <div class="tl-head">
-              <span class="dept-tag">{{ node.tag }}</span>
+              <AuditActorTag :text="actorTag(node)" />
               <span class="node-status">审核完成</span>
             </div>
             <div class="tl-row tl-row--split">
@@ -190,16 +208,6 @@ function operatorLabel(node: AuditTimelineNode) {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
-}
-.dept-tag {
-  display: inline-block;
-  padding: 0 8px;
-  line-height: 22px;
-  font-size: 12px;
-  color: var(--color-primary);
-  border: 1px solid var(--color-primary);
-  border-radius: 2px;
-  background: #fff;
 }
 .node-status {
   font-size: 12px;

@@ -29,7 +29,14 @@
 ## 路径前缀（D63，强制）
 
 - 本站 axios `baseURL` 为 **`/api/v1`**；业务封装写相对路径（如 `/live-reports/list` → 实际 `GET /api/v1/live-reports/list`）。
+- **只改 baseURL**。禁止 `import … from "@/api/v1/..."`，禁止建 `src/api/v1/`；模块仍 `@/api/auth` 等。
 - 细则见 `../zhibo-shared/docs/API约定.md`「通则 · 路径前缀」。
+
+## 工作区安全（D64，红线）
+
+- **禁止**用 `git checkout HEAD --` / `git restore` / `git reset --hard` / `git clean -fd` 覆盖或删除未提交 WIP（含「修乱码」「修错误替换」）。
+- 危险操作前先 commit（用户授权）或 `git stash push -u`。
+- 细则：`../zhibo-shared/docs/工作区与Git安全.md`。
 
 ## 路径命名（D62，强制）
 

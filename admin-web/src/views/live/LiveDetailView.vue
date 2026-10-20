@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { onBeforeRouteLeave, useRoute, useRouter, RouterLink } from "vue-router";
+import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import {
   getActivity,
   getHostUrl,
@@ -9,6 +9,7 @@ import {
 } from "@/api/activity";
 import { getAccessToken } from "@/utils/authSession";
 import { buildAudienceWatchUrl } from "@/utils/liveLinks";
+import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 import UiButton from "@/components/ui/UiButton.vue";
 import ShareDialog from "@/components/share/ShareDialog.vue";
 import BasicSettingsTab from "./detail/BasicSettingsTab.vue";
@@ -37,6 +38,12 @@ const sideNav = [
   { key: "commerce" as const, label: "直播带货" },
   { key: "userOps" as const, label: "用户运营" },
   { key: "data" as const, label: "直播数据" },
+];
+
+const crumbs: AppBreadcrumbItem[] = [
+  { label: "直播", to: "/live" },
+  { label: "直播管理", to: "/live" },
+  { label: "直播设置" },
 ];
 
 const activeTab = computed<TabKey>(() => {
@@ -108,23 +115,7 @@ watch(id, fetchDetail);
 
 <template>
   <div class="live-detail">
-    <div class="crumb">
-      <RouterLink
-        to="/live"
-        class="crumb-link"
-      >
-        直播
-      </RouterLink>
-      <span class="crumb-sep">/</span>
-      <RouterLink
-        to="/live"
-        class="crumb-link"
-      >
-        直播管理
-      </RouterLink>
-      <span class="crumb-sep">/</span>
-      <span>直播设置</span>
-    </div>
+    <AppBreadcrumb :items="crumbs" />
 
     <p
       v-if="loading"
@@ -249,24 +240,6 @@ watch(id, fetchDetail);
 <style scoped>
 .live-detail {
   min-height: 100%;
-}
-.crumb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-}
-.crumb-link {
-  color: var(--color-text-secondary);
-  text-decoration: none;
-}
-.crumb-link:hover {
-  color: var(--color-primary);
-}
-.crumb-sep {
-  color: var(--color-text-placeholder);
 }
 .status-text {
   font-size: 13px;

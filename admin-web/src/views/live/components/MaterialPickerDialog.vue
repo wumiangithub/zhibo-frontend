@@ -20,7 +20,7 @@ import { useMaterialCenter } from "@/composables/useMaterialCenter";
 import MaterialGroupSidebar from "@/views/settings/materials/MaterialGroupSidebar.vue";
 import MaterialAssetCell from "@/views/settings/materials/MaterialAssetCell.vue";
 import MaterialUploadDialog from "@/views/settings/materials/MaterialUploadDialog.vue";
-import MaterialImageViewer from "@/views/settings/materials/MaterialImageViewer.vue";
+import ImagePreview from "@/components/ImagePreview.vue";
 import MaterialVideoPreviewDialog from "@/views/settings/materials/MaterialVideoPreviewDialog.vue";
 import {
   asFileMaterialType,
@@ -174,7 +174,7 @@ function stubItem(id: string): MaterialListItem {
     groupId: "",
     objectKey: "",
     status: "available",
-    uploadedAt: "",
+    uploadedTime: "",
   };
 }
 
@@ -529,7 +529,7 @@ watch(displayList, () => {
               </template>
             </ElTableColumn>
             <ElTableColumn
-              prop="uploadedAt"
+              prop="uploadedTime"
               label="上传时间"
               width="160"
             />
@@ -586,7 +586,7 @@ watch(displayList, () => {
     @confirm="onUploadConfirm"
   />
 
-  <MaterialImageViewer
+  <ImagePreview
     v-model="imageViewerVisible"
     :items="imagePreviewItems"
     :initial-index="imageViewerIndex"

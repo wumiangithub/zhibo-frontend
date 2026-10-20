@@ -5,6 +5,7 @@ import { ElIcon, ElMessage } from "element-plus";
 import {
   getHostUrl,
   getPushStream,
+  getStreamStatus,
   startActivityLive,
   type ActivityId,
   type LiveProvider,
@@ -41,9 +42,13 @@ const showSrt = computed(() => props.provider === "tencent");
 const rtmpServer = ref("");
 const rtmpStreamKey = ref("");
 const rtmpExpireTime = ref("");
+/** 推流状态：null 未查到；0 无流；1 有流 */
+const streamStatus = ref<number | null>(null);
+const streamStatusLoading = ref(false);
 const broadcastPasscode = ref("");
 const hostLink = ref("");
 let pushSeq = 0;
+let statusSeq = 0;
 let hostSeq = 0;
 
 function shownOrEmpty(value: string | undefined) {
@@ -70,6 +75,22 @@ const currentPush = computed(() => {
   return { server: rtmpServer.value, streamKey: rtmpStreamKey.value };
 });
 
+/** 无流 / 未查到 / 失败时直接展示完整文案，禁止用「—」「-」占位 */
+const streamStatusText = computed(() => {
+  if (streamStatusLoading.value && streamStatus.value === null) return "检测中…";
+  if (streamStatus.value === 1) return "已检测到流";
+  return "未检测到推流";
+});
+
+const canStartLive = computed(
+  () =>
+    pushProtocol.value === "rtmp" &&
+    !!currentPush.value.server &&
+    !!currentPush.value.streamKey &&
+    streamStatus.value === 1 &&
+    !startingLive.value,
+);
+
 async function loadRtmp() {
   const seq = ++pushSeq;
   rtmpServer.value = "";
@@ -91,14 +112,36 @@ async function loadRtmp() {
   }
 }
 
+async function loadStreamStatus() {
+  if (otherMethod.value !== "push" || pushProtocol.value !== "rtmp") return;
+  const seq = ++statusSeq;
+  streamStatusLoading.value = true;
+  try {
+    const data = await getStreamStatus(props.activityId);
+    if (seq !== statusSeq) return;
+    streamStatus.value = data.status === 1 ? 1 : 0;
+    emit("error", "");
+  } catch (e) {
+    if (seq !== statusSeq) return;
+    streamStatus.value = null;
+    emit("error", e instanceof Error ? e.message : "获取推流状态失败");
+  } finally {
+    if (seq === statusSeq) streamStatusLoading.value = false;
+  }
+}
+
 watch(
-  () => [otherMethod.value, pushProtocol.value] as const,
+  () => [otherMethod.value, pushProtocol.value, props.activityId] as const,
   ([method, protocol]) => {
     if (method === "push" && protocol === "rtmp") {
       void loadRtmp();
+      void loadStreamStatus();
       return;
     }
     pushSeq += 1;
+    statusSeq += 1;
+    streamStatus.value = null;
+    streamStatusLoading.value = false;
   },
   { immediate: true },
 );
@@ -140,7 +183,7 @@ function onSubTab(key: (typeof subTabs)[number]["key"]) {
 }
 
 async function startThirdPartyLive() {
-  if (startingLive.value || pushProtocol.value !== "rtmp") return;
+  if (!canStartLive.value) return;
   startingLive.value = true;
   try {
     await startActivityLive(props.activityId);
@@ -392,11 +435,36 @@ async function openHost() {
             </p>
             <div
               v-if="pushProtocol === 'rtmp'"
-              class="start-live-row"
+              class="stream-status-row"
             >
+              <span class="copy-label">推流状态：</span>
+              <span
+                class="status-text"
+                :class="{
+                  'is-ok': streamStatus === 1,
+                  'is-miss':
+                    streamStatus === 0 ||
+                    (streamStatus === null && !streamStatusLoading),
+                }"
+              >{{ streamStatusText }}</span>
+              <button
+                type="button"
+                class="status-refresh"
+                :disabled="streamStatusLoading"
+                title="刷新推流状态"
+                @click="loadStreamStatus"
+              >
+                <ElIcon
+                  class="status-refresh__icon"
+                  :class="{ 'is-spinning': streamStatusLoading }"
+                  :size="14"
+                >
+                  <Refresh />
+                </ElIcon>
+              </button>
               <UiButton
                 variant="primary"
-                :disabled="startingLive || !currentPush.server || !currentPush.streamKey"
+                :disabled="!canStartLive"
                 @click="startThirdPartyLive"
               >
                 {{ startingLive ? "开播中…" : "开始直播" }}
@@ -664,8 +732,56 @@ async function openHost() {
   color: var(--color-text-placeholder);
   line-height: 1.5;
 }
-.start-live-row {
-  margin: 0 0 12px 92px;
+.stream-status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.status-text {
+  flex: none;
+  font-size: 13px;
+  line-height: 32px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+.status-text.is-miss {
+  color: #f5222d;
+}
+.status-text.is-ok {
+  color: #52c41a;
+}
+.status-refresh {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.status-refresh:hover:not(:disabled) {
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+.status-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.status-refresh__icon.is-spinning {
+  animation: status-spin 0.8s linear infinite;
+}
+@keyframes status-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .push-notes p {
   margin: 0;

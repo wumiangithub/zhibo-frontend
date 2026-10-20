@@ -6,6 +6,7 @@ import {
   deleteMaterialGroup,
   listMaterialGroups,
   listMaterials,
+  MaterialAudit,
   renameMaterial,
   renameMaterialGroup,
   updateMaterialAiAudit,
@@ -242,24 +243,34 @@ export function useMaterialCenter(options: UseMaterialCenterOptions = {}) {
     }
   }
 
-  /** passed → 驳回；否则 → 通过 */
+  /** 已通过(1) → 驳回(2)；否则 → 通过(1)。写接口不接受待审(0) */
   async function toggleAiAudit(item: MaterialListItem) {
-    const next = item.aiAuditStatus === "passed" ? "rejected" : "passed";
+    const next =
+      item.aiAuditStatus === MaterialAudit.PASSED
+        ? MaterialAudit.REJECTED
+        : MaterialAudit.PASSED;
     try {
       const updated = await updateMaterialAiAudit(item.id, next);
       patchListItem(item.id, updated);
-      ElMessage.success(next === "passed" ? "AI 审核已通过" : "AI 审核已驳回");
+      ElMessage.success(
+        next === MaterialAudit.PASSED ? "AI 审核已通过" : "AI 审核已驳回",
+      );
     } catch (err: unknown) {
       ElMessage.error(errMsg(err, "更新 AI 审核失败"));
     }
   }
 
   async function toggleRiskAudit(item: MaterialListItem) {
-    const next = item.riskAuditStatus === "passed" ? "rejected" : "passed";
+    const next =
+      item.riskAuditStatus === MaterialAudit.PASSED
+        ? MaterialAudit.REJECTED
+        : MaterialAudit.PASSED;
     try {
       const updated = await updateMaterialRiskAudit(item.id, next);
       patchListItem(item.id, updated);
-      ElMessage.success(next === "passed" ? "风控合规已通过" : "风控合规已驳回");
+      ElMessage.success(
+        next === MaterialAudit.PASSED ? "风控合规已通过" : "风控合规已驳回",
+      );
     } catch (err: unknown) {
       ElMessage.error(errMsg(err, "更新风控合规失败"));
     }

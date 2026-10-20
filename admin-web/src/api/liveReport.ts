@@ -66,6 +66,8 @@ export interface ReportAudit {
   /** 操作人员工 id（rs_mainkey_id） */
   operatorId: number;
   operatorName: string;
+  /** 操作人部门展示名；无则省略 */
+  departmentName?: string;
   createdTime: string;
 }
 

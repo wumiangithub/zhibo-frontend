@@ -11,6 +11,7 @@ import { ElMessage } from "element-plus";
 import { getMaterialFileIcon } from "@/views/settings/materials/materialFileIcons";
 import { previewDocument } from "@/utils/documentPreview";
 import { downloadFiles } from "@/utils/downloadFile";
+import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 import UiButton from "@/components/ui/UiButton.vue";
 import ReportAuditDrawer from "./ReportAuditDrawer.vue";
 
@@ -20,6 +21,12 @@ const data = ref<LiveReport>();
 const loading = ref(false);
 const error = ref("");
 const audits = ref(route.query.audits === "1");
+
+const crumbs: AppBreadcrumbItem[] = [
+  { label: "直播", to: "/live" },
+  { label: "直播报备", to: "/live-reports" },
+  { label: "查看详情" },
+];
 
 async function load() {
   loading.value = true;
@@ -42,7 +49,7 @@ onMounted(load);
 
 <template>
   <div class="page">
-    <div class="crumb">直播 / 直播报备 / 查看详情</div>
+    <AppBreadcrumb :items="crumbs" />
     <div v-loading="loading" class="card">
       <p v-if="error" class="err">{{ error }}</p>
       <template v-if="data">
@@ -53,13 +60,13 @@ onMounted(load);
             <UiButton
               v-if="data.status === 'pending' || data.status === 'passed' || data.status === 'rejected'"
               variant="primary"
-              @click="router.push(`/live-reports/${data.id}/audit`)"
+              @click="router.push(`/live-reports/audit/${data.id}`)"
             >
               去审核
             </UiButton>
             <UiButton
               v-if="data.status === 'rejected' || (data.status === 'passed' && !data.boundLiveCount)"
-              @click="router.push(`/live-reports/${data.id}/edit`)"
+              @click="router.push(`/live-reports/edit/${data.id}`)"
             >
               编辑
             </UiButton>
@@ -109,11 +116,6 @@ onMounted(load);
 <style scoped>
 .page {
   min-width: 800px;
-}
-.crumb {
-  margin-bottom: 12px;
-  color: #666;
-  font-size: 13px;
 }
 .card {
   background: #fff;

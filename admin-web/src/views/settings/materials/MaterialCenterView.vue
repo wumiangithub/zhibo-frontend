@@ -25,8 +25,9 @@ import { useMaterialsStore } from "@/stores/materials";
 import MaterialUploadDialog from "./MaterialUploadDialog.vue";
 import MaterialGroupSidebar from "./MaterialGroupSidebar.vue";
 import MaterialVideoPreviewDialog from "./MaterialVideoPreviewDialog.vue";
-import MaterialImageViewer from "./MaterialImageViewer.vue";
+import ImagePreview from "@/components/ImagePreview.vue";
 import MaterialAssetCell from "./MaterialAssetCell.vue";
+import MaterialAuditRecordsDrawer from "./MaterialAuditRecordsDrawer.vue";
 import {
   asFileMaterialType,
   AUDIT_OPTIONS,
@@ -40,18 +41,19 @@ import {
 import {
   isMaterialAuditPending,
   isMaterialSelectable,
+  MaterialAudit,
+  MATERIAL_AUDIT_LABEL,
   materialAvailabilityLabel,
   moveMaterial,
   replaceMaterialImage,
+  type MaterialAuditStatus,
+  type MaterialCenterType,
   type MaterialListItem,
 } from "@/api/materials";
 import type { MaterialRegisterItem } from "./materialUploadTypes";
 import { buildMaterialObjectKey, formatUploadSize, resolveMaterialAccessUrl } from "./materialUploadFormat";
-import { useToast } from "@/composables/useToast";
 import { useMaterialCenter } from "@/composables/useMaterialCenter";
-import type { MaterialCenterType } from "@/api/materials";
 
-const { toast } = useToast();
 const route = useRoute();
 const router = useRouter();
 
@@ -164,25 +166,32 @@ function onThumbClick(row: MaterialListItem) {
   }
 }
 
-function auditLabel(s?: AuditStatus | null) {
-  if (s === "passed") return "已通过";
-  if (s === "rejected") return "已驳回";
-  return "待审核";
+function auditLabel(s?: MaterialAuditStatus | null) {
+  return MATERIAL_AUDIT_LABEL[normalizeAudit(s)];
 }
 
-function auditTagType(s?: AuditStatus | null): "success" | "danger" | "info" {
-  if (s === "passed") return "success";
-  if (s === "rejected") return "danger";
+function auditTagType(s?: MaterialAuditStatus | null): "success" | "danger" | "info" {
+  const n = normalizeAudit(s);
+  if (n === MaterialAudit.PASSED) return "success";
+  if (n === MaterialAudit.REJECTED) return "danger";
   return "info";
 }
 
-function normalizeAudit(s?: AuditStatus | null): AuditStatus {
-  if (s === "passed" || s === "rejected") return s;
-  return "pending";
+function normalizeAudit(s?: MaterialAuditStatus | null): MaterialAuditStatus {
+  if (s === MaterialAudit.PASSED || s === MaterialAudit.REJECTED) return s;
+  return MaterialAudit.PENDING;
 }
 
-function shell(label: string) {
-  toast(`「${label}」暂未开放`);
+const auditDrawerVisible = ref(false);
+const auditDrawerId = ref("");
+const auditDrawerTitle = ref("");
+const auditDrawerCover = ref("");
+
+function openAuditRecords(row: MaterialListItem) {
+  auditDrawerId.value = row.id;
+  auditDrawerTitle.value = row.name;
+  auditDrawerCover.value = row.url?.trim() || "";
+  auditDrawerVisible.value = true;
 }
 
 const moveVisible = ref(false);
@@ -493,7 +502,7 @@ async function onEditName(row: MaterialListItem) {
               </template>
             </ElTableColumn>
             <ElTableColumn
-              prop="uploadedAt"
+              prop="uploadedTime"
               label="上传时间"
               width="170"
             />
@@ -551,7 +560,7 @@ async function onEditName(row: MaterialListItem) {
                   <button
                     type="button"
                     class="op-link"
-                    @click="shell('审核记录')"
+                    @click="openAuditRecords(row as MaterialListItem)"
                   >
                     审核记录
                   </button>
@@ -592,14 +601,16 @@ async function onEditName(row: MaterialListItem) {
                         </ElDropdownItem>
                         <ElDropdownItem command="ai">
                           {{
-                            normalizeAudit((row as MaterialListItem).aiAuditStatus) === "passed"
+                            normalizeAudit((row as MaterialListItem).aiAuditStatus) ===
+                            MaterialAudit.PASSED
                               ? "AI审核驳回"
                               : "AI审核通过"
                           }}
                         </ElDropdownItem>
                         <ElDropdownItem command="risk">
                           {{
-                            normalizeAudit((row as MaterialListItem).riskAuditStatus) === "passed"
+                            normalizeAudit((row as MaterialListItem).riskAuditStatus) ===
+                            MaterialAudit.PASSED
                               ? "风控合规驳回"
                               : "风控合规通过"
                           }}
@@ -636,7 +647,7 @@ async function onEditName(row: MaterialListItem) {
       @confirm="onUploadConfirm"
     />
 
-    <MaterialImageViewer
+    <ImagePreview
       v-model="imageViewerVisible"
       :items="imagePreviewItems"
       :initial-index="imageViewerIndex"
@@ -646,6 +657,13 @@ async function onEditName(row: MaterialListItem) {
       v-model="videoPreviewVisible"
       :url="videoPreviewUrl"
       :title="videoPreviewTitle"
+    />
+
+    <MaterialAuditRecordsDrawer
+      v-model="auditDrawerVisible"
+      :material-id="auditDrawerId"
+      :title="auditDrawerTitle"
+      :cover-url="auditDrawerCover || undefined"
     />
 
     <ElDialog

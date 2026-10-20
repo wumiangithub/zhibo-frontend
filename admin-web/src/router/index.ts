@@ -32,12 +32,14 @@ const router = createRouter({
           component: () => import("@/views/liveReport/LiveReportListView.vue"),
         },
         {
-          path: "live-reports/:id/edit",
+          /** D62：动作在前、单业务 id 在末尾 */
+          path: "live-reports/edit/:id",
           name: "live-report-edit",
           component: () => import("@/views/liveReport/LiveReportFormView.vue"),
         },
         {
-          path: "live-reports/:id/audit",
+          /** D62：动作在前、单业务 id 在末尾 */
+          path: "live-reports/audit/:id",
           name: "live-report-audit",
           component: () => import("@/views/liveReport/LiveReportAuditView.vue"),
         },

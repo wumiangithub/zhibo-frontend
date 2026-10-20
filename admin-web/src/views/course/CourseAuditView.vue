@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { RouterLink, useRoute } from "vue-router";
+import { useRoute } from "vue-router";
 import {
   ElButton,
   ElImage,
@@ -24,9 +24,15 @@ import {
   type RiskStatus,
   type ShelfStatus,
 } from "@/api/course";
+import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 
 const route = useRoute();
 const id = computed(() => String(route.params.id));
+
+const crumbs: AppBreadcrumbItem[] = [
+  { label: "课程管理", to: "/course" },
+  { label: "去审核" },
+];
 
 const loading = ref(true);
 const submitting = ref(false);
@@ -96,16 +102,7 @@ watch(id, loadAll);
 
 <template>
   <div class="course-audit">
-    <div class="crumb">
-      <RouterLink
-        to="/course"
-        class="crumb-link"
-      >
-        课程管理
-      </RouterLink>
-      <span class="crumb-sep">/</span>
-      <span>去审核</span>
-    </div>
+    <AppBreadcrumb :items="crumbs" />
     <p
       v-if="loading"
       class="status"
@@ -210,19 +207,6 @@ watch(id, loadAll);
 </template>
 
 <style scoped>
-.crumb {
-  margin-bottom: 12px;
-  font-size: 14px;
-  color: #666;
-}
-.crumb-link {
-  color: var(--color-primary);
-  text-decoration: none;
-}
-.crumb-sep {
-  margin: 0 6px;
-  color: #ccc;
-}
 .status {
   color: #999;
 }

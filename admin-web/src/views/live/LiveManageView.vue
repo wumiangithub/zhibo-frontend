@@ -29,6 +29,8 @@ import {
   type RiskStatus,
   type ShelfStatus,
 } from "@/api/activity";
+import ImagePreview from "@/components/ImagePreview.vue";
+import type { ImagePreviewItem } from "@/components/ImagePreview.vue";
 import ShareDialog from "@/components/share/ShareDialog.vue";
 import { buildAudienceWatchUrl } from "@/utils/liveLinks";
 import AuditRecordsDrawer from "./components/AuditRecordsDrawer.vue";
@@ -50,6 +52,10 @@ const auditDrawerVisible = ref(false);
 const auditDrawerTitle = ref("");
 const auditDrawerId = ref("");
 
+/** 列表封面点击放大（共用 ImagePreview，对齐素材中心） */
+const coverPreviewVisible = ref(false);
+const coverPreviewItems = ref<ImagePreviewItem[]>([]);
+
 const filters = reactive({
   keyword: "",
   shelfStatus: "" as "" | ShelfStatus,
@@ -70,6 +76,12 @@ const selectPage = computed({
     selectedIds.value = v ? list.value.map((i) => i.id) : [];
   },
 });
+
+function openCoverPreview(url?: string | null, title?: string) {
+  if (!url) return;
+  coverPreviewItems.value = [{ url, name: title || "封面" }];
+  coverPreviewVisible.value = true;
+}
 
 function ownersText(item: ActivityListItem) {
   const names = (item.owners ?? []).map((o) => o.userName).filter(Boolean);
@@ -404,6 +416,7 @@ onMounted(fetchList);
                     v-if="item.coverUrl"
                     :src="item.coverUrl"
                     :alt="item.title"
+                    @click.stop="openCoverPreview(item.coverUrl, item.title)"
                   >
                   <span
                     v-else
@@ -560,6 +573,11 @@ onMounted(fetchList);
       :title="auditDrawerTitle"
       :activity-id="auditDrawerId"
     />
+
+    <ImagePreview
+      v-model="coverPreviewVisible"
+      :items="coverPreviewItems"
+    />
   </div>
 </template>
 
@@ -672,6 +690,7 @@ onMounted(fetchList);
   width: 100%;
   height: 100%;
   object-fit: cover;
+  cursor: pointer;
 }
 .cover-ph {
   display: flex;

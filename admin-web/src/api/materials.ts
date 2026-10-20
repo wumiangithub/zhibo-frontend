@@ -257,6 +257,22 @@ export function updateMaterialRiskAudit(
   return put<MaterialListItem>(`/materials/risk-audit/${id}`, { status });
 }
 
+/** 素材审核流水：`action` 为 `ai` / `risk` */
+export interface MaterialAuditRecord {
+  id: string;
+  action: "ai" | "risk" | string;
+  result: "passed" | "rejected";
+  operatorId: number;
+  operatorName: string;
+  departmentName?: string;
+  createdTime: string;
+}
+
+/** GET /api/v1/materials/audits/{id} */
+export function listMaterialAudits(id: string) {
+  return get<{ list: MaterialAuditRecord[] }>(`/materials/audits/${encodeURIComponent(id)}`);
+}
+
 /** DELETE /api/v1/materials/delete/{id} 软删 */
 export function deleteMaterial(id: string) {
   return del<{ id: string }>(`/materials/delete/${id}`);

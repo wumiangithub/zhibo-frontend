@@ -227,6 +227,13 @@ export function getPushStream(id: ActivityId) {
   return get<PushStreamInfo>(`/activities/push-stream/${encodeURIComponent(id)}`);
 }
 
+/** 是否有推流：0 无，1 有。仅 rtmp。 */
+export function getStreamStatus(id: ActivityId) {
+  return get<{ status: number }>(
+    `/activities/stream-status/${encodeURIComponent(id)}`,
+  );
+}
+
 /** 第三方推流真正开播。不是结束直播，也不是网页主持人开播。 */
 export function startActivityLive(id: ActivityId) {
   return post<{ id: ActivityId; state: number }>(
@@ -356,6 +363,8 @@ export interface AuditRecord {
   /** 操作人员工 id（rs_mainkey_id） */
   operatorId: number;
   operatorName: string;
+  /** 操作人部门展示名；无则省略 */
+  departmentName?: string;
   createdTime: string;
 }
 

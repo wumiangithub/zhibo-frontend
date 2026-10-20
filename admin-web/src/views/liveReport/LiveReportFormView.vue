@@ -8,6 +8,7 @@ import {
   ElInput,
   ElMessage,
   ElOption,
+  ElProgress,
   ElSelect,
   ElTimePicker,
 } from "element-plus";
@@ -24,15 +25,28 @@ import type { MaterialListItem } from "@/api/materials";
 import { useMaterialsStore } from "@/stores/materials";
 import { handleUpload } from "@/utils/upload";
 import { downloadFiles } from "@/utils/downloadFile";
-import { resolveMaterialAccessUrl } from "@/views/settings/materials/materialUploadFormat";
+import {
+  formatUploadSize,
+  resolveMaterialAccessUrl,
+} from "@/views/settings/materials/materialUploadFormat";
 import { randomUuid } from "@/utils/uuid";
 import { getMaterialFileIcon } from "@/views/settings/materials/materialFileIcons";
 import { previewDocument } from "@/utils/documentPreview";
 import MaterialPickerDialog from "@/views/live/components/MaterialPickerDialog.vue";
+import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 import UiButton from "@/components/ui/UiButton.vue";
 
 const MAX_COVER_SIZE = 5 * 1024 * 1024;
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+
+/** 材料上传队列项（对齐素材中心 MaterialUploadItem 的进度字段）。 */
+type PendingUpload = {
+  uid: string;
+  name: string;
+  fileSize: number;
+  status: "waiting" | "uploading" | "error";
+  percent: number;
+};
 
 /** 表单内拆成日期+时刻，提交时再拼成 API 的 startTime/endTime。 */
 type PlanTimeRow = {
@@ -114,6 +128,12 @@ const id = ref(String(route.params.id || randomUuid()));
 const status = ref("");
 const bound = ref(0);
 
+const crumbs = computed<AppBreadcrumbItem[]>(() => [
+  { label: "直播", to: "/live" },
+  { label: "直播报备", to: "/live-reports" },
+  { label: editing.value ? "编辑" : "新建直播报备" },
+]);
+
 const form = reactive({
   title: "",
   content: "",
@@ -130,6 +150,8 @@ const employees = ref<EmployeeItem[]>([]);
 const hostLoading = ref(false);
 const saving = ref(false);
 const uploading = ref(false);
+/** 串行上传时展示当前/排队文件的百分比，避免只有 uploading 布尔。 */
+const pendingUploads = ref<PendingUpload[]>([]);
 const loading = ref(false);
 const passedAppendOnly = computed(() => status.value === "passed");
 const originalCount = ref(0);
@@ -146,10 +168,16 @@ function attachmentKey(name: string) {
   return `live-report/${id.value}/attachment/${Date.now()}_${safeName(name)}`;
 }
 
-async function upload(file: File) {
+async function upload(file: File, onProgress?: (percent: number) => void) {
   const cfg = await store.ensureTosConfig();
   const objectKey = attachmentKey(file.name);
-  const res = await handleUpload({ ...cfg, name: objectKey, file, fileSize: file.size });
+  const res = await handleUpload({
+    ...cfg,
+    name: objectKey,
+    file,
+    fileSize: file.size,
+    onProgress: (percent) => onProgress?.(percent),
+  });
   if (!res) throw new Error("上传失败");
   return {
     objectKey,
@@ -226,35 +254,89 @@ async function loadEmployees(keyword?: string) {
 }
 
 async function onFiles(e: Event) {
-  const files = Array.from((e.target as HTMLInputElement).files || []);
+  const input = e.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+  if (uploading.value) {
+    ElMessage.warning("正在上传，请稍候");
+    input.value = "";
+    return;
+  }
   if (form.attachments.length + files.length > 20) {
     ElMessage.warning("最多上传 20 份材料");
+    input.value = "";
     return;
   }
   for (const f of files) {
     if (!/\.(doc|docx|pdf)$/i.test(f.name) || f.size > MAX_ATTACHMENT_SIZE) {
-      ElMessage.warning(`${f.name} 格式或大小不符合要求`);
+      ElMessage.warning(`${f.name} 格式或大小不符合要求（单份不超过 10MB）`);
+      input.value = "";
       return;
     }
   }
+
+  const queue = files.map((f) => ({
+    uid: randomUuid(),
+    name: f.name,
+    fileSize: f.size,
+    status: "waiting" as const,
+    percent: 0,
+    file: f,
+  }));
+  pendingUploads.value = queue.map(({ uid, name, fileSize, status, percent }) => ({
+    uid,
+    name,
+    fileSize,
+    status,
+    percent,
+  }));
   uploading.value = true;
   try {
-    for (const f of files) {
-      const r = await upload(f);
-      form.attachments.push({
-        name: f.name,
-        url: r.url,
-        objectKey: r.objectKey,
-        fileSize: f.size,
-        mimeType: f.type,
-      });
+    for (const item of queue) {
+      const pending = pendingUploads.value.find((x) => x.uid === item.uid);
+      if (pending) {
+        pending.status = "uploading";
+        pending.percent = 0;
+      }
+      try {
+        const r = await upload(item.file, (percent) => {
+          if (pending) pending.percent = percent;
+        });
+        if (pending) pending.percent = 100;
+        form.attachments.push({
+          name: item.name,
+          url: r.url,
+          objectKey: r.objectKey,
+          fileSize: item.fileSize,
+          mimeType: item.file.type,
+        });
+        pendingUploads.value = pendingUploads.value.filter((x) => x.uid !== item.uid);
+      } catch (err) {
+        if (pending) {
+          pending.status = "error";
+          pending.percent = 0;
+        }
+        ElMessage.error(
+          err instanceof Error ? `${item.name}：${err.message}` : `${item.name} 上传失败`,
+        );
+      }
     }
-  } catch (err) {
-    ElMessage.error(err instanceof Error ? err.message : "上传失败");
   } finally {
     uploading.value = false;
-    (e.target as HTMLInputElement).value = "";
+    pendingUploads.value = pendingUploads.value.filter((x) => x.status === "error");
+    input.value = "";
   }
+}
+
+function dismissPending(uid: string) {
+  pendingUploads.value = pendingUploads.value.filter((x) => x.uid !== uid);
+}
+
+/** 对齐 MaterialUploadFileTable.statusText：等待 / 上传中百分比 / 失败。 */
+function pendingStatusText(item: PendingUpload) {
+  if (item.status === "waiting") return "等待上传";
+  if (item.status === "error") return "上传失败";
+  return `${item.percent.toFixed(1)}%`;
 }
 
 function addTime() {
@@ -366,7 +448,7 @@ onMounted(init);
 
 <template>
   <div v-loading="loading" class="form-page">
-    <div class="crumb">直播 / 直播报备 / {{ editing ? "编辑" : "新建直播报备" }}</div>
+    <AppBreadcrumb :items="crumbs" />
     <div class="card">
       <h2>{{ passedAppendOnly ? "增加计划时间" : editing ? "编辑直播报备" : "新建直播报备" }}</h2>
       <template v-if="!passedAppendOnly">
@@ -486,11 +568,44 @@ onMounted(init);
         <div class="field">
           <label><i>*</i> 直播报备材料</label>
           <div class="materials">
-            <label class="pick">
+            <label class="pick" :class="{ 'is-disabled': uploading }">
               + 添加材料
-              <input type="file" multiple accept=".doc,.docx,.pdf" @change="onFiles" />
+              <input
+                type="file"
+                multiple
+                accept=".doc,.docx,.pdf"
+                :disabled="uploading"
+                @change="onFiles"
+              />
             </label>
             <small>支持 doc、docx、pdf，单份不超过 10MB，最多 20 份</small>
+            <div v-for="p in pendingUploads" :key="p.uid" class="file file-pending">
+              <img :src="getMaterialFileIcon(p.name)" class="file-icon" alt="" />
+              <b>{{ p.name }}</b>
+              <span>{{ (p.fileSize / 1024 / 1024).toFixed(2) }}MB</span>
+              <div v-if="p.status === 'uploading'" class="status-uploading">
+                <ElProgress
+                  type="circle"
+                  :percentage="p.percent"
+                  :width="22"
+                  :stroke-width="3"
+                  :show-text="false"
+                  color="var(--color-primary)"
+                />
+                <span>{{ p.percent.toFixed(1) }}%</span>
+              </div>
+              <span v-else-if="p.status === 'waiting'" class="status-text">等待上传</span>
+              <span v-else class="status-text is-error">上传失败</span>
+              <button
+                v-if="p.status === 'error'"
+                type="button"
+                @click="dismissPending(p.uid)"
+              >
+                移除
+              </button>
+              <span v-else />
+              <span />
+            </div>
             <div v-for="(f, i) in form.attachments" :key="f.objectKey" class="file">
               <img :src="getMaterialFileIcon(f.name)" class="file-icon" alt="" />
               <b>{{ f.name }}</b>
@@ -518,24 +633,22 @@ onMounted(init);
           @close="coverPreview = false"
         />
       </template>
-      <div class="actions">
-        <UiButton @click="router.back()">取消</UiButton>
-        <UiButton variant="primary" :disabled="saving || uploading" @click="save">
-          {{ saving ? "保存中…" : "确定" }}
-        </UiButton>
-      </div>
+    </div>
+
+    <div class="actions">
+      <UiButton @click="router.back()">取消</UiButton>
+      <UiButton variant="primary" :disabled="saving || uploading" @click="save">
+        {{ saving ? "保存中…" : "确定" }}
+      </UiButton>
     </div>
   </div>
 </template>
 
 <style scoped>
 .form-page {
+  position: relative;
   min-width: 980px;
-}
-.crumb {
-  margin-bottom: 12px;
-  color: #666;
-  font-size: 13px;
+  padding-bottom: 80px;
 }
 .card {
   background: #fff;
@@ -669,6 +782,10 @@ small {
   border-radius: 4px;
   font-size: 13px;
 }
+.pick.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .file {
   display: grid;
   grid-template-columns: 28px minmax(150px, 1fr) 70px auto auto auto;
@@ -677,6 +794,21 @@ small {
   background: #f7f8fa;
   padding: 10px 12px;
   font-size: 13px;
+}
+/* 对齐素材中心 MaterialUploadFileTable .status-uploading */
+.status-uploading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #333;
+  font-size: 13px;
+}
+.status-text {
+  font-size: 13px;
+  color: #999;
+}
+.status-text.is-error {
+  color: #f5222d;
 }
 .file-icon {
   width: 28px;
@@ -691,12 +823,20 @@ small {
   cursor: pointer;
   text-decoration: none;
 }
+/* 与新建直播 LiveCreateView .live-create__footer 同一套贴底悬浮 */
 .actions {
+  position: fixed;
+  left: 176px;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  height: 64px;
   display: flex;
+  align-items: center;
   justify-content: center;
   gap: 20px;
-  border-top: 1px solid #eee;
-  padding-top: 20px;
-  margin-top: 28px;
+  padding: 0 32px;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
 }
 </style>

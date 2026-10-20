@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import AuditTimelineDrawer, {
   type AuditTimelineNode,
 } from "@/components/audit/AuditTimelineDrawer.vue";
+import { resolveAuditActorTag } from "@/components/audit/resolveAuditActorTag";
 import { listLiveReportAudits, type ReportAudit } from "@/api/liveReport";
 
 const props = defineProps<{
@@ -27,6 +28,7 @@ function mapRow(a: ReportAudit): AuditTimelineNode {
       tag: "发起申请",
       operatorName: a.operatorName,
       createdTime: a.createdTime,
+      departmentName: a.departmentName,
     };
   }
   if (a.action === "resubmit") {
@@ -36,6 +38,7 @@ function mapRow(a: ReportAudit): AuditTimelineNode {
       tag: "重新提交",
       operatorName: a.operatorName,
       createdTime: a.createdTime,
+      departmentName: a.departmentName,
     };
   }
   if (a.action === "append") {
@@ -45,15 +48,19 @@ function mapRow(a: ReportAudit): AuditTimelineNode {
       tag: "追加计划时间",
       operatorName: a.operatorName,
       createdTime: a.createdTime,
+      departmentName: a.departmentName,
       reason: a.reason,
     };
   }
   return {
     id: a.id,
     variant: "audit",
-    tag: "发起申请",
+    tag: resolveAuditActorTag({
+      departmentName: a.departmentName,
+    }),
     operatorName: a.operatorName,
     createdTime: a.createdTime,
+    departmentName: a.departmentName,
     result: a.result,
     reason: a.reason,
   };

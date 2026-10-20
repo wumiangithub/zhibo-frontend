@@ -1,14 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { RouterLink, useRoute } from "vue-router";
+import { useRoute } from "vue-router";
 import { ElButton, ElInput, ElMessage, ElRadio, ElRadioGroup, ElTable, ElTableColumn } from "element-plus";
 import { auditLiveReport, getLiveReport, listLiveReportAudits, REPORT_STATUS_LABEL, type LiveReport, type ReportAudit } from "@/api/liveReport";
+import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 
 const route = useRoute();
 const id = computed(() => String(route.params.id));
 const loading = ref(true), submitting = ref(false), error = ref("");
 const detail = ref<LiveReport | null>(null), audits = ref<ReportAudit[]>([]);
 const result = ref<"passed" | "rejected">("passed"), reason = ref("");
+
+const crumbs = computed<AppBreadcrumbItem[]>(() => [
+  { label: "直播报备", to: "/live-reports" },
+  { label: "详情", to: `/live-reports/${id.value}` },
+  { label: "去审核" },
+]);
 
 async function loadAll() {
   loading.value = true;
@@ -54,10 +61,7 @@ onMounted(loadAll);
 
 <template>
   <div class="report-audit">
-    <div class="crumb">
-      <RouterLink to="/live-reports">直播报备</RouterLink><span>/</span>
-      <RouterLink :to="`/live-reports/${id}`">详情</RouterLink><span>/</span><span>去审核</span>
-    </div>
+    <AppBreadcrumb :items="crumbs" />
     <p v-if="loading" class="status-text">加载中...</p>
     <p v-else-if="error && !detail" class="status-text is-error">{{ error }}</p>
     <template v-else-if="detail">
@@ -86,5 +90,5 @@ onMounted(loadAll);
 </template>
 
 <style scoped>
-.report-audit{max-width:960px}.crumb{display:flex;align-items:center;gap:6px;margin-bottom:16px;font-size:13px;color:#999}.crumb a{color:var(--color-primary);text-decoration:none}.crumb a:hover{text-decoration:underline}.crumb span:not(:last-child){color:#d9d9d9}.status-text{font-size:13px;color:#999}.status-text.is-error{color:var(--color-danger)}.card{background:#fff;border-radius:8px;padding:20px 24px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}.card h2{margin:0 0 16px;font-size:16px;font-weight:600;color:#1a1a1a}.meta{display:flex;flex-direction:column;gap:8px;margin-bottom:20px;font-size:13px;color:#333}.meta span{display:inline-block;width:72px;color:#999}.form-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}.form-label{flex:none;width:72px;line-height:32px;font-size:13px;color:#666}.form-row .el-textarea{max-width:480px}
+.report-audit{max-width:960px}.status-text{font-size:13px;color:#999}.status-text.is-error{color:var(--color-danger)}.card{background:#fff;border-radius:8px;padding:20px 24px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}.card h2{margin:0 0 16px;font-size:16px;font-weight:600;color:#1a1a1a}.meta{display:flex;flex-direction:column;gap:8px;margin-bottom:20px;font-size:13px;color:#333}.meta span{display:inline-block;width:72px;color:#999}.form-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}.form-label{flex:none;width:72px;line-height:32px;font-size:13px;color:#666}.form-row .el-textarea{max-width:480px}
 </style>

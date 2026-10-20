@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { RouterLink, useRoute } from "vue-router";
+import { useRoute } from "vue-router";
 import {
   ElButton,
   ElInput,
@@ -23,9 +23,16 @@ import {
   type RiskStatus,
   type ShelfStatus,
 } from "@/api/activity";
+import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 
 const route = useRoute();
 const id = computed<ActivityId>(() => String(route.params.id));
+
+const crumbs = computed<AppBreadcrumbItem[]>(() => [
+  { label: "直播管理", to: "/live" },
+  { label: "详情", to: `/live/${id.value}` },
+  { label: "去审核" },
+]);
 
 const loading = ref(true);
 const submitting = ref(false);
@@ -106,23 +113,7 @@ watch(id, loadAll);
 
 <template>
   <div class="live-audit">
-    <div class="crumb">
-      <RouterLink
-        to="/live"
-        class="crumb-link"
-      >
-        直播管理
-      </RouterLink>
-      <span class="crumb-sep">/</span>
-      <RouterLink
-        :to="`/live/${id}`"
-        class="crumb-link"
-      >
-        详情
-      </RouterLink>
-      <span class="crumb-sep">/</span>
-      <span>去审核</span>
-    </div>
+    <AppBreadcrumb :items="crumbs" />
 
     <p
       v-if="loading"
@@ -227,24 +218,6 @@ watch(id, loadAll);
 <style scoped>
 .live-audit {
   max-width: 960px;
-}
-.crumb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 16px;
-  font-size: 13px;
-  color: #999;
-}
-.crumb-link {
-  color: var(--color-primary);
-  text-decoration: none;
-}
-.crumb-link:hover {
-  text-decoration: underline;
-}
-.crumb-sep {
-  color: #d9d9d9;
 }
 .status {
   font-size: 13px;
