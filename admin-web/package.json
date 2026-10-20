@@ -17,6 +17,7 @@
     "cropperjs": "1.6.2",
     "element-plus": "2.14.6",
     "pinia": "2.3.1",
+    "qrcode": "1.5.4",
     "vue": "3.5.42",
     "vue-router": "4.6.4",
     "xlsx": "0.18.5"

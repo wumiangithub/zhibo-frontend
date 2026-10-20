@@ -11,6 +11,7 @@ import {
   type ActivityId,
 } from "@/api/activity";
 import UiButton from "@/components/ui/UiButton.vue";
+import { buildAudienceWatchUrl } from "@/utils/liveLinks";
 
 const props = defineProps<{
   activityId: ActivityId;
@@ -78,7 +79,7 @@ async function copyHost() {
 }
 
 function copyWatchLink() {
-  void copy(`http://localhost:5174/watch/${props.activityId}`, "观看链接已复制");
+  void copy(buildAudienceWatchUrl(props.activityId), "观看链接已复制");
 }
 
 async function loadEmbed() {

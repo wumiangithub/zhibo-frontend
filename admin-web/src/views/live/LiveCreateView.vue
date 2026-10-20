@@ -38,10 +38,11 @@ function buildPayload(): CreateActivityPayload {
     startTime: `${form.startDate} ${form.startTime}:00`,
     type: MODE_TO_TYPE[form.mode],
     viewerStyle: form.viewerStyle,
-    ultraLowLatency: true,
+    ultraLowLatency: form.ultraLowLatency,
     autoList: form.autoList,
     hostIds: form.hostIds.slice(0, 1),
   };
+  if (form.reportId) payload.reportId = form.reportId;
   const intro = form.intro.trim();
   if (intro) payload.introduction = intro;
   if (form.endDate && form.endTime) {
@@ -73,10 +74,10 @@ async function onSave() {
   }
   submitting.value = true;
   try {
-    const data = await createActivity(buildPayload());
+    await createActivity(buildPayload());
     ElMessage.success("创建成功");
     leave.allowNextNavigation();
-    void router.push({ path: `/live/${data.id}`, query: { tab: "basic" } });
+    void router.push("/live");
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : "创建失败");
   } finally {
@@ -94,11 +95,16 @@ async function onSave() {
 
     <div class="live-create__form">
       <div class="card">
-        <BasicInfoSection :form="form" />
+        <BasicInfoSection
+          :form="form"
+          show-report-bind
+        />
         <ProviderModeSection :form="form" />
         <RelatedBusinessSection
           :form="form"
+          :known-hosts="form.reportHost ? [form.reportHost] : []"
           :known-owners="knownOwners"
+          host-locked
         />
       </div>
     </div>
@@ -108,8 +114,7 @@ async function onSave() {
         v-model="form.agreed"
         @change="leave.markDirty"
       >
-        我已阅读并同意遵守
-        <a class="link">《钱坤直播运营规范》</a>
+      新建直播
       </ElCheckbox>
       <div class="flex items-center gap-3">
         <ElButton @click="onCancel">取消</ElButton>

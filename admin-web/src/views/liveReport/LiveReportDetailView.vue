@@ -51,7 +51,7 @@ onMounted(load);
           <span :class="data.status">{{ REPORT_STATUS_LABEL[data.status] }}</span>
           <div>
             <UiButton
-              v-if="data.status === 'pending'"
+              v-if="data.status === 'pending' || data.status === 'passed' || data.status === 'rejected'"
               variant="primary"
               @click="router.push(`/live-reports/${data.id}/audit`)"
             >
@@ -93,9 +93,14 @@ onMounted(load);
         <footer>
           <span>提交人 {{ data.submitterName }}</span>
           <span>所属部门 {{ data.departmentName || "--" }}</span>
-          <span>提交时间 {{ data.submittedAt }}</span>
+          <span>提交时间 {{ data.submittedTime }}</span>
         </footer>
-        <ReportAuditDrawer v-model="audits" :report-id="data.id" :title="data.title" />
+        <ReportAuditDrawer
+          v-model="audits"
+          :report-id="data.id"
+          :title="data.title"
+          :cover-url="data.coverUrl"
+        />
       </template>
     </div>
   </div>

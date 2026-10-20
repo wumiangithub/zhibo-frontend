@@ -19,7 +19,7 @@ export interface AttendeeListData {
   list: AttendeeItem[];
 }
 
-/** live-service：`GET /api/watch/{id}/attendees`（T15.9） */
+/** live-service：`GET /api/v1/watch/attendees/{id}`（T15.9；D62） */
 export function listAttendees(
   id: string,
   query: { tab: AttendeeTab; page: number; pageSize?: number; keyword?: string },
@@ -31,5 +31,5 @@ export function listAttendees(
   };
   const keyword = query.keyword?.trim();
   if (keyword) params.keyword = keyword;
-  return get<AttendeeListData>(`/watch/${id}/attendees`, { params });
+  return get<AttendeeListData>(`/watch/attendees/${id}`, { params });
 }

@@ -15,6 +15,8 @@ export interface AuthUser {
   userAccount: string;
   userName?: string;
   avatar?: string;
+  /** 所在部门；多部门顿号连接。登录接口已返回，无则省略 */
+  departmentName?: string;
 }
 
 /** login/query 的 data */

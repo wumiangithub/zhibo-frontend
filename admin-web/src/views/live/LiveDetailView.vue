@@ -8,6 +8,7 @@ import {
   type ActivityId,
 } from "@/api/activity";
 import { getAccessToken } from "@/utils/authSession";
+import { buildAudienceWatchUrl } from "@/utils/liveLinks";
 import UiButton from "@/components/ui/UiButton.vue";
 import ShareDialog from "@/components/share/ShareDialog.vue";
 import BasicSettingsTab from "./detail/BasicSettingsTab.vue";
@@ -214,7 +215,12 @@ watch(id, fetchDetail);
             v-else-if="activeTab === 'broadcast'"
             :activity-id="id"
             :can-broadcast="!!detail.canBroadcast"
+            :live-title="detail.title"
+            :start-time="detail.startTime"
+            :provider="detail.provider"
+            :host-locked="!!detail.reportId"
             @error="pageError = $event"
+            @refreshed="fetchDetail"
           />
           <PlaceholderModuleTab
             v-else-if="activeTab === 'commerce'"
@@ -235,7 +241,7 @@ watch(id, fetchDetail);
     <ShareDialog
       v-model="shareVisible"
       :title="detail?.title ?? ''"
-      :watch-url="`http://localhost:5174/watch/${id}`"
+      :watch-url="buildAudienceWatchUrl(id)"
     />
   </div>
 </template>

@@ -4,6 +4,7 @@ import {
   getRefreshToken,
   setTokens,
 } from "@/utils/authSession";
+import { axiosErrorMessage } from "@/utils/axiosErrorMessage";
 
 export class AuthRefreshError extends Error {
   code: number;
@@ -32,7 +33,7 @@ export function isAccessExpired(token: string, skewSec = 30): boolean {
 }
 
 /**
- * 调 POST /api/auth/refresh（白名单，不走本站鉴权拦截器逻辑）。
+ * 调 POST /api/v1/auth/refresh（白名单，不走本站鉴权拦截器逻辑）。
  * 成功写入新 access + refresh，返回新 access。
  */
 export function refreshAccessToken(): Promise<string> {
@@ -53,7 +54,7 @@ async function doRefresh(): Promise<string> {
   let resp;
   try {
     resp = await axios.post(
-      "/api/auth/refresh",
+      "/api/v1/auth/refresh",
       { accessToken, refreshToken },
       { timeout: 15000 },
     );
@@ -63,7 +64,7 @@ async function doRefresh(): Promise<string> {
       throw new AuthRefreshError("刷新登录态失败", status);
     }
     throw new AuthRefreshError(
-      e instanceof Error ? e.message : "刷新登录态网络错误",
+      axiosErrorMessage(e, "刷新登录态网络错误"),
       -1,
     );
   }

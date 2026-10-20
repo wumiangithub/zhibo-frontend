@@ -1,4 +1,5 @@
 import axios from "axios";
+import { axiosErrorMessage } from "@/utils/axiosErrorMessage";
 import { ensureFreshAccess } from "@/utils/authRefresh";
 
 export interface OrderCenterProduct {
@@ -74,23 +75,28 @@ export async function listSalerProducts(): Promise<OrderCenterProduct[]> {
   }
 
   const url = `${orderCenterBase()}/order-center/api/live/saler/product/list`;
-  const resp = await axios.post(url, {}, {
-    headers: {
-      "Authorization-Live-Saler": `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    timeout: 15000,
-    transformResponse: [
-      (data: unknown) => {
-        if (typeof data !== "string") return data;
-        try {
-          return JSON.parse(stringifySpuIds(data)) as OrderCenterListBody;
-        } catch {
-          return data;
-        }
+  let resp;
+  try {
+    resp = await axios.post(url, {}, {
+      headers: {
+        "Authorization-Live-Saler": `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
-    ],
-  });
+      timeout: 15000,
+      transformResponse: [
+        (data: unknown) => {
+          if (typeof data !== "string") return data;
+          try {
+            return JSON.parse(stringifySpuIds(data)) as OrderCenterListBody;
+          } catch {
+            return data;
+          }
+        },
+      ],
+    });
+  } catch (e) {
+    throw new Error(axiosErrorMessage(e, "拉取商品列表失败"));
+  }
 
   const body = resp.data as OrderCenterListBody;
   if (!isOrderCenterSuccess(body?.code)) {

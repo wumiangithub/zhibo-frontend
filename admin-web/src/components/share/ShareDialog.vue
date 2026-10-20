@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { ElDialog, ElInput, ElMessage } from "element-plus";
 import UiButton from "@/components/ui/UiButton.vue";
 import { useToast } from "@/composables/useToast";
+import { copyText } from "@/utils/copyText";
 
 export type ShareTabKey = "poster" | "link" | "qrcode" | "terminal";
 
@@ -64,28 +65,27 @@ function onTab(key: ShareTabKey) {
   toast(`「${tabs.find((t) => t.key === key)?.label}」暂未开放`);
 }
 
-async function copyText(text: string, okMsg: string) {
-  if (!text) {
-    ElMessage.warning("暂无可复制内容");
+function copyLongLink() {
+  if (!longUrl.value.trim()) {
+    ElMessage.warning("暂无");
     return;
   }
-  try {
-    await navigator.clipboard.writeText(text);
-    ElMessage.success(okMsg);
-  } catch {
-    ElMessage.error("复制失败，请手动选择复制");
-  }
-}
-
-function copyLongLink() {
   void copyText(longUrl.value, "长链接已复制");
 }
 
 function copyLink() {
+  if (!displayShortUrl.value.trim()) {
+    ElMessage.warning("暂无");
+    return;
+  }
   void copyText(displayShortUrl.value, "链接已复制");
 }
 
 function copyContent() {
+  if (!shareContent.value.trim()) {
+    ElMessage.warning("暂无");
+    return;
+  }
   void copyText(shareContent.value, "分享内容已复制");
 }
 

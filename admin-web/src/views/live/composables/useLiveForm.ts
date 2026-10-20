@@ -49,6 +49,10 @@ export interface LiveFormState {
   recordSource: "" | "video" | "live";
   detailCover: string;
   detailHtml: string;
+  /** 绑定的已通过直播报备 UUID；空表示未绑定 */
+  reportId: string;
+  /** 所选报备主播快照，供只读回显 */
+  reportHost: EmployeeItem | null;
   /** 主播员工 id；UI 单选，提交时长度为 0 或 1 的数组 */
   hostIds: string[];
   /** 归属人员工 id */
@@ -101,6 +105,8 @@ export function useLiveForm() {
     recordSource: "",
     detailCover: "",
     detailHtml: "",
+    reportId: "",
+    reportHost: null,
     hostIds: [],
     ownerIds: [],
     products: [],

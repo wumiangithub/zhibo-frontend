@@ -18,12 +18,17 @@ import {
   type LiveReport,
   type ReportStatus,
 } from "@/api/liveReport";
+import ReportAuditDrawer from "./ReportAuditDrawer.vue";
 
 const router = useRouter();
 const loading = ref(false);
 const error = ref("");
 const rows = ref<LiveReport[]>([]);
 const total = ref(0);
+const auditDrawerVisible = ref(false);
+const auditDrawerId = ref("");
+const auditDrawerTitle = ref("");
+const auditDrawerCover = ref("");
 const q = reactive({
   title: "",
   hostName: "",
@@ -73,9 +78,22 @@ function canEdit(r: LiveReport) {
   return r.status === "rejected" || (r.status === "passed" && r.boundLiveCount === 0);
 }
 
+/** 待审核 / 已通过 / 已驳回均可进入去审核（契约 §4） */
+function canAudit(r: LiveReport) {
+  return r.status === "pending" || r.status === "passed" || r.status === "rejected";
+}
+
+function openAuditRecords(row: LiveReport) {
+  auditDrawerId.value = row.id;
+  auditDrawerTitle.value = row.title;
+  auditDrawerCover.value = row.coverUrl ?? "";
+  auditDrawerVisible.value = true;
+}
+
 function onMoreCommand(command: string, row: LiveReport) {
-  if (command === "audit" && row.status === "pending")
+  if (command === "audit" && canAudit(row)) {
     void router.push(`/live-reports/${row.id}/audit`);
+  }
 }
 
 onMounted(load);
@@ -147,17 +165,14 @@ onMounted(load);
               >
                 编辑
               </UiButton>
-              <UiButton
-                variant="link"
-                @click="router.push({ path: `/live-reports/${row.id}`, query: { audits: '1' } })"
-              >
+              <UiButton variant="link" @click="openAuditRecords(row)">
                 审核记录
               </UiButton>
               <ElDropdown trigger="click" @command="(command: string) => onMoreCommand(command, row)">
                 <button type="button" class="op-more">···</button>
                 <template #dropdown>
                   <ElDropdownMenu>
-                    <ElDropdownItem command="audit" :disabled="row.status !== 'pending'">
+                    <ElDropdownItem command="audit" :disabled="!canAudit(row)">
                       去审核
                     </ElDropdownItem>
                   </ElDropdownMenu>
@@ -175,6 +190,12 @@ onMounted(load);
         @change="load"
       />
     </div>
+    <ReportAuditDrawer
+      v-model="auditDrawerVisible"
+      :report-id="auditDrawerId"
+      :title="auditDrawerTitle"
+      :cover-url="auditDrawerCover"
+    />
   </div>
 </template>
 

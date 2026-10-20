@@ -11,10 +11,13 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AuditTimelineDrawer: typeof import('./src/components/audit/AuditTimelineDrawer.vue')['default']
     ElEmpty: typeof import('element-plus/es')['ElEmpty']
     ElIcon: typeof import('element-plus/es')['ElIcon']
     ElTable: typeof import('element-plus/es')['ElTable']
     ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
+    InviteHostDialog: typeof import('./src/components/live/InviteHostDialog.vue')['default']
+    MaterialCoverPicker: typeof import('./src/components/MaterialCoverPicker.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     ShareDialog: typeof import('./src/components/share/ShareDialog.vue')['default']

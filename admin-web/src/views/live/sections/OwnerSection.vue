@@ -26,7 +26,13 @@ function mergeEmployee(a?: EmployeeItem, b?: EmployeeItem): EmployeeItem | undef
     id,
     userName: (a?.userName || b?.userName || id).trim() || id,
     avatar: a?.avatar?.trim() || b?.avatar?.trim() || undefined,
+    departmentName:
+      a?.departmentName?.trim() || b?.departmentName?.trim() || undefined,
   };
+}
+
+function deptOf(emp: EmployeeItem) {
+  return emp.departmentName?.trim() || "";
 }
 
 async function loadEmployees(keyword?: string) {
@@ -159,6 +165,10 @@ onMounted(() => {
               </svg>
             </span>
             <span>{{ emp.userName }}</span>
+            <span
+              v-if="deptOf(emp)"
+              class="owner-option__dept"
+            >{{ deptOf(emp) }}</span>
           </span>
         </ElOption>
       </ElSelect>
@@ -188,6 +198,10 @@ onMounted(() => {
             </svg>
           </span>
           <span class="owner-tag__name">{{ emp.userName }}</span>
+          <span
+            v-if="deptOf(emp)"
+            class="owner-tag__dept"
+          >{{ deptOf(emp) }}</span>
           <i
             class="owner-tag__x"
             @click="removeOwner(emp.id)"
@@ -208,6 +222,11 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+.owner-option__dept,
+.owner-tag__dept {
+  color: #999;
+  font-size: 12px;
 }
 .owner-option__avatar,
 .owner-tag__avatar {

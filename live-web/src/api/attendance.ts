@@ -28,10 +28,10 @@ export interface LeaveAttendanceBatchResult {
 }
 
 export function enterAttendance(activityId: string, body: EnterAttendanceBody) {
-  return post<{ id: string }>(`/watch/${activityId}/attendance/enter`, body);
+  return post<{ id: string }>(`/watch/attendance/enter/${activityId}`, body);
 }
 
 /** 批量离开：`{ items }`，单请求 1～100 条 */
 export function leaveAttendanceBatch(activityId: string, body: LeaveAttendanceBatchBody) {
-  return post<LeaveAttendanceBatchResult>(`/watch/${activityId}/attendance/leave`, body);
+  return post<LeaveAttendanceBatchResult>(`/watch/attendance/leave/${activityId}`, body);
 }

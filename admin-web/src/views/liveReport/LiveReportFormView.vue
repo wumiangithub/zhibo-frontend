@@ -9,6 +9,7 @@ import {
   ElMessage,
   ElOption,
   ElSelect,
+  ElTimePicker,
 } from "element-plus";
 import {
   createLiveReport,
@@ -33,6 +34,78 @@ import UiButton from "@/components/ui/UiButton.vue";
 const MAX_COVER_SIZE = 5 * 1024 * 1024;
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 
+/** 表单内拆成日期+时刻，提交时再拼成 API 的 startTime/endTime。 */
+type PlanTimeRow = {
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+};
+
+const dateShortcuts = [{ text: "今天", value: () => new Date() }];
+
+function emptyPlanTime(): PlanTimeRow {
+  return { startDate: "", startTime: "", endDate: "", endTime: "" };
+}
+
+function fromApiPlanTime(x: PlanTime): PlanTimeRow {
+  const [sd, st] = (x.startTime || "").split(" ");
+  const [ed, et] = (x.endTime || "").split(" ");
+  return {
+    startDate: sd || "",
+    startTime: st ? st.slice(0, 5) : "",
+    endDate: ed || "",
+    endTime: et ? et.slice(0, 5) : "",
+  };
+}
+
+function joinDateTime(date: string, time: string) {
+  return date && time ? `${date} ${time}:00` : "";
+}
+
+function toApiPlanTimes(rows: PlanTimeRow[]): PlanTime[] {
+  return rows.map((x) => ({
+    startTime: joinDateTime(x.startDate, x.startTime),
+    endTime: joinDateTime(x.endDate, x.endTime),
+  }));
+}
+
+function hostLabel(x: EmployeeItem): string {
+  const name = x.userName?.trim() || x.id;
+  const dept = x.departmentName?.trim() || "";
+  return dept ? `${name} / ${dept}` : name;
+}
+
+function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/** 与新建直播同一套日期+时刻；计划时间再禁用今天之前。 */
+function disablePastDate(date: Date) {
+  return date.getTime() < startOfToday().getTime();
+}
+
+function isSameCalendarDay(dateStr: string, now = new Date()) {
+  if (!dateStr) return false;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return now.getFullYear() === y && now.getMonth() + 1 === m && now.getDate() === d;
+}
+
+function disabledPastHours(dateStr: string) {
+  if (!isSameCalendarDay(dateStr)) return [];
+  const hour = new Date().getHours();
+  return Array.from({ length: hour }, (_, i) => i);
+}
+
+function disabledPastMinutes(dateStr: string, hour: number) {
+  if (!isSameCalendarDay(dateStr)) return [];
+  const now = new Date();
+  if (hour !== now.getHours()) return hour < now.getHours() ? Array.from({ length: 60 }, (_, i) => i) : [];
+  return Array.from({ length: now.getMinutes() }, (_, i) => i);
+}
+
 const route = useRoute();
 const router = useRouter();
 const store = useMaterialsStore();
@@ -44,7 +117,7 @@ const bound = ref(0);
 const form = reactive({
   title: "",
   content: "",
-  planTimes: [{ startTime: "", endTime: "" }] as PlanTime[],
+  planTimes: [emptyPlanTime()] as PlanTimeRow[],
   coverUrl: "",
   coverObjectKey: "",
   coverFileSize: 0,
@@ -185,7 +258,7 @@ async function onFiles(e: Event) {
 }
 
 function addTime() {
-  if (form.planTimes.length < 10) form.planTimes.push({ startTime: "", endTime: "" });
+  if (form.planTimes.length < 10) form.planTimes.push(emptyPlanTime());
 }
 
 function removeTime(i: number) {
@@ -195,12 +268,21 @@ function removeTime(i: number) {
 function validate() {
   if (!form.title.trim() || form.title.trim().length > 64) return "请输入 1~64 字报备名称";
   if (!form.content.trim() || form.content.trim().length > 500) return "请输入 1~500 字报备内容";
-  if (form.planTimes.some((x) => !x.startTime || !x.endTime || x.endTime <= x.startTime))
+  if (
+    form.planTimes.some(
+      (x) =>
+        !x.startDate ||
+        !x.startTime ||
+        !x.endDate ||
+        !x.endTime ||
+        joinDateTime(x.endDate, x.endTime) <= joinDateTime(x.startDate, x.startTime),
+    )
+  )
     return "请填写有效的计划起止时间";
   const max = new Date();
   max.setDate(max.getDate() + 7);
   max.setHours(23, 59, 59, 999);
-  if (form.planTimes.some((x) => new Date(x.endTime.replace(" ", "T")) > max))
+  if (form.planTimes.some((x) => new Date(joinDateTime(x.endDate, x.endTime).replace(" ", "T")) > max))
     return "报备计划截止日期不能超过未来第 7 天";
   if (passedAppendOnly.value) return "";
   if (!form.coverUrl || !form.coverMaterialId) return "请上传报备封面";
@@ -217,10 +299,23 @@ async function save() {
   }
   saving.value = true;
   try {
+    const planTimes = toApiPlanTimes(form.planTimes);
     if (passedAppendOnly.value) {
-      await updateLiveReport(id.value, { planTimes: form.planTimes });
+      await updateLiveReport(id.value, { planTimes });
     } else {
-      const payload: SaveReportPayload = { id: id.value, ...form };
+      const payload: SaveReportPayload = {
+        id: id.value,
+        title: form.title,
+        content: form.content,
+        planTimes,
+        coverUrl: form.coverUrl,
+        coverObjectKey: form.coverObjectKey,
+        coverFileSize: form.coverFileSize,
+        coverMimeType: form.coverMimeType,
+        coverMaterialId: form.coverMaterialId,
+        hostId: form.hostId,
+        attachments: form.attachments,
+      };
       if (editing.value) await updateLiveReport(id.value, payload);
       else await createLiveReport(payload);
     }
@@ -243,7 +338,7 @@ async function init() {
       Object.assign(form, {
         title: d.title,
         content: d.content,
-        planTimes: d.planTimes.map((x) => ({ ...x })),
+        planTimes: d.planTimes.map(fromApiPlanTime),
         coverUrl: d.coverUrl,
         coverObjectKey: d.coverObjectKey,
         coverFileSize: d.coverFileSize,
@@ -294,19 +389,47 @@ onMounted(init);
         <div class="times">
           <div v-for="(t, i) in form.planTimes" :key="i" class="time-row">
             <ElDatePicker
-              v-model="t.startTime"
-              type="datetime"
-              value-format="YYYY-MM-DD HH:mm:ss"
-              placeholder="开始时间"
+              v-model="t.startDate"
+              type="date"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              placeholder="选择日期"
+              :shortcuts="dateShortcuts"
+              :disabled-date="disablePastDate"
               :disabled="i < originalCount"
+              style="width: 160px"
+            />
+            <ElTimePicker
+              v-model="t.startTime"
+              format="HH:mm"
+              value-format="HH:mm"
+              placeholder="选择时间"
+              :disabled-hours="() => disabledPastHours(t.startDate)"
+              :disabled-minutes="(h: number) => disabledPastMinutes(t.startDate, h)"
+              :disabled="i < originalCount"
+              style="width: 120px"
             />
             <span>至</span>
             <ElDatePicker
-              v-model="t.endTime"
-              type="datetime"
-              value-format="YYYY-MM-DD HH:mm:ss"
-              placeholder="结束时间"
+              v-model="t.endDate"
+              type="date"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              placeholder="选择日期"
+              :shortcuts="dateShortcuts"
+              :disabled-date="disablePastDate"
               :disabled="i < originalCount"
+              style="width: 160px"
+            />
+            <ElTimePicker
+              v-model="t.endTime"
+              format="HH:mm"
+              value-format="HH:mm"
+              placeholder="选择时间"
+              :disabled-hours="() => disabledPastHours(t.endDate)"
+              :disabled-minutes="(h: number) => disabledPastMinutes(t.endDate, h)"
+              :disabled="i < originalCount"
+              style="width: 120px"
             />
             <ElButton
               v-if="i >= originalCount && form.planTimes.length > 1"
@@ -340,7 +463,7 @@ onMounted(init);
                 <button type="button" @click="removeCover">删除</button>
               </div>
             </div>
-            <small>从素材中心选择 JPG/PNG，不超过 5MB，建议 400×400</small>
+            <small>建议尺寸750*422px或16:9,小于5M的JPG、PNG格式图片</small>
           </div>
         </div>
         <div class="field">
@@ -354,7 +477,10 @@ onMounted(init);
             placeholder="请输入主播姓名搜索"
             @visible-change="(open: boolean) => open && loadEmployees()"
           >
-            <ElOption v-for="x in employees" :key="x.id" :label="x.userName" :value="x.id" />
+            <ElOption v-for="x in employees" :key="x.id" :label="hostLabel(x)" :value="x.id">
+              <span>{{ x.userName?.trim() || x.id }}</span>
+              <span v-if="x.departmentName?.trim()" class="host-dept"> / {{ x.departmentName.trim() }}</span>
+            </ElOption>
           </ElSelect>
         </div>
         <div class="field">
@@ -404,7 +530,7 @@ onMounted(init);
 
 <style scoped>
 .form-page {
-  min-width: 820px;
+  min-width: 980px;
 }
 .crumb {
   margin-bottom: 12px;
@@ -422,7 +548,7 @@ onMounted(init);
 }
 .field {
   display: grid;
-  grid-template-columns: 140px minmax(0, 620px);
+  grid-template-columns: 140px minmax(0, 760px);
   gap: 14px;
   margin: 0 0 20px;
   align-items: start;
@@ -448,8 +574,8 @@ onMounted(init);
   align-items: center;
   gap: 8px;
 }
-.time-row .el-date-editor {
-  width: 220px;
+.time-row :deep(.el-date-editor) {
+  flex: none;
 }
 .add-time {
   align-self: flex-start;
@@ -461,6 +587,9 @@ small {
   display: block;
   color: #999;
   font-size: 12px;
+}
+.host-dept {
+  color: #999;
 }
 .cover-box {
   position: relative;

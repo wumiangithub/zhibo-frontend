@@ -13,7 +13,7 @@ const { message, visible, toast } = useToast();
 
 const topNav = [
   { key: "workbench", label: "工作台", to: "/" },
-  { key: "course", label: "课程" },
+  { key: "course", label: "课程", to: "/course" },
   { key: "live", label: "直播", to: "/live" },
   { key: "mall", label: "商城" },
   { key: "scrm", label: "SCRM" },
@@ -41,6 +41,7 @@ const workbenchSideNav = [
 
 /** 直播模块侧栏：无图标，贴近截图 */
 const liveSideNav = [
+  { key: "report-create", label: "新建直播报备", to: "/live-reports/new" },
   { key: "report", label: "直播报备", to: "/live-reports" },
   { key: "create", label: "新建直播", to: "/live/create" },
   { key: "manage", label: "直播管理", to: "/live" },
@@ -48,6 +49,11 @@ const liveSideNav = [
   { key: "console", label: "直播中控台" },
   { key: "download", label: "软件下载" },
   { key: "settings", label: "通用设置" },
+] as const;
+
+const courseSideNav = [
+  { key: "create", label: "新建课程", to: "/course/create" },
+  { key: "manage", label: "课程管理", to: "/course" },
 ] as const;
 
 /** 设置模块侧栏 */
@@ -68,12 +74,15 @@ const isLiveModule = computed(() => {
   );
 });
 
+const isCourseModule = computed(() => route.path === "/course" || route.path.startsWith("/course/"));
+
 const isSettingsModule = computed(
   () => route.name === "settings-materials" || route.path.startsWith("/settings"),
 );
 
 const activeTop = computed(() => {
   if (isLiveModule.value) return "live";
+  if (isCourseModule.value) return "course";
   if (isSettingsModule.value) return "settings";
   if (route.name === "dashboard" || route.path === "/") return "workbench";
   return "";
@@ -86,7 +95,12 @@ const activeSide = computed(() => {
     if (route.name === "settings-roles") return "roles";
     return "";
   }
+  if (isCourseModule.value) {
+    if (route.name === "course-create") return "create";
+    return "manage";
+  }
   if (isLiveModule.value) {
+    if (route.name === "live-report-create" || route.path === "/live-reports/new") return "report-create";
     if (route.path.startsWith("/live-reports")) return "report";
     if (route.name === "live-create") return "create";
     // 列表 / 详情 / 去审核均高亮「直播管理」
@@ -103,8 +117,21 @@ const activeSide = computed(() => {
   return route.name === "dashboard" || route.path === "/" ? "overview" : "";
 });
 
+/**
+ * 新建/编辑报备是同一个页面组件。不换 key 时，从编辑点侧栏「新建直播报备」
+ * 只会改地址，组件实例还停在编辑态。
+ */
+const viewKey = computed(() => {
+  if (route.name === "live-report-create" || route.name === "live-report-edit") {
+    return route.fullPath;
+  }
+  const leaf = route.matched[route.matched.length - 1];
+  return leaf?.path || route.path;
+});
+
 const currentSideNav = computed(() => {
   if (isSettingsModule.value) return settingsSideNav;
+  if (isCourseModule.value) return courseSideNav;
   if (isLiveModule.value) return liveSideNav;
   return workbenchSideNav;
 });
@@ -265,7 +292,7 @@ async function onAccountClick() {
     <div class="flex min-h-0 flex-1">
       <aside
         class="side-aside flex w-[176px] flex-none flex-col border-r border-[#ebebeb] bg-[#fafbfc]"
-        :class="{ 'is-live-module': isLiveModule }"
+        :class="{ 'is-live-module': isLiveModule || isCourseModule }"
       >
         <nav class="side-nav min-h-0 flex-1 space-y-0.5 px-2 py-3 text-[13px]">
           <template
@@ -300,7 +327,7 @@ async function onAccountClick() {
         </nav>
 
         <div
-          v-if="!isLiveModule && !isSettingsModule"
+          v-if="!isLiveModule && !isSettingsModule && !isCourseModule"
           class="box-border px-2 pb-3"
         >
           <button
@@ -347,7 +374,12 @@ async function onAccountClick() {
             : 'overflow-y-auto'
         "
       >
-        <RouterView />
+        <RouterView v-slot="{ Component }">
+          <component
+            :is="Component"
+            :key="viewKey"
+          />
+        </RouterView>
       </main>
     </div>
 

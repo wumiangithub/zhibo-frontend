@@ -14,6 +14,35 @@
 
 缺接口写在 `docs/进度.md` 阻塞项。提交前缀 `[frontend]`。
 
+## 主键 / 外键类型（D56，强制）
+
+类型跟库走，**禁止**把数字 id 改成十进制 string：
+
+- 库列 `INT` / `BIGINT`（含 `rs_mainkey_id`、员工/部门/角色 id、`hostIds` / `ownerIds` / `hostId`、审核人、上传人）→ TypeScript `number`，请求/响应 JSON 也是数字。
+- 库列 UUID / `VARCHAR`（活动 / 课程 / 素材 / 报备 id）→ `string`。
+- 下拉、Map、表单字段的 key / value 与接口类型一致，不要 `Map<string, …>` 去装员工 id。
+- 例外：确知可能超过 JS `Number.MAX_SAFE_INTEGER` 的外部大整数才用 string，并在该字段说明原因（当前仅订单中心 `spuId`）。
+- 观看端进出场 `userId` 是第三方观众标识，不是员工 `rs_mainkey_id`，保持 string。
+
+细则见 `../zhibo-shared/docs/API约定.md`「通则 · 主键 / 外键类型」。
+
+## 路径前缀（D63，强制）
+
+- 本站 axios `baseURL` 为 **`/api/v1`**；业务封装写相对路径（如 `/live-reports/list` → 实际 `GET /api/v1/live-reports/list`）。
+- 细则见 `../zhibo-shared/docs/API约定.md`「通则 · 路径前缀」。
+
+## 路径命名（D62，强制）
+
+- 封装管理端 API 时路径必须带动作段（如 `/activities/create`、`/live-reports/list`），**禁止**靠 HTTP 方法区分同名 URL。
+- 单业务 id 放末尾（如 `/activities/audits/${id}`、`/activities/members/list/${id}`），禁止 `/activities/${id}/audits`；多 id 用 params/body。
+- 素材/课程/org/watch 等封装已按 D62 改完；对齐契约与决策。细则见 `../zhibo-shared/docs/API约定.md`「通则 · 路径命名」。
+
+## 图片 / 文件上传（D60，强制）
+
+- **禁止**调用 `POST /api/v1/uploads/image`（微吼代理）及前端 `uploadImage`；该接口已废弃。
+- 一律：`GET /api/v1/uploads/tos-sts` → 浏览器直传 TOS → CDN/可访问 URL；管理端用 `admin-web/src/utils/tosUpload.ts`（或素材中心既有路径）。
+- 对象 key **必须**用 `../zhibo-shared/docs/API约定.md` tos-sts「对象 key 目录」表中的前缀；新功能先登记前缀再编码，禁止自创或塞进 `upload/`。
+
 ## 依赖版本（D36，强制）
 
 - `admin-web` / `live-web` 的 `package.json`：**禁止** `^`、`~`、`*`、`latest`，版本写到补丁号。

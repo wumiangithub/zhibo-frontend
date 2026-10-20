@@ -17,12 +17,15 @@ const props = withDefaults(
     maxLength?: number;
     /** 左下角提示文案 */
     tip?: string;
+    /** sentence 为直播原有「已输入/还可以输入」；fraction 为 0/10000 */
+    counter?: "sentence" | "fraction";
   }>(),
   {
     placeholder: "请输入内容",
     height: "340px",
     maxLength: 10000,
     tip: "友情提示：粘贴第三方内容，若排版不符合预期，需调整样式",
+    counter: "sentence",
   },
 );
 
@@ -132,9 +135,13 @@ onBeforeUnmount(() => {
       @on-change="handleChange"
     />
     <div class="rich-editor__footer">
-      <span class="rich-editor__tip">{{ tip }}</span>
+      <span
+        v-if="tip"
+        class="rich-editor__tip"
+      >{{ tip }}</span>
       <span class="rich-editor__count">
-        已输入{{ count }}个字符，还可以输入{{ remaining }}个字符
+        <template v-if="counter === 'fraction'">{{ count }}/{{ maxLength }}</template>
+        <template v-else>已输入{{ count }}个字符，还可以输入{{ remaining }}个字符</template>
       </span>
     </div>
   </div>

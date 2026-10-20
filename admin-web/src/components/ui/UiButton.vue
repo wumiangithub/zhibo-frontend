@@ -6,12 +6,18 @@ withDefaults(
     /** 右侧下拉箭头 */
     dropdown?: boolean;
     disabled?: boolean;
+    /**
+     * 仅禁用外观，仍可点击（如绑报备后点「添加主播」要 toast）。
+     * 与 disabled 同时为 true 时以真正禁用为准。
+     */
+    lookDisabled?: boolean;
     type?: "button" | "submit" | "reset";
   }>(),
   {
     variant: "default",
     dropdown: false,
     disabled: false,
+    lookDisabled: false,
     type: "button",
   },
 );
@@ -21,7 +27,10 @@ withDefaults(
   <button
     :type="type"
     class="ui-btn"
-    :class="[`is-${variant}`, { 'is-dropdown': dropdown }]"
+    :class="[
+      `is-${variant}`,
+      { 'is-dropdown': dropdown, 'is-look-disabled': lookDisabled && !disabled },
+    ]"
     :disabled="disabled"
   >
     <slot />
@@ -62,9 +71,40 @@ withDefaults(
   transition: color 0.15s, background-color 0.15s, border-color 0.15s;
 }
 
-.ui-btn:disabled {
+.ui-btn:disabled,
+.ui-btn.is-look-disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.ui-btn.is-look-disabled:hover {
+  /* 禁用外观时不要出现可点悬停态 */
+  border-color: inherit;
+  background: inherit;
+  color: inherit;
+  text-decoration: none;
+}
+
+.ui-btn.is-outline.is-look-disabled:hover {
+  border-color: var(--color-primary);
+  background: #fff;
+  color: var(--color-primary);
+}
+
+.ui-btn.is-default.is-look-disabled:hover {
+  border-color: #d9d9d9;
+  background: #fff;
+  color: #333;
+}
+
+.ui-btn.is-primary.is-look-disabled:hover {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.ui-btn.is-link.is-look-disabled:hover {
+  text-decoration: none;
 }
 
 .ui-btn.is-primary {

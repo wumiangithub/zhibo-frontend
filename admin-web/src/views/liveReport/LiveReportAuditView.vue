@@ -68,14 +68,14 @@ onMounted(loadAll);
           <div><span>当前审核</span>{{ REPORT_STATUS_LABEL[detail.status] }}</div>
           <div><span>当前绑定</span>{{ detail.boundLiveCount > 0 ? `已绑定 ${detail.boundLiveCount} 场直播` : "未绑定直播" }}</div>
         </div>
-        <div class="form-row"><span class="form-label">审核结果</span><ElRadioGroup v-model="result" :disabled="detail.status !== 'pending'"><ElRadio value="passed">通过</ElRadio><ElRadio value="rejected">驳回</ElRadio></ElRadioGroup></div>
-        <div class="form-row"><span class="form-label">理由</span><ElInput v-model="reason" type="textarea" :rows="3" maxlength="500" show-word-limit :disabled="detail.status !== 'pending'" :placeholder="result === 'rejected' ? '驳回时必填（1～500 字）' : '选填，最多 500 字'" /></div>
-        <ElButton type="primary" :loading="submitting" :disabled="detail.status !== 'pending'" @click="submitAudit">提交</ElButton>
+        <div class="form-row"><span class="form-label">审核结果</span><ElRadioGroup v-model="result"><ElRadio value="passed">通过</ElRadio><ElRadio value="rejected">驳回</ElRadio></ElRadioGroup></div>
+        <div class="form-row"><span class="form-label">理由</span><ElInput v-model="reason" type="textarea" :rows="3" maxlength="500" show-word-limit :placeholder="result === 'rejected' ? '驳回时必填（1～500 字）' : '选填，最多 500 字'" /></div>
+        <ElButton type="primary" :loading="submitting" @click="submitAudit">提交</ElButton>
       </div>
       <div class="card">
         <h2>审核记录</h2>
         <ElTable :data="audits" empty-text="暂无记录">
-          <ElTableColumn prop="createdAt" label="时间" min-width="170" />
+          <ElTableColumn prop="createdTime" label="时间" min-width="170" />
           <ElTableColumn prop="operatorName" label="审核人" min-width="120" />
           <ElTableColumn label="结果" min-width="100"><template #default="{ row }">{{ auditResult(row as ReportAudit) }}</template></ElTableColumn>
           <ElTableColumn label="理由" min-width="200"><template #default="{ row }">{{ row.reason || "--" }}</template></ElTableColumn>

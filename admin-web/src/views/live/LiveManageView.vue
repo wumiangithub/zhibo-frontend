@@ -30,6 +30,7 @@ import {
   type ShelfStatus,
 } from "@/api/activity";
 import ShareDialog from "@/components/share/ShareDialog.vue";
+import { buildAudienceWatchUrl } from "@/utils/liveLinks";
 import AuditRecordsDrawer from "./components/AuditRecordsDrawer.vue";
 import { exportLiveRows } from "./exportLiveRows";
 
@@ -181,7 +182,7 @@ async function goLive(item: ActivityListItem) {
 
 function openShare(item: ActivityListItem) {
   shareTitle.value = item.title;
-  shareWatchUrl.value = `http://localhost:5174/watch/${item.id}`;
+  shareWatchUrl.value = buildAudienceWatchUrl(item.id);
   shareVisible.value = true;
 }
 

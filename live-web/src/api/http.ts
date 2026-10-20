@@ -1,4 +1,5 @@
 import axios, { type AxiosRequestConfig } from "axios";
+import { axiosErrorMessage } from "@/utils/axiosErrorMessage";
 
 export interface ApiResult<T> {
   code: number;
@@ -16,7 +17,7 @@ export class ApiError extends Error {
 }
 
 const instance = axios.create({
-  baseURL: "/api",
+  baseURL: "/api/v1",
   timeout: 15000,
 });
 
@@ -30,7 +31,7 @@ instance.interceptors.response.use(
       new ApiError(body?.msg ?? "请求失败", body?.code ?? -1),
     );
   },
-  (err) => Promise.reject(new ApiError(err?.message ?? "网络错误", -1)),
+  (err) => Promise.reject(new ApiError(axiosErrorMessage(err), -1)),
 );
 
 export async function get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {

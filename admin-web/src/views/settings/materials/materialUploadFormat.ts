@@ -1,19 +1,17 @@
 /** 素材上传列表：大小 / 速度文案 / 对象 key / 尺寸·时长 meta */
 
+import { buildTosObjectKey, resolveTosAccessUrl } from "@/utils/tosUpload";
+
 export type MaterialObjectKind = "image" | "video" | "document";
 
 /** TOS 对象 key：`material/{image|video|document}/{timestamp}_{filename}` */
 export function buildMaterialObjectKey(type: MaterialObjectKind, fileName: string): string {
-  return `material/${type}/${Date.now()}_${fileName}`;
+  return buildTosObjectKey(`material/${type}/`, fileName);
 }
 
-/** 登记用可访问 URL：优先 TOS Location，否则拼 CDN + objectKey */
+/** 登记用可访问 URL：优先 TOS Location，否则拼 CDN + objectKey（同 resolveTosAccessUrl） */
 export function resolveMaterialAccessUrl(location: string | undefined, objectKey: string): string {
-  if (location && /^https?:\/\//i.test(location)) return location;
-  const base = String(import.meta.env.VITE_APP_TOS_CDN_URL || "").replace(/\/$/, "");
-  const key = objectKey.replace(/^\//, "");
-  if (!base) return location || key;
-  return `${base}/${key}`;
+  return resolveTosAccessUrl(location, objectKey);
 }
 
 export function formatUploadSize(bytes: number): string {

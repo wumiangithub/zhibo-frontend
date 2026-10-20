@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type AxiosRequestConfig, type InternalAxiosRequestConfig } from "axios";
 import { clearSession, getAccessToken, getRefreshToken } from "@/utils/authSession";
 import { AuthRefreshError, refreshAccessToken } from "@/utils/authRefresh";
+import { axiosErrorMessage } from "@/utils/axiosErrorMessage";
 
 export interface ApiResult<T> {
   code: number;
@@ -24,7 +25,7 @@ export type AuthRequestConfig = AxiosRequestConfig & {
 };
 
 const instance = axios.create({
-  baseURL: "/api",
+  baseURL: "/api/v1",
   timeout: 15000,
 });
 
@@ -110,7 +111,7 @@ instance.interceptors.response.use(
       redirectToLogin();
       return Promise.reject(new ApiError("未登录", 401));
     }
-    return Promise.reject(new ApiError(err?.message ?? "网络错误", -1));
+    return Promise.reject(new ApiError(axiosErrorMessage(err), -1));
   },
 );
 

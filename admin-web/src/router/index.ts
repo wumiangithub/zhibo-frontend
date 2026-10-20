@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import DefaultLayout from "@/layouts/DefaultLayout.vue";
 import { isLoggedIn } from "@/utils/authSession";
+import { HOST_INVITE_PATH_PREFIX } from "@/utils/liveLinks";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -21,14 +22,14 @@ const router = createRouter({
           component: () => import("@/views/dashboard/DashboardView.vue"),
         },
         {
-          path: "live-reports",
-          name: "live-report-list",
-          component: () => import("@/views/liveReport/LiveReportListView.vue"),
-        },
-        {
           path: "live-reports/new",
           name: "live-report-create",
           component: () => import("@/views/liveReport/LiveReportFormView.vue"),
+        },
+        {
+          path: "live-reports",
+          name: "live-report-list",
+          component: () => import("@/views/liveReport/LiveReportListView.vue"),
         },
         {
           path: "live-reports/:id/edit",
@@ -46,14 +47,14 @@ const router = createRouter({
           component: () => import("@/views/liveReport/LiveReportDetailView.vue"),
         },
         {
-          path: "live",
-          name: "live-manage",
-          component: () => import("@/views/live/LiveManageView.vue"),
-        },
-        {
           path: "live/create",
           name: "live-create",
           component: () => import("@/views/live/LiveCreateView.vue"),
+        },
+        {
+          path: "live",
+          name: "live-manage",
+          component: () => import("@/views/live/LiveManageView.vue"),
         },
         {
           path: "live/:id/audit",
@@ -64,6 +65,31 @@ const router = createRouter({
           path: "live/:id",
           name: "live-detail",
           component: () => import("@/views/live/LiveDetailView.vue"),
+        },
+        {
+          path: "course/create",
+          name: "course-create",
+          component: () => import("@/views/course/CourseCreateView.vue"),
+        },
+        {
+          path: "course",
+          name: "course-manage",
+          component: () => import("@/views/course/CourseManageView.vue"),
+        },
+        {
+          path: "course/:id/audit",
+          name: "course-audit",
+          component: () => import("@/views/course/CourseAuditView.vue"),
+        },
+        {
+          path: "course/:id/data",
+          name: "course-data",
+          component: () => import("@/views/course/CoursePlaceholderView.vue"),
+        },
+        {
+          path: "course/:id",
+          name: "course-detail",
+          component: () => import("@/views/course/CoursePlaceholderView.vue"),
         },
         {
           path: "settings/materials",
@@ -91,6 +117,12 @@ const router = createRouter({
           component: () => import("@/views/settings/roles/RoleManageView.vue"),
         },
       ],
+    },
+    /** 主播邀请页：邀请链接落地，独立壳。后续在此把打开链接的登录用户加入本场主播。 */
+    {
+      path: `${HOST_INVITE_PATH_PREFIX}/:activityId`,
+      name: "host-invite",
+      component: () => import("@/views/live/HostInviteView.vue"),
     },
     /** 直播中控台列表：侧栏新窗口打开，独立壳，不套 DefaultLayout */
     {

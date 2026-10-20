@@ -4,7 +4,7 @@ export interface ChatFilterData {
   pageUrl: string;
 }
 
-/** live-service：`GET /api/watch/{id}/chat-filter`（T15.13 / D34） */
+/** live-service：`GET /api/v1/watch/chat-filter/{id}`（T15.13 / D34；D62） */
 export function fetchChatFilterPageUrl(
   id: string,
   query?: { email?: string; name?: string },
@@ -14,7 +14,7 @@ export function fetchChatFilterPageUrl(
   const name = query?.name?.trim();
   if (email) params.email = email;
   if (name) params.name = name;
-  return get<ChatFilterData>(`/watch/${id}/chat-filter`, {
+  return get<ChatFilterData>(`/watch/chat-filter/${id}`, {
     params: Object.keys(params).length ? params : undefined,
   });
 }

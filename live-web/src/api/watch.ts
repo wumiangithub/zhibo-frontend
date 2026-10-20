@@ -79,11 +79,11 @@ export function storeNickname(nickname: string) {
 }
 
 export function getWatch(id: string, params: WatchParams = {}) {
-  return get<WatchData>(`/watch/${id}`, { params });
+  return get<WatchData>(`/watch/detail/${id}`, { params });
 }
 
 export function getWatchSdk(id: string, params: WatchParams = {}) {
-  return get<WatchSdkData>(`/watch/${id}/sdk`, { params });
+  return get<WatchSdkData>(`/watch/sdk/${id}`, { params });
 }
 
 export function listWatchActivities(page = 1, pageSize = 20) {

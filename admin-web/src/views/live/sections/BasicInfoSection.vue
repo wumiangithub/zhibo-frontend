@@ -8,12 +8,17 @@ import {
 import { useMarkDirty } from "@/composables/useLeaveConfirm";
 import FormRow from "../components/FormRow.vue";
 import PhonePreview from "../components/PhonePreview.vue";
+import BindReportSection from "./BindReportSection.vue";
 import CoverSection from "./CoverSection.vue";
 import DetailSection from "./DetailSection.vue";
 import type { LiveFormState } from "../composables/useLiveForm";
 
 const props = defineProps<{
   form: LiveFormState;
+  /** 仅新建页：第一行绑定已通过报备 */
+  showReportBind?: boolean;
+  /** 设置页：已绑定报备的只读标题 */
+  boundReportLabel?: string;
 }>();
 
 const markDirty = useMarkDirty();
@@ -38,6 +43,22 @@ const dateShortcuts = [
 
     <div class="section__body">
       <div class="section__fields">
+        <BindReportSection
+          v-if="showReportBind"
+          :form="form"
+        />
+        <FormRow
+          v-else-if="boundReportLabel"
+          label="绑定直播报备:"
+          info="创建时绑定，不可更改。主播来自该报备。"
+        >
+          <ElInput
+            :model-value="boundReportLabel"
+            disabled
+            style="width: 360px"
+          />
+        </FormRow>
+
         <FormRow
           label="直播名称:"
           required

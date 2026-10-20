@@ -1,17 +1,20 @@
-import { get, put } from "./http";
+import { get, post, put } from "./http";
 
 export interface DeptTreeNode {
-  id: string;
+  /** 部门 rs_mainkey_id */
+  id: number;
   name: string;
   code: string;
-  parentId: string;
+  /** 上级部门 id；根为 0 */
+  parentId: number;
   children: DeptTreeNode[];
 }
 
 export type HqStatus = "normal" | "disabled" | "unknown";
 
 export interface OrgEmployeeItem {
-  id: string;
+  /** 账号 rs_mainkey_id */
+  id: number;
   userName: string;
   departmentName: string;
   roleNames: string;
@@ -31,18 +34,20 @@ export function fetchDeptTree() {
 }
 
 /** 前端树「全部」节点 id；请求名单时不传 deptId */
-export const ORG_DEPT_ALL = "all";
+export const ORG_DEPT_ALL = "all" as const;
+
+export type OrgDeptSelectId = number | typeof ORG_DEPT_ALL;
 
 export function fetchOrgEmployees(params: {
   /** 空 / all = 全部员工；否则仅该部门 */
-  deptId?: string;
+  deptId?: OrgDeptSelectId;
   userName?: string;
   /** 空 = 全部角色 */
   roleId?: number;
   page?: number;
   pageSize?: number;
 }) {
-  const all = !params.deptId || params.deptId === ORG_DEPT_ALL;
+  const all = params.deptId == null || params.deptId === ORG_DEPT_ALL;
   return get<OrgEmployeeListResult>("/org/employees", {
     params: {
       deptId: all ? undefined : params.deptId,
@@ -54,8 +59,8 @@ export function fetchOrgEmployees(params: {
   });
 }
 
-export function setLiveEnabled(id: string, enabled: boolean) {
-  return put<{ id: string; liveEnabled: boolean }>(`/org/employees/${id}/live-enabled`, {
+export function setLiveEnabled(id: number, enabled: boolean) {
+  return put<{ id: number; liveEnabled: boolean }>(`/org/employees/live-enabled/${id}`, {
     enabled,
   });
 }
@@ -72,7 +77,8 @@ export interface RoleMenuNode {
 }
 
 export interface RoleMemberItem {
-  id: string;
+  /** 账号 rs_mainkey_id */
+  id: number;
   userName: string;
   departmentName: string;
 }
@@ -87,15 +93,15 @@ export interface RoleDetail {
 }
 
 export function fetchRoles() {
-  return get<RoleListItem[]>("/org/roles");
+  return get<RoleListItem[]>("/roles/list");
 }
 
 export function fetchRoleDetail(id: number) {
-  return get<RoleDetail>(`/org/roles/${id}`);
+  return get<RoleDetail>(`/roles/detail/${id}`);
 }
 
 export function saveRoleMenus(id: number, menuCodes: string[]) {
-  return put<RoleDetail>(`/org/roles/${id}/menus`, { menuCodes });
+  return post<RoleDetail>("/roles/save-menus", { id, menuCodes });
 }
 
 export function memberLabel(member: RoleMemberItem): string {

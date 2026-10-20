@@ -5,7 +5,7 @@ import { useToast } from "@/composables/useToast";
 
 const { toast } = useToast();
 
-/** 近期直播 Mock：样式优先，后续再接 GET /api/activities */
+/** 近期直播 Mock：样式优先，后续再接 GET /api/v1/activities */
 const recentLives = [
   { id: "mock-1", title: "测试直播功能-秦", stateLabel: "已结束" },
 ];

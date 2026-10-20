@@ -24,7 +24,7 @@ export interface MaterialVideoItem {
   status?: string;
   citePlaces?: string;
   protection?: string;
-  createdAt?: string;
+  createdTime?: string;
   groupId?: string;
 }
 
@@ -71,7 +71,7 @@ export interface VhallPlaybackItem {
   id: string;
   title: string;
   duration?: string;
-  createdAt?: string;
+  createdTime?: string;
   coverUrl?: string;
 }
 
@@ -91,12 +91,12 @@ function mapActivityToLive(item: ActivityListItem): VhallLiveItem {
   };
 }
 
-/** GET /api/materials/groups */
+/** GET /api/v1/materials/groups/list */
 export function listMaterialGroups() {
-  return get<MaterialGroup[]>("/materials/groups");
+  return get<MaterialGroup[]>("/materials/groups/list");
 }
 
-/** GET /api/materials/videos */
+/** GET /api/v1/materials/videos */
 export function listMaterialVideos(query: MaterialVideoQuery = {}) {
   return get<MaterialVideoListData>("/materials/videos", {
     params: {
@@ -110,7 +110,7 @@ export function listMaterialVideos(query: MaterialVideoQuery = {}) {
 
 /**
  * 选择直播列表：复用本站活动列表，固定筛 provider=vhall。
- * 即 GET /api/activities?provider=vhall&page&pageSize&keyword
+ * 即 GET /api/v1/activities/list?provider=vhall&page&pageSize&keyword
  */
 export async function listVhallLives(query: VhallLiveQuery = {}): Promise<VhallLiveListData> {
   const data = await listActivities({
@@ -127,10 +127,10 @@ export async function listVhallLives(query: VhallLiveQuery = {}): Promise<VhallL
 
 /**
  * 某场本站活动（微吼）下的回放记录。
- * GET /api/activities/{id}/records → id 为 create-demand 的 record_id
+ * GET /api/v1/activities/records/{id} → list[].id 为 create-demand 的 record_id
  */
 export function listVhallLiveRecords(activityId: string) {
   return get<VhallPlaybackListData>(
-    `/activities/${encodeURIComponent(activityId)}/records`,
+    `/activities/records/${encodeURIComponent(activityId)}`,
   );
 }

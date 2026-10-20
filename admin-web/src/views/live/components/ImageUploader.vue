@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
 import { ElImageViewer, ElMessage } from "element-plus";
-import { uploadImage } from "@/api/activity";
+import { uploadFileToTos, type TosObjectKeyPrefixValue } from "@/utils/tosUpload";
 import ImageCropDialog, { type CropAspect } from "./ImageCropDialog.vue";
 
 const props = defineProps<{
   modelValue: string;
+  /**
+   * TOS 对象 key 前缀（D60 权威表）。调用方必传，如 activity/cover/、activity/warmup/、activity/promo/。
+   * 禁止传 upload/（仅调试）或未登记前缀。
+   */
+  objectKeyPrefix: TosObjectKeyPrefixValue | string;
   /** 固定裁剪比例；不传则不裁剪，直接上传 */
   aspect?: CropAspect;
   /** 推荐尺寸文案，如 "750*422px 或 16:9" */
@@ -72,7 +77,7 @@ async function onFile(e: Event) {
 async function doUpload(file: File) {
   uploading.value = true;
   try {
-    url.value = await uploadImage(file);
+    url.value = await uploadFileToTos(file, props.objectKeyPrefix);
     ElMessage.success("上传成功");
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : "上传失败");

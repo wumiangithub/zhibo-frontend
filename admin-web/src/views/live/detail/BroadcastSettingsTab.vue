@@ -1,32 +1,185 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { getHostUrl, type ActivityId } from "@/api/activity";
+import { computed, ref, watch } from "vue";
+import { Refresh } from "@element-plus/icons-vue";
+import { ElIcon, ElMessage } from "element-plus";
+import {
+  getHostUrl,
+  getPushStream,
+  startActivityLive,
+  type ActivityId,
+  type LiveProvider,
+} from "@/api/activity";
 import { useToast } from "@/composables/useToast";
 import UiButton from "@/components/ui/UiButton.vue";
+import InviteHostDialog from "@/components/live/InviteHostDialog.vue";
+import { copyText } from "@/utils/copyText";
+import { buildAudienceWatchUrl } from "@/utils/liveLinks";
+import RoleSettingsPanel from "./role/RoleSettingsPanel.vue";
 
 const props = withDefaults(
-  defineProps<{ activityId: ActivityId; canBroadcast?: boolean }>(),
-  { canBroadcast: false },
+  defineProps<{
+    activityId: ActivityId;
+    canBroadcast?: boolean;
+    liveTitle?: string;
+    startTime?: string;
+    provider: LiveProvider;
+    hostLocked?: boolean;
+  }>(),
+  { canBroadcast: false, liveTitle: "", startTime: "", hostLocked: false },
 );
-const emit = defineEmits<{ error: [msg: string] }>();
+const emit = defineEmits<{ error: [msg: string]; refreshed: [] }>();
 
 const { toast } = useToast();
-const subTab = ref<"method" | "role" | "relay" | "notify">("method");
+const inviteHostVisible = ref(false);
+const subTab = ref<"method" | "role">("method");
 const opening = ref(false);
+const startingLive = ref(false);
+const otherMethod = ref<"push" | "passcode">("push");
+const pushProtocol = ref<"rtmp" | "srt">("rtmp");
+const showSrt = computed(() => props.provider === "tencent");
+
+const rtmpServer = ref("");
+const rtmpStreamKey = ref("");
+const rtmpExpireTime = ref("");
+const broadcastPasscode = ref("");
+const hostLink = ref("");
+let pushSeq = 0;
+let hostSeq = 0;
+
+function shownOrEmpty(value: string | undefined) {
+  const text = (value ?? "").trim();
+  return text || "暂无";
+}
+
+function randomPasscode() {
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  return String(100000000 + (buf[0] % 900000000));
+}
+
+const liveNameText = computed(() => shownOrEmpty(props.liveTitle));
+const liveTimeText = computed(() => shownOrEmpty(props.startTime));
+const watchLinkText = computed(() =>
+  shownOrEmpty(buildAudienceWatchUrl(props.activityId)),
+);
+const passcodeText = computed(() => shownOrEmpty(broadcastPasscode.value));
+const hostLinkText = computed(() => shownOrEmpty(hostLink.value));
+
+const currentPush = computed(() => {
+  if (pushProtocol.value !== "rtmp") return { server: "", streamKey: "" };
+  return { server: rtmpServer.value, streamKey: rtmpStreamKey.value };
+});
+
+async function loadRtmp() {
+  const seq = ++pushSeq;
+  rtmpServer.value = "";
+  rtmpStreamKey.value = "";
+  rtmpExpireTime.value = "";
+  try {
+    const data = await getPushStream(props.activityId);
+    if (seq !== pushSeq) return;
+    rtmpServer.value = (data.streamAddress ?? "").trim();
+    rtmpStreamKey.value = (data.streamCode ?? "").trim();
+    rtmpExpireTime.value = (data.expireTime ?? "").trim();
+    emit("error", "");
+  } catch (e) {
+    if (seq !== pushSeq) return;
+    rtmpServer.value = "";
+    rtmpStreamKey.value = "";
+    rtmpExpireTime.value = "";
+    emit("error", e instanceof Error ? e.message : "获取推流地址失败");
+  }
+}
+
+watch(
+  () => [otherMethod.value, pushProtocol.value] as const,
+  ([method, protocol]) => {
+    if (method === "push" && protocol === "rtmp") {
+      void loadRtmp();
+      return;
+    }
+    pushSeq += 1;
+  },
+  { immediate: true },
+);
+
+async function loadHostLink() {
+  const seq = ++hostSeq;
+  hostLink.value = "";
+  try {
+    const data = await getHostUrl(props.activityId);
+    if (seq !== hostSeq) return;
+    hostLink.value = (data.hostUrl ?? "").trim();
+    emit("error", hostLink.value ? "" : "获取开播链接失败");
+  } catch (e) {
+    if (seq !== hostSeq) return;
+    hostLink.value = "";
+    emit("error", e instanceof Error ? e.message : "获取开播链接失败");
+  }
+}
+
+watch(
+  () => [otherMethod.value, props.activityId] as const,
+  ([method]) => {
+    if (method !== "passcode") {
+      hostSeq += 1;
+      return;
+    }
+    broadcastPasscode.value = randomPasscode();
+    void loadHostLink();
+  },
+);
 
 const subTabs = [
   { key: "method" as const, label: "开播方式" },
   { key: "role" as const, label: "角色设置" },
-  { key: "relay" as const, label: "转播设置" },
-  { key: "notify" as const, label: "通知设置" },
 ];
 
 function onSubTab(key: (typeof subTabs)[number]["key"]) {
-  if (key === "method") {
-    subTab.value = key;
+  subTab.value = key;
+}
+
+async function startThirdPartyLive() {
+  if (startingLive.value || pushProtocol.value !== "rtmp") return;
+  startingLive.value = true;
+  try {
+    await startActivityLive(props.activityId);
+    emit("error", "");
+    ElMessage.success("已开始直播");
+    emit("refreshed");
+  } catch (e) {
+    emit("error", e instanceof Error ? e.message : "开始直播失败");
+  } finally {
+    startingLive.value = false;
+  }
+}
+
+function copyValue(value: string, emptyTip = "暂无") {
+  const text = value.trim();
+  if (!text || text === "暂无") {
+    toast(emptyTip);
     return;
   }
-  toast(`「${subTabs.find((t) => t.key === key)?.label}」暂未开放`);
+  void copyText(text, "已复制");
+}
+
+function resetPasscode() {
+  broadcastPasscode.value = randomPasscode();
+}
+
+function copyPasscode() {
+  void copyValue(broadcastPasscode.value);
+}
+
+function copyAllPasscodeInfo() {
+  const text = [
+    `直播名称：${liveNameText.value}`,
+    `直播时间：${liveTimeText.value}`,
+    `直播口令：${passcodeText.value}`,
+    `口令开播链接：${hostLinkText.value}`,
+    `观众观看链接：${watchLinkText.value}`,
+  ].join("\n");
+  void copyValue(text);
 }
 
 async function openHost() {
@@ -66,10 +219,16 @@ async function openHost() {
         </p>
         <UiButton
           variant="outline"
-          @click="toast('「邀请主播」暂未开放')"
+          @click="inviteHostVisible = true"
         >
           邀请主播
         </UiButton>
+        <InviteHostDialog
+          v-model="inviteHostVisible"
+          :activity-id="activityId"
+          :live-title="liveTitle"
+          :start-time="startTime"
+        />
       </section>
 
       <section class="block">
@@ -144,7 +303,177 @@ async function openHost() {
           </div>
         </div>
       </section>
+
+      <section class="block">
+        <h3 class="block-title">其他方式开播</h3>
+        <div class="other-card">
+          <div class="method-tabs">
+            <button
+              type="button"
+              class="method-tab"
+              :class="{ 'is-active': otherMethod === 'push' }"
+              @click="otherMethod = 'push'"
+            >
+              第三方推流到直播间
+            </button>
+            <button
+              type="button"
+              class="method-tab"
+              :class="{ 'is-active': otherMethod === 'passcode' }"
+              @click="otherMethod = 'passcode'"
+            >
+              口令开播
+            </button>
+          </div>
+
+          <template v-if="otherMethod === 'push'">
+            <p class="method-desc">
+              OBS摄像机 适合双机位开播，支持桌面共享/屏幕捕获
+            </p>
+            <div class="protocol-row">
+              <label class="protocol-option">
+                <input
+                  v-model="pushProtocol"
+                  type="radio"
+                  value="rtmp"
+                >
+                rtmp推流
+              </label>
+              <label
+                v-if="showSrt"
+                class="protocol-option"
+              >
+                <input
+                  v-model="pushProtocol"
+                  type="radio"
+                  value="srt"
+                >
+                srt推流
+                <span class="protocol-hint">低延迟/更稳定</span>
+              </label>
+            </div>
+            <div class="copy-row">
+              <span class="copy-label">服务器：</span>
+              <input
+                class="copy-input"
+                type="text"
+                readonly
+                :value="currentPush.server"
+                placeholder="暂无推流地址"
+              >
+              <UiButton
+                variant="default"
+                @click="copyValue(currentPush.server)"
+              >
+                复制
+              </UiButton>
+            </div>
+            <div class="copy-row">
+              <span class="copy-label">串流密钥：</span>
+              <input
+                class="copy-input"
+                type="text"
+                readonly
+                :value="currentPush.streamKey"
+                placeholder="暂无串流密钥"
+              >
+              <UiButton
+                variant="default"
+                @click="copyValue(currentPush.streamKey)"
+              >
+                复制
+              </UiButton>
+            </div>
+            <p
+              v-if="pushProtocol === 'rtmp' && rtmpExpireTime"
+              class="expire-note"
+            >
+              有效期至 {{ rtmpExpireTime }}
+            </p>
+            <div
+              v-if="pushProtocol === 'rtmp'"
+              class="start-live-row"
+            >
+              <UiButton
+                variant="primary"
+                :disabled="startingLive || !currentPush.server || !currentPush.streamKey"
+                @click="startThirdPartyLive"
+              >
+                {{ startingLive ? "开播中…" : "开始直播" }}
+              </UiButton>
+            </div>
+            <div class="push-notes">
+              <p>1、推流域名不固定，复制时请仔细检查。为防止串流，每次推流只能用一种地址</p>
+              <p>2、为保证观看质量与流量消耗，推荐设置码率1000~2000之间，分辨率在1080P或以下</p>
+            </div>
+          </template>
+
+          <template v-else>
+            <p class="passcode-desc">
+              发送口令信息给主播即可开播，开播链接与直播口令为主播专用，请勿随意转发
+            </p>
+            <div class="passcode-card">
+              <div class="passcode-row">
+                <span class="passcode-label">直播名称：</span>
+                <span class="passcode-value">{{ liveNameText }}</span>
+              </div>
+              <div class="passcode-row">
+                <span class="passcode-label">直播时间：</span>
+                <span class="passcode-value">{{ liveTimeText }}</span>
+              </div>
+              <div class="passcode-row">
+                <span class="passcode-label">直播口令：</span>
+                <span class="passcode-value">{{ passcodeText }}</span>
+                <button
+                  type="button"
+                  class="passcode-reset"
+                  @click="resetPasscode"
+                >
+                  <ElIcon
+                    class="passcode-reset__icon"
+                    :size="14"
+                  >
+                    <Refresh />
+                  </ElIcon>
+                  重置口令
+                </button>
+              </div>
+              <div class="passcode-row">
+                <span class="passcode-label">口令开播链接：</span>
+                <span class="passcode-value">{{ hostLinkText }}</span>
+                <span class="passcode-aside">主播专用链接，请勿随意转发</span>
+              </div>
+              <div class="passcode-row">
+                <span class="passcode-label">观众观看链接：</span>
+                <span class="passcode-value">{{ watchLinkText }}</span>
+              </div>
+            </div>
+            <div class="passcode-actions">
+              <UiButton
+                variant="outline"
+                @click="copyPasscode"
+              >
+                复制口令
+              </UiButton>
+              <UiButton
+                variant="primary"
+                @click="copyAllPasscodeInfo"
+              >
+                复制全部信息
+              </UiButton>
+            </div>
+          </template>
+        </div>
+      </section>
     </template>
+
+    <RoleSettingsPanel
+      v-show="subTab === 'role'"
+      :activity-id="activityId"
+      :live-title="liveTitle"
+      :start-time="startTime"
+      :host-locked="hostLocked"
+    />
   </div>
 </template>
 
@@ -242,5 +571,169 @@ async function openHost() {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+.other-card {
+  padding: 4px 16px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fff;
+}
+.method-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+.method-tab {
+  border: 0;
+  background: transparent;
+  padding: 10px 0;
+  margin-bottom: -1px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  outline: none;
+  border-bottom: 2px solid transparent;
+}
+.method-tab.is-active {
+  color: var(--color-primary);
+  font-weight: 600;
+  border-bottom-color: var(--color-primary);
+}
+.method-desc {
+  margin: 16px 0 12px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+.protocol-row {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  margin-bottom: 16px;
+}
+.protocol-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.protocol-option input {
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+.protocol-hint {
+  color: var(--color-text-disabled);
+  font-size: 12px;
+}
+.copy-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.copy-label {
+  flex: none;
+  width: 84px;
+  text-align: right;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.copy-input {
+  box-sizing: border-box;
+  flex: 1 1 240px;
+  width: auto;
+  min-width: 0;
+  max-width: 420px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: var(--color-bg-muted);
+  font-size: 13px;
+  color: var(--color-text);
+  outline: none;
+}
+.copy-input::placeholder {
+  color: var(--color-text-placeholder);
+}
+.expire-note {
+  margin: -4px 0 12px 92px;
+  font-size: 12px;
+  color: var(--color-text-placeholder);
+  line-height: 1.5;
+}
+.start-live-row {
+  margin: 0 0 12px 92px;
+}
+.push-notes p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-placeholder);
+  line-height: 1.7;
+}
+.passcode-desc {
+  margin: 16px 0 12px;
+  font-size: 13px;
+  color: var(--color-text-placeholder);
+  line-height: 1.6;
+}
+.passcode-card {
+  padding: 16px 24px 16px 12px;
+  border-radius: 8px;
+  background: #f5f7fb;
+}
+.passcode-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 11px 0;
+  font-size: 13px;
+  line-height: 22px;
+}
+.passcode-label {
+  flex: none;
+  width: 108px;
+  text-align: right;
+  color: var(--color-text-secondary);
+}
+.passcode-value {
+  min-width: 0;
+  max-width: calc(100% - 124px);
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+.passcode-reset {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 13px;
+  line-height: 22px;
+  cursor: pointer;
+}
+.passcode-reset:hover {
+  color: var(--color-primary-hover);
+}
+.passcode-reset__icon {
+  font-size: 14px;
+}
+.passcode-aside {
+  color: var(--color-text-placeholder);
+  font-size: 12px;
+  line-height: 22px;
+}
+.passcode-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
 }
 </style>

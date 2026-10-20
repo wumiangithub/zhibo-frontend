@@ -29,7 +29,13 @@ function mergeEmployee(a?: EmployeeItem, b?: EmployeeItem): EmployeeItem | undef
     id,
     userName: (a?.userName || b?.userName || id).trim() || id,
     avatar: a?.avatar?.trim() || b?.avatar?.trim() || undefined,
+    departmentName:
+      a?.departmentName?.trim() || b?.departmentName?.trim() || undefined,
   };
+}
+
+function deptOf(emp: EmployeeItem) {
+  return emp.departmentName?.trim() || "";
 }
 
 function syncSelected(id: string) {
@@ -164,6 +170,10 @@ onMounted(() => {
               </svg>
             </span>
             <span>{{ emp.userName }}</span>
+            <span
+              v-if="deptOf(emp)"
+              class="host-option__dept"
+            >{{ deptOf(emp) }}</span>
           </span>
         </ElOption>
       </ElSelect>
@@ -189,6 +199,10 @@ onMounted(() => {
             </svg>
           </span>
           <span class="host-tag__name">{{ selected.userName }}</span>
+          <span
+            v-if="deptOf(selected)"
+            class="host-tag__dept"
+          >{{ deptOf(selected) }}</span>
           <i
             class="host-tag__x"
             @click="clearHost"
@@ -209,6 +223,11 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+.host-option__dept,
+.host-tag__dept {
+  color: #999;
+  font-size: 12px;
 }
 .host-option__avatar,
 .host-tag__avatar {
