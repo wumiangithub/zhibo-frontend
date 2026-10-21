@@ -15,6 +15,8 @@ const props = defineProps<{
   materialId: string;
   title?: string;
   coverUrl?: string;
+  /** 文档等：静态文件类型图标，优先于 coverUrl */
+  coverIcon?: string;
   /** 列表行上传时间，供无 submit 时合成「发起申请」 */
   uploadedTime?: string;
   uploaderName?: string;
@@ -82,6 +84,7 @@ watch(
     v-model="visible"
     :title="title"
     :cover-url="coverUrl"
+    :cover-icon="coverIcon"
     :loading="loading"
     :nodes="nodes"
   />

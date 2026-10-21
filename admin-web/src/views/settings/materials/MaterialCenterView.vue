@@ -28,6 +28,7 @@ import MaterialVideoPreviewDialog from "./MaterialVideoPreviewDialog.vue";
 import ImagePreview from "@/components/ImagePreview.vue";
 import MaterialAssetCell from "./MaterialAssetCell.vue";
 import MaterialAuditRecordsDrawer from "./MaterialAuditRecordsDrawer.vue";
+import { getMaterialFileIcon } from "./materialFileIcons";
 import {
   asFileMaterialType,
   AUDIT_OPTIONS,
@@ -39,12 +40,14 @@ import {
   type AuditStatus,
 } from "./mock";
 import {
+  canStartVhallTranscode,
   isMaterialAuditPending,
   isMaterialSelectable,
   MaterialAudit,
   MATERIAL_AUDIT_LABEL,
   materialAvailabilityLabel,
   moveMaterial,
+  vhallTranscodeLabel,
   type MaterialAuditStatus,
   type MaterialCenterType,
   type MaterialListItem,
@@ -89,6 +92,7 @@ const {
   toggleAiAudit,
   toggleRiskAudit,
   removeMaterialItem,
+  startVhallTranscodeItem,
 } = useMaterialCenter({ initialType: initialCenterType() });
 
 const primaryLabel = computed(() =>
@@ -186,6 +190,7 @@ const auditDrawerVisible = ref(false);
 const auditDrawerId = ref("");
 const auditDrawerTitle = ref("");
 const auditDrawerCover = ref("");
+const auditDrawerCoverIcon = ref("");
 const auditDrawerUploadedTime = ref("");
 const auditDrawerUploaderName = ref("");
 const auditDrawerDepartmentName = ref("");
@@ -194,7 +199,15 @@ const auditDrawerUploaderId = ref<number | undefined>();
 function openAuditRecords(row: MaterialListItem) {
   auditDrawerId.value = row.id;
   auditDrawerTitle.value = row.name;
-  auditDrawerCover.value = row.url?.trim() || "";
+  if (materialType.value === "document") {
+    // 文档与列表一致：文件类型图标，勿把 xlsx 等当封面图
+    auditDrawerCoverIcon.value = getMaterialFileIcon(row.name);
+    auditDrawerCover.value = "";
+  } else {
+    // 图/视频：源 URL；TOS 截帧/缩放由 AuditTimelineDrawer 统一处理
+    auditDrawerCoverIcon.value = "";
+    auditDrawerCover.value = (row.thumbUrl || row.url)?.trim() || "";
+  }
   auditDrawerUploadedTime.value = row.uploadedTime || "";
   auditDrawerUploaderName.value = row.uploaderName || "";
   auditDrawerDepartmentName.value = row.departmentName || "";
@@ -264,6 +277,29 @@ async function confirmDelete(row: MaterialListItem) {
     return;
   }
   await removeMaterialItem(row);
+}
+
+/** 待转码 / 转码失败：确认后上传微吼。 */
+async function onVhallTranscodeClick(row: MaterialListItem) {
+  if (!canStartVhallTranscode(row)) return;
+  try {
+    await ElMessageBox.confirm(
+      "确认上传到第三方转码？仅创建录播直播视频需要。",
+      "上传转码",
+      {
+        type: "info",
+        confirmButtonText: "确认上传",
+        cancelButtonText: "取消",
+      },
+    );
+  } catch {
+    return;
+  }
+  try {
+    await startVhallTranscodeItem(row);
+  } catch {
+    /* 错误已 toast */
+  }
 }
 
 function openMove(row: MaterialListItem) {
@@ -540,6 +576,23 @@ async function onEditName(row: MaterialListItem) {
               </template>
             </ElTableColumn>
             <ElTableColumn
+              v-if="materialType === 'video'"
+              label="转码"
+              width="110"
+            >
+              <template #default="{ row }">
+                <button
+                  v-if="canStartVhallTranscode(row as MaterialListItem)"
+                  type="button"
+                  class="op-link"
+                  @click="onVhallTranscodeClick(row as MaterialListItem)"
+                >
+                  {{ vhallTranscodeLabel(row as MaterialListItem) }}
+                </button>
+                <span v-else>{{ vhallTranscodeLabel(row as MaterialListItem) }}</span>
+              </template>
+            </ElTableColumn>
+            <ElTableColumn
               prop="uploadedTime"
               label="上传时间"
               width="170"
@@ -708,6 +761,7 @@ async function onEditName(row: MaterialListItem) {
       :material-id="auditDrawerId"
       :title="auditDrawerTitle"
       :cover-url="auditDrawerCover || undefined"
+      :cover-icon="auditDrawerCoverIcon || undefined"
       :uploaded-time="auditDrawerUploadedTime || undefined"
       :uploader-name="auditDrawerUploaderName || undefined"
       :department-name="auditDrawerDepartmentName || undefined"

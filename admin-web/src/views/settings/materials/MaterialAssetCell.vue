@@ -16,12 +16,15 @@ const emit = defineEmits<{
   "thumb-click": [row: MaterialListItem];
 }>();
 
-/** 图片：宽*高 (比例)；视频等：有 meta 原样，旧数据 -- */
+/** 图片：宽*高 (比例)；视频：有 meta 原样，旧数据 --；文档：无 meta 不显示副行 */
 const subText = computed(() => {
   if (props.materialType === "image") {
     return formatImageMetaDisplay(props.row.meta);
   }
   const meta = props.row.meta?.trim();
+  if (props.materialType === "document") {
+    return meta || "";
+  }
   return meta || "--";
 });
 
@@ -90,7 +93,10 @@ function onThumbClick(e: MouseEvent, row: MaterialListItem) {
           <el-icon><EditPen /></el-icon>
         </button>
       </div>
-      <div class="asset-sub">{{ subText }}</div>
+      <div
+        v-if="subText"
+        class="asset-sub"
+      >{{ subText }}</div>
     </div>
   </div>
 </template>

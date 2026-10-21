@@ -4,6 +4,7 @@ import { ElDrawer, ElEmpty, ElIcon } from "element-plus";
 import { CircleCheckFilled } from "@element-plus/icons-vue";
 import ImagePreview from "@/components/ImagePreview.vue";
 import type { ImagePreviewItem } from "@/components/ImagePreview.vue";
+import { getTosPreviewUrl } from "@/utils/fileInfo";
 import AuditActorTag from "./AuditActorTag.vue";
 import {
   resolveAuditActorTag,
@@ -33,7 +34,17 @@ export interface AuditTimelineNode {
 const props = defineProps<{
   modelValue: boolean;
   title?: string;
+  /**
+   * 封面源 URL（原始图/视频均可）。抽屉内会经 getTosPreviewUrl 处理：
+   * 视频 mp4 → TOS snapshot；图片 → resize。调用方无需自行转换。
+   * 与 coverIcon 互斥：文档等非图素材请传 coverIcon，勿传此字段。
+   */
   coverUrl?: string;
+  /**
+   * 静态文件类型图标（如 getMaterialFileIcon(name)）。
+   * 有值时优先于 coverUrl：居中 contain 展示，不可点击放大。
+   */
+  coverIcon?: string;
   loading?: boolean;
   nodes: AuditTimelineNode[];
 }>();
@@ -43,9 +54,20 @@ const visible = computed({
   set: (v) => emit("update:modelValue", v),
 });
 const coverPreview = ref(false);
-const coverPreviewItems = computed<ImagePreviewItem[]>(() =>
-  props.coverUrl ? [{ url: props.coverUrl, name: props.title || "封面" }] : [],
-);
+const coverIconSrc = computed(() => props.coverIcon?.trim() || "");
+/** 抽屉缩略图：与素材列表视频封面一致 160×90（仅 coverUrl 模式） */
+const coverDisplaySrc = computed(() => {
+  if (coverIconSrc.value) return "";
+  const base = props.coverUrl?.trim();
+  return base ? getTosPreviewUrl(base, 160, 90) : "";
+});
+/** 点击放大：同一套 TOS 处理，稍大尺寸便于查看 */
+const coverPreviewItems = computed<ImagePreviewItem[]>(() => {
+  if (coverIconSrc.value) return [];
+  const base = props.coverUrl?.trim();
+  if (!base) return [];
+  return [{ url: getTosPreviewUrl(base, 960, 540), name: props.title || "封面" }];
+});
 
 function operatorLabel(node: AuditTimelineNode) {
   return node.operatorLabel ?? (node.variant === "apply" ? "操作人" : "审核人");
@@ -74,13 +96,19 @@ function actorTag(node: AuditTimelineNode) {
     >
       {{ title }}
     </p>
+    <div
+      v-if="coverIconSrc"
+      class="drawer-cover drawer-cover--icon"
+    >
+      <img :src="coverIconSrc" alt="" />
+    </div>
     <button
-      v-if="coverUrl"
+      v-else-if="coverDisplaySrc"
       type="button"
       class="drawer-cover"
       @click="coverPreview = true"
     >
-      <img :src="coverUrl" alt="" />
+      <img :src="coverDisplaySrc" alt="" />
     </button>
     <ImagePreview v-model="coverPreview" :items="coverPreviewItems" />
 
@@ -183,6 +211,18 @@ function actorTag(node: AuditTimelineNode) {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+.drawer-cover--icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  background: var(--color-bg-muted, #f5f5f5);
+}
+.drawer-cover--icon img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
 }
 .timeline {
   padding: 4px 0 24px;

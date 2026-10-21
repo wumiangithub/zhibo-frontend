@@ -73,6 +73,48 @@ export interface MaterialListItem {
   /** 所在部门展示名快照 */
   departmentName?: string;
   uploadedTime: string;
+  /** 仅 video：微吼媒资 video_id；未上传可空 */
+  vhallVideoId?: string | null;
+  /** 仅 video：转码进度 0～100 */
+  vhallTranscodeProgress?: number | null;
+  /**
+   * 仅 video：转码结果。空=未上传；0=转码中；1=成功；3=失败
+   *（对齐微吼完成回调 method_id=3）。
+   */
+  vhallTranscodeStatus?: number | null;
+}
+
+/** 微吼转码结果（对齐完成回调 status） */
+export const VhallTranscodeStatus = {
+  PENDING: 0,
+  OK: 1,
+  FAIL: 3,
+} as const;
+
+/** 素材中心转码列文案 */
+export function vhallTranscodeLabel(
+  item: Pick<MaterialListItem, "vhallVideoId" | "vhallTranscodeProgress" | "vhallTranscodeStatus">,
+): string {
+  const status = item.vhallTranscodeStatus;
+  if (status === VhallTranscodeStatus.OK) return "转码成功";
+  if (status === VhallTranscodeStatus.FAIL) return "转码失败";
+  if (status === VhallTranscodeStatus.PENDING || item.vhallVideoId) {
+    const p = item.vhallTranscodeProgress;
+    return typeof p === "number" ? `${p}%` : "转码中";
+  }
+  return "待转码";
+}
+
+/** 是否可点「待转码 / 转码失败」发起上传 */
+export function canStartVhallTranscode(
+  item: Pick<MaterialListItem, "vhallVideoId" | "vhallTranscodeStatus">,
+): boolean {
+  const status = item.vhallTranscodeStatus;
+  if (status === VhallTranscodeStatus.PENDING || status === VhallTranscodeStatus.OK) {
+    return false;
+  }
+  // 未上传，或失败可重传
+  return !item.vhallVideoId || status === VhallTranscodeStatus.FAIL || status == null;
 }
 
 /**
@@ -239,6 +281,11 @@ export function createMaterials(payload: CreateMaterialsPayload) {
 /** PUT /api/v1/materials/rename/{id} 修改展示名（不改 TOS） */
 export function renameMaterial(id: string, name: string) {
   return put<MaterialListItem>(`/materials/rename/${id}`, { name });
+}
+
+/** POST /api/v1/materials/vhall-transcode/{id} 视频上传微吼转码 */
+export function startVhallTranscode(id: string) {
+  return post<MaterialListItem>(`/materials/vhall-transcode/${encodeURIComponent(id)}`);
 }
 
 /** PUT /api/v1/materials/ai-audit/{id} 仅 {@link MaterialAudit.PASSED} / {@link MaterialAudit.REJECTED} */

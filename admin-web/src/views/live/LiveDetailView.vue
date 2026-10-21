@@ -2,6 +2,8 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import {
+  ActivityReady,
+  activityReadyLabel,
   getActivity,
   getHostUrl,
   type ActivityDetail,
@@ -146,7 +148,18 @@ watch(id, fetchDetail);
             >封面</span>
           </div>
           <div class="summary-info">
-            <h1 class="summary-title">{{ detail.title }}</h1>
+            <h1 class="summary-title">
+              {{ detail.title }}
+              <span
+                v-if="detail.type === 4"
+                class="ready-badge"
+                :class="{
+                  'is-ok': (detail.ready ?? ActivityReady.OK) === ActivityReady.OK,
+                  'is-pending': detail.ready === ActivityReady.PENDING,
+                  'is-fail': detail.ready === ActivityReady.FAIL,
+                }"
+              >【{{ activityReadyLabel(detail.ready) }}】</span>
+            </h1>
             <p class="summary-time">直播时间: {{ timeRange }}</p>
           </div>
         </div>
@@ -299,6 +312,21 @@ watch(id, fetchDetail);
   font-weight: 600;
   color: var(--color-text);
   line-height: 1.4;
+}
+.ready-badge {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+.ready-badge.is-ok {
+  color: #389e0d;
+}
+.ready-badge.is-pending {
+  color: #d48806;
+}
+.ready-badge.is-fail {
+  color: #cf1322;
 }
 .summary-time {
   margin: 8px 0 0;

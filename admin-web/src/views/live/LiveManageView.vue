@@ -19,6 +19,8 @@ import {
   deleteActivity,
   getHostUrl,
   listActivities,
+  ActivityReady,
+  activityReadyLabel,
   LIVE_STATE_LABEL,
   LIVE_TYPE_LABEL,
   RISK_STATUS_LABEL,
@@ -458,6 +460,13 @@ onMounted(fetchList);
                 />
                 {{ LIVE_STATE_LABEL[item.state] ?? item.state }}
               </span>
+              <span
+                v-if="item.type === 4 && item.ready !== ActivityReady.OK"
+                class="ready-tag"
+                :class="item.ready === ActivityReady.FAIL ? 'is-fail' : 'is-pending'"
+              >
+                {{ activityReadyLabel(item.ready) }}
+              </span>
             </td>
             <td>
               <ElTooltip
@@ -745,6 +754,23 @@ onMounted(fetchList);
   text-overflow: ellipsis;
   white-space: nowrap;
   vertical-align: bottom;
+}
+.ready-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 2px;
+  font-size: 12px;
+  line-height: 18px;
+  vertical-align: middle;
+}
+.ready-tag.is-pending {
+  color: #d48806;
+  background: #fff7e6;
+}
+.ready-tag.is-fail {
+  color: #cf1322;
+  background: #fff1f0;
 }
 .risk-tag {
   display: inline-block;

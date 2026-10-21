@@ -15,7 +15,8 @@ import VhallLivePicker from "../components/VhallLivePicker.vue";
 import UiButton from "@/components/ui/UiButton.vue";
 import type { LiveFormState, ViewerStyle } from "../composables/useLiveForm";
 import { PROVIDER_LABEL, type LiveProvider } from "@/api/activity";
-import type { MaterialVideoItem, VhallLiveItem, VhallPlaybackItem } from "@/api/recordResource";
+import type { MaterialListItem } from "@/api/materials";
+import type { VhallLiveItem, VhallPlaybackItem } from "@/api/recordResource";
 import videoIcon from "@/assets/images/live/video.svg?raw";
 import recordIcon from "@/assets/images/live/record.svg?raw";
 import voiceIcon from "@/assets/images/live/voice.svg?raw";
@@ -55,24 +56,35 @@ const recordSourceLabel = computed(() => {
 
 function clearRecord() {
   props.form.recordId = "";
+  props.form.materialId = "";
   props.form.recordLabel = "";
   props.form.recordSource = "";
 }
+
+const recordDisplayId = computed(() => {
+  if (props.form.recordSource === "video") return props.form.materialId;
+  if (props.form.recordSource === "live") return props.form.recordId;
+  return "";
+});
+
+const hasRecordSelection = computed(() => Boolean(recordDisplayId.value.trim()));
 
 function onClearRecord() {
   clearRecord();
   markDirty();
 }
 
-function onPickVideo(item: MaterialVideoItem) {
-  props.form.recordId = (item.recordId || item.id).trim();
-  props.form.recordLabel = item.title;
+function onPickVideo(item: MaterialListItem) {
+  props.form.materialId = item.id.trim();
+  props.form.recordId = "";
+  props.form.recordLabel = item.name;
   props.form.recordSource = "video";
   markDirty();
 }
 
 function onPickLivePlayback(payload: { live: VhallLiveItem; playback: VhallPlaybackItem }) {
   props.form.recordId = payload.playback.id.trim();
+  props.form.materialId = "";
   props.form.recordLabel = `${payload.live.title} · ${payload.playback.title}`;
   props.form.recordSource = "live";
   markDirty();
@@ -109,8 +121,14 @@ watch(
     }
     // 级联清录播字段；dirty 由用户改 mode 的交互负责
     if (mode !== "recorded") {
-      if (props.form.recordId || props.form.recordLabel || props.form.recordSource) {
+      if (
+        props.form.recordId
+        || props.form.materialId
+        || props.form.recordLabel
+        || props.form.recordSource
+      ) {
         props.form.recordId = "";
+        props.form.materialId = "";
         props.form.recordLabel = "";
         props.form.recordSource = "";
       }
@@ -191,7 +209,7 @@ watch(
         v-if="form.mode === 'recorded'"
         label="回放资源:"
         required
-        info="录播需指定资源：素材库视频，或从历史直播中选择回放。提交时写入 create 的 recordId。"
+        info="素材视频走 create 的 materialId；历史直播回放走 recordId。二者只传其一。"
       >
         <div class="record-picker">
           <div class="record-picker__btns">
@@ -211,12 +229,12 @@ watch(
             </UiButton>
           </div>
           <div
-            v-if="form.recordId"
+            v-if="hasRecordSelection"
             class="record-picker__selected"
           >
             <span class="record-picker__tag">{{ recordSourceLabel }}</span>
-            <span class="record-picker__name">{{ form.recordLabel || form.recordId }}</span>
-            <span class="record-picker__id">ID：{{ form.recordId }}</span>
+            <span class="record-picker__name">{{ form.recordLabel || recordDisplayId }}</span>
+            <span class="record-picker__id">ID：{{ recordDisplayId }}</span>
             <UiButton
               variant="link"
               @click="onClearRecord"
@@ -235,7 +253,7 @@ watch(
 
       <MaterialVideoPicker
         v-model="videoPickerVisible"
-        :selected-id="form.recordSource === 'video' ? form.recordId : ''"
+        :selected-id="form.recordSource === 'video' ? form.materialId : ''"
         @select="onPickVideo"
       />
       <VhallLivePicker

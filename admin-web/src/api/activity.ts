@@ -103,6 +103,21 @@ export interface ActivityCourseware {
 export type AccessValidityType = "long" | "days";
 export type PlaybackValidityType = "forever" | "days";
 
+/** 活动就绪：1 就绪 / 0 转码中 / 2 失败 */
+export const ActivityReady = {
+  PENDING: 0,
+  OK: 1,
+  FAIL: 2,
+} as const;
+
+export type ActivityReadyStatus = (typeof ActivityReady)[keyof typeof ActivityReady];
+
+export function activityReadyLabel(ready?: number | null): string {
+  if (ready === ActivityReady.PENDING) return "转码中";
+  if (ready === ActivityReady.FAIL) return "转码失败";
+  return "已转码";
+}
+
 export interface ActivityListItem {
   id: ActivityId;
   provider?: LiveProvider;
@@ -111,6 +126,10 @@ export interface ActivityListItem {
   coverUrl?: string;
   state: number;
   type: number;
+  /** 1 就绪（默认）/ 0 转码中 / 2 失败 */
+  ready?: number;
+  /** 录播素材 UUID */
+  recordMaterialId?: string;
   viewerStyle?: string;
   shareLink?: string;
   createdTime?: string;
@@ -180,7 +199,10 @@ export interface CreateActivityPayload {
   title: string;
   startTime: string;
   type: number;
+  /** 录播选「直播回放」：微吼回放列表 id */
   recordId?: string;
+  /** 录播选「素材视频」：本站视频素材 UUID */
+  materialId?: string;
   introduction?: string;
   endTime?: string;
   viewerStyle?: string;
@@ -288,6 +310,8 @@ export interface UpdateActivityPayload {
   ownerIds?: number[];
   products?: ActivityProduct[];
   coursewareMaterialIds?: string[];
+  /** 仅录播：替换素材视频，ready→0 */
+  materialId?: string;
 }
 
 export function updateActivity(id: ActivityId, payload: UpdateActivityPayload) {

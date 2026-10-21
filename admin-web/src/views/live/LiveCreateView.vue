@@ -48,8 +48,12 @@ function buildPayload(): CreateActivityPayload {
   if (form.endDate && form.endTime) {
     payload.endTime = `${form.endDate} ${form.endTime}:00`;
   }
-  if (form.mode === "recorded" && form.recordId.trim()) {
-    payload.recordId = form.recordId.trim();
+  if (form.mode === "recorded") {
+    if (form.recordSource === "video" && form.materialId.trim()) {
+      payload.materialId = form.materialId.trim();
+    } else if (form.recordSource === "live" && form.recordId.trim()) {
+      payload.recordId = form.recordId.trim();
+    }
   }
   if (form.detailCover) payload.coverUrl = form.detailCover;
   if (form.detailHtml?.trim()) payload.detailHtml = form.detailHtml;
@@ -114,7 +118,8 @@ async function onSave() {
         v-model="form.agreed"
         @change="leave.markDirty"
       >
-      新建直播
+        我已阅读并同意遵守
+        <a class="link">《钱坤直播运营规范》</a>
       </ElCheckbox>
       <div class="flex items-center gap-3">
         <ElButton @click="onCancel">取消</ElButton>

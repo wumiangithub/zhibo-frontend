@@ -5,45 +5,6 @@ import {
   type ActivityListItem,
 } from "./activity";
 
-/** 素材分组 */
-export interface MaterialGroup {
-  id: string;
-  name: string;
-  count: number;
-}
-
-/** 素材库视频 */
-export interface MaterialVideoItem {
-  id: string;
-  title: string;
-  /** 提交 create-demand 时优先用此字段 */
-  recordId?: string;
-  coverUrl?: string;
-  duration?: string;
-  size?: string;
-  status?: string;
-  citePlaces?: string;
-  protection?: string;
-  createdTime?: string;
-  groupId?: string;
-}
-
-export interface MaterialVideoListData {
-  total: number;
-  list: MaterialVideoItem[];
-  /** 可选：与列表一并返回的分组 */
-  groups?: MaterialGroup[];
-  /** 容量提示，如「已用 1.2G / 共 10G」 */
-  capacityTip?: string;
-}
-
-export interface MaterialVideoQuery {
-  page?: number;
-  pageSize?: number;
-  groupId?: string;
-  keyword?: string;
-}
-
 /** 选择直播弹窗用的列表项（来自本站活动列表，已筛 provider=vhall） */
 export interface VhallLiveItem {
   id: string;
@@ -89,23 +50,6 @@ function mapActivityToLive(item: ActivityListItem): VhallLiveItem {
     state: item.state,
     stateLabel: STATE_LABEL[item.state] ?? String(item.state),
   };
-}
-
-/** GET /api/v1/materials/groups/list */
-export function listMaterialGroups() {
-  return get<MaterialGroup[]>("/materials/groups/list");
-}
-
-/** GET /api/v1/materials/videos */
-export function listMaterialVideos(query: MaterialVideoQuery = {}) {
-  return get<MaterialVideoListData>("/materials/videos", {
-    params: {
-      page: query.page ?? 1,
-      pageSize: query.pageSize ?? 20,
-      groupId: query.groupId || undefined,
-      keyword: query.keyword || undefined,
-    },
-  });
 }
 
 /**

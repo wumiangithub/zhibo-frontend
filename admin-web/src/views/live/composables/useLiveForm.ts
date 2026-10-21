@@ -41,8 +41,10 @@ export interface LiveFormState {
   startTime: string;
   endDate: string;
   endTime: string;
-  /** type=4 录播时必填（微吼 recordId） */
+  /** type=4 + 选「直播回放」：微吼 record_id */
   recordId: string;
+  /** type=4 + 选「素材视频」：本站素材 UUID → 后端 create-by-url */
+  materialId: string;
   /** 选中资源展示名 */
   recordLabel: string;
   /** 选择来源：素材视频 / 微吼直播回放 */
@@ -101,6 +103,7 @@ export function useLiveForm() {
     endDate: "",
     endTime: "",
     recordId: "",
+    materialId: "",
     recordLabel: "",
     recordSource: "",
     detailCover: "",
@@ -143,8 +146,14 @@ export function useLiveForm() {
     if (intro.length > 256) return "直播简介不能超过 256 字";
     if (!form.startDate) return "请选择开始日期";
     if (!form.startTime) return "请选择开始时间";
+    const startAt = new Date(`${form.startDate} ${form.startTime}:00`).getTime();
+    if (Number.isNaN(startAt)) return "开始时间无效";
+    // 对齐微吼：定时开始须晚于当前至少 2 分钟，避免打到云侧才 512096
+    const minStartAt = Date.now() + 2 * 60 * 1000;
+    if (startAt < minStartAt) {
+      return "开始时间须晚于当前时间至少 2 分钟";
+    }
     if (form.endDate && form.endTime) {
-      const startAt = new Date(`${form.startDate} ${form.startTime}:00`).getTime();
       const endAt = new Date(`${form.endDate} ${form.endTime}:00`).getTime();
       if (endAt <= startAt) return "结束时间必须大于开始时间";
     } else if (form.endDate && !form.endTime) {
@@ -152,8 +161,12 @@ export function useLiveForm() {
     } else if (!form.endDate && form.endTime) {
       return "请选择结束日期";
     }
-    if (form.mode === "recorded" && form.provider === "vhall" && !form.recordId.trim()) {
-      return "录播模式请选择视频或直播回放资源";
+    if (form.mode === "recorded" && form.provider === "vhall") {
+      const hasVideo = form.recordSource === "video" && form.materialId.trim();
+      const hasLive = form.recordSource === "live" && form.recordId.trim();
+      if (!hasVideo && !hasLive) {
+        return "录播模式请选择视频或直播回放资源";
+      }
     }
     if (!form.hostIds.length) return "请选择主播";
     if (form.ownerIds.length > 20) return "归属人最多选择 20 人";

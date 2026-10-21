@@ -69,6 +69,18 @@ function applyDetail(d: ActivityDetail) {
   form.coursewareMaterialIds = form.coursewares.map((c) => c.id);
   form.autoList = d.autoList ?? false;
   form.agreed = true;
+  // 录播素材回显；替换视频保存时传 materialId → ready 可能变 0
+  if (d.type === 4 && d.recordMaterialId) {
+    form.materialId = d.recordMaterialId;
+    form.recordId = "";
+    form.recordSource = "video";
+    form.recordLabel = form.recordLabel || "已选素材";
+  } else {
+    form.materialId = "";
+    form.recordId = "";
+    form.recordSource = "";
+    form.recordLabel = "";
+  }
 }
 
 watch(
@@ -88,8 +100,12 @@ function validateBasic(): string | null {
   if ((form.endDate && !form.endTime) || (!form.endDate && form.endTime)) {
     return "结束时间须完整填写日期与时间";
   }
+  const startAt = new Date(`${form.startDate} ${form.startTime}:00`).getTime();
+  if (Number.isNaN(startAt)) return "开始时间无效";
+  if (startAt < Date.now() + 2 * 60 * 1000) {
+    return "开始时间须晚于当前时间至少 2 分钟";
+  }
   if (form.endDate && form.endTime) {
-    const startAt = new Date(`${form.startDate} ${form.startTime}:00`).getTime();
     const endAt = new Date(`${form.endDate} ${form.endTime}:00`).getTime();
     if (endAt <= startAt) return "结束时间必须大于开始时间";
   }
@@ -129,6 +145,15 @@ async function onSave() {
     };
     if (form.endDate && form.endTime) {
       payload.endTime = `${form.endDate} ${form.endTime}:00`;
+    }
+    // 录播替换素材：与详情原 recordMaterialId 不同才传
+    if (
+      props.detail.type === 4
+      && form.recordSource === "video"
+      && form.materialId.trim()
+      && form.materialId.trim() !== (props.detail.recordMaterialId ?? "")
+    ) {
+      payload.materialId = form.materialId.trim();
     }
     await updateActivity(props.activityId, payload);
     ElMessage.success("保存成功，重新进入审核");

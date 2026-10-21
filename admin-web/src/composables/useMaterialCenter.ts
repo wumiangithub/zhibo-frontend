@@ -10,6 +10,7 @@ import {
   MaterialAudit,
   renameMaterial,
   renameMaterialGroup,
+  startVhallTranscode,
   updateMaterialAiAudit,
   updateMaterialRiskAudit,
   type CreateMaterialItem,
@@ -288,6 +289,18 @@ export function useMaterialCenter(options: UseMaterialCenterOptions = {}) {
     }
   }
 
+  /** 视频上传微吼转码（create-by-url）。 */
+  async function startVhallTranscodeItem(item: MaterialListItem) {
+    try {
+      const updated = await startVhallTranscode(item.id);
+      patchListItem(item.id, updated);
+      ElMessage.success("已提交转码");
+    } catch (err: unknown) {
+      ElMessage.error(errMsg(err, "提交转码失败"));
+      throw err;
+    }
+  }
+
   return {
     materialType,
     groupKeyword,
@@ -316,5 +329,6 @@ export function useMaterialCenter(options: UseMaterialCenterOptions = {}) {
     toggleAiAudit,
     toggleRiskAudit,
     removeMaterialItem,
+    startVhallTranscodeItem,
   };
 }
