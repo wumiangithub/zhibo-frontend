@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
-import { ElImageViewer, ElMessage } from "element-plus";
+import { ElMessage } from "element-plus";
 import { uploadFileToTos, type TosObjectKeyPrefixValue } from "@/utils/tosUpload";
 import ImageCropDialog, { type CropAspect } from "./ImageCropDialog.vue";
+import ImagePreview from "@/components/ImagePreview.vue";
+import type { ImagePreviewItem } from "@/components/ImagePreview.vue";
 
 const props = defineProps<{
   modelValue: string;
@@ -31,6 +33,9 @@ const url = computed({
 });
 
 const previewVisible = ref(false);
+const previewItems = computed<ImagePreviewItem[]>(() =>
+  url.value ? [{ url: url.value, name: "图片" }] : [],
+);
 const uploading = ref(false);
 const cropVisible = ref(false);
 const cropSrc = ref("");
@@ -215,12 +220,7 @@ function onCrop() {
       >查看示例</span>
     </div>
 
-    <ElImageViewer
-      v-if="previewVisible && url"
-      :url-list="[url]"
-      teleported
-      @close="previewVisible = false"
-    />
+    <ImagePreview v-model="previewVisible" :items="previewItems" />
 
     <ImageCropDialog
       v-if="aspect"

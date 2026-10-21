@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { ElDrawer, ElEmpty, ElIcon, ElImage } from "element-plus";
+import { computed, ref } from "vue";
+import { ElDrawer, ElEmpty, ElIcon } from "element-plus";
 import { CircleCheckFilled } from "@element-plus/icons-vue";
+import ImagePreview from "@/components/ImagePreview.vue";
+import type { ImagePreviewItem } from "@/components/ImagePreview.vue";
 import AuditActorTag from "./AuditActorTag.vue";
 import {
   resolveAuditActorTag,
@@ -40,6 +42,10 @@ const visible = computed({
   get: () => props.modelValue,
   set: (v) => emit("update:modelValue", v),
 });
+const coverPreview = ref(false);
+const coverPreviewItems = computed<ImagePreviewItem[]>(() =>
+  props.coverUrl ? [{ url: props.coverUrl, name: props.title || "封面" }] : [],
+);
 
 function operatorLabel(node: AuditTimelineNode) {
   return node.operatorLabel ?? (node.variant === "apply" ? "操作人" : "审核人");
@@ -68,14 +74,15 @@ function actorTag(node: AuditTimelineNode) {
     >
       {{ title }}
     </p>
-    <ElImage
+    <button
       v-if="coverUrl"
+      type="button"
       class="drawer-cover"
-      :src="coverUrl"
-      :preview-src-list="[coverUrl]"
-      fit="cover"
-      preview-teleported
-    />
+      @click="coverPreview = true"
+    >
+      <img :src="coverUrl" alt="" />
+    </button>
+    <ImagePreview v-model="coverPreview" :items="coverPreviewItems" />
 
     <div
       v-loading="loading"
@@ -164,9 +171,18 @@ function actorTag(node: AuditTimelineNode) {
   width: 160px;
   height: 100px;
   margin: -8px 0 16px;
+  padding: 0;
+  border: 0;
   border-radius: 4px;
   overflow: hidden;
   cursor: zoom-in;
+  background: transparent;
+}
+.drawer-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .timeline {
   padding: 4px 0 24px;

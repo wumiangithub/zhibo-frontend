@@ -186,11 +186,19 @@ const auditDrawerVisible = ref(false);
 const auditDrawerId = ref("");
 const auditDrawerTitle = ref("");
 const auditDrawerCover = ref("");
+const auditDrawerUploadedTime = ref("");
+const auditDrawerUploaderName = ref("");
+const auditDrawerDepartmentName = ref("");
+const auditDrawerUploaderId = ref<number | undefined>();
 
 function openAuditRecords(row: MaterialListItem) {
   auditDrawerId.value = row.id;
   auditDrawerTitle.value = row.name;
   auditDrawerCover.value = row.url?.trim() || "";
+  auditDrawerUploadedTime.value = row.uploadedTime || "";
+  auditDrawerUploaderName.value = row.uploaderName || "";
+  auditDrawerDepartmentName.value = row.departmentName || "";
+  auditDrawerUploaderId.value = row.uploaderId;
   auditDrawerVisible.value = true;
 }
 
@@ -664,6 +672,10 @@ async function onEditName(row: MaterialListItem) {
       :material-id="auditDrawerId"
       :title="auditDrawerTitle"
       :cover-url="auditDrawerCover || undefined"
+      :uploaded-time="auditDrawerUploadedTime || undefined"
+      :uploader-name="auditDrawerUploaderName || undefined"
+      :department-name="auditDrawerDepartmentName || undefined"
+      :uploader-id="auditDrawerUploaderId"
     />
 
     <ElDialog

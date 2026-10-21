@@ -16,6 +16,7 @@ declare module 'vue' {
     AuditTimelineDrawer: typeof import('./src/components/audit/AuditTimelineDrawer.vue')['default']
     ElEmpty: typeof import('element-plus/es')['ElEmpty']
     ElIcon: typeof import('element-plus/es')['ElIcon']
+    ElImage: typeof import('element-plus/es')['ElImage']
     ElImageViewer: typeof import('element-plus/es')['ElImageViewer']
     ElTable: typeof import('element-plus/es')['ElTable']
     ElTableColumn: typeof import('element-plus/es')['ElTableColumn']

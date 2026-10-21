@@ -5,6 +5,7 @@ import AuditTimelineDrawer, {
 } from "@/components/audit/AuditTimelineDrawer.vue";
 import { resolveAuditActorTag } from "@/components/audit/resolveAuditActorTag";
 import {
+  ensureMaterialSubmitAudit,
   listMaterialAudits,
   type MaterialAuditRecord,
 } from "@/api/materials";
@@ -14,6 +15,11 @@ const props = defineProps<{
   materialId: string;
   title?: string;
   coverUrl?: string;
+  /** 列表行上传时间，供无 submit 时合成「发起申请」 */
+  uploadedTime?: string;
+  uploaderName?: string;
+  departmentName?: string;
+  uploaderId?: number;
 }>();
 const emit = defineEmits<{ "update:modelValue": [boolean] }>();
 const visible = computed({
@@ -24,6 +30,16 @@ const nodes = ref<AuditTimelineNode[]>([]);
 const loading = ref(false);
 
 function mapRow(a: MaterialAuditRecord): AuditTimelineNode {
+  if (a.action === "submit") {
+    return {
+      id: a.id,
+      variant: "apply",
+      tag: "发起申请",
+      operatorName: a.operatorName,
+      createdTime: a.createdTime,
+      departmentName: a.departmentName,
+    };
+  }
   const channel = a.action === "ai" ? "ai" : a.action === "risk" ? "risk" : null;
   return {
     id: a.id,
@@ -46,7 +62,13 @@ watch(
     if (!open || !materialId) return;
     loading.value = true;
     try {
-      nodes.value = ((await listMaterialAudits(materialId)).list ?? []).map(mapRow);
+      const list = ensureMaterialSubmitAudit((await listMaterialAudits(materialId)).list ?? [], {
+        uploadedTime: props.uploadedTime,
+        uploaderName: props.uploaderName,
+        departmentName: props.departmentName,
+        uploaderId: props.uploaderId,
+      });
+      nodes.value = list.map(mapRow);
     } finally {
       loading.value = false;
     }

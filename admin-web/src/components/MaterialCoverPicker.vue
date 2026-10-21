@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { ElImageViewer, ElMessage } from "element-plus";
+import { computed, ref } from "vue";
+import { ElMessage } from "element-plus";
 import type { MaterialListItem } from "@/api/materials";
 import MaterialPickerDialog from "@/views/live/components/MaterialPickerDialog.vue";
+import ImagePreview from "@/components/ImagePreview.vue";
+import type { ImagePreviewItem } from "@/components/ImagePreview.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -26,6 +28,9 @@ const emit = defineEmits<{
 
 const pickerVisible = ref(false);
 const previewVisible = ref(false);
+const previewItems = computed<ImagePreviewItem[]>(() =>
+  props.coverUrl ? [{ url: props.coverUrl, name: "封面" }] : [],
+);
 
 function openPicker() {
   pickerVisible.value = true;
@@ -149,12 +154,7 @@ function openPreview() {
       @confirm="onConfirm"
     />
 
-    <ElImageViewer
-      v-if="previewVisible && coverUrl"
-      :url-list="[coverUrl]"
-      teleported
-      @close="previewVisible = false"
-    />
+    <ImagePreview v-model="previewVisible" :items="previewItems" />
   </div>
 </template>
 

@@ -4,7 +4,6 @@ import { useRoute, useRouter } from "vue-router";
 import {
   ElButton,
   ElDatePicker,
-  ElImageViewer,
   ElInput,
   ElMessage,
   ElOption,
@@ -24,6 +23,7 @@ import { listEmployees, type EmployeeItem } from "@/api/activity";
 import type { MaterialListItem } from "@/api/materials";
 import { useMaterialsStore } from "@/stores/materials";
 import { handleUpload } from "@/utils/upload";
+import { TosObjectKeyPrefix } from "@/utils/tosUpload";
 import { downloadFiles } from "@/utils/downloadFile";
 import {
   formatUploadSize,
@@ -33,6 +33,8 @@ import { randomUuid } from "@/utils/uuid";
 import { getMaterialFileIcon } from "@/views/settings/materials/materialFileIcons";
 import { previewDocument } from "@/utils/documentPreview";
 import MaterialPickerDialog from "@/views/live/components/MaterialPickerDialog.vue";
+import ImagePreview from "@/components/ImagePreview.vue";
+import type { ImagePreviewItem } from "@/components/ImagePreview.vue";
 import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 import UiButton from "@/components/ui/UiButton.vue";
 
@@ -124,9 +126,17 @@ const route = useRoute();
 const router = useRouter();
 const store = useMaterialsStore();
 const editing = computed(() => !!route.params.id);
-const id = ref(String(route.params.id || randomUuid()));
+/** 编辑态为报备 id；新建态为空（主键由后端生成）。 */
+const id = ref(String(route.params.id || ""));
 const status = ref("");
 const bound = ref(0);
+/**
+ * 同一批材料共用此前缀，落在 `live-report/attachment/` 下，不再按报备建子目录。
+ * 新建：进入页时生成；编辑：用报备 id。
+ */
+const attachmentBatchPrefix = ref(editing.value ? id.value : randomUuid());
+/** 同批序号只增不补洞（删中间项也不回填）。 */
+const nextAttachmentSeq = ref(1);
 
 const crumbs = computed<AppBreadcrumbItem[]>(() => [
   { label: "直播", to: "/live" },
@@ -159,18 +169,47 @@ const originalCount = ref(0);
 const coverPicker = ref(false);
 const coverPreview = ref(false);
 const selectedCoverId = ref("");
+/** 封面预览走公用 ImagePreview（与素材中心一致） */
+const coverPreviewItems = computed<ImagePreviewItem[]>(() =>
+  form.coverUrl
+    ? [{ url: form.coverUrl, name: form.title.trim() || "报备封面" }]
+    : [],
+);
 
 function safeName(n: string) {
   return n.replace(/[^\w.\-一-龥]/g, "_");
 }
 
-function attachmentKey(name: string) {
-  return `live-report/${id.value}/attachment/${Date.now()}_${safeName(name)}`;
+function escapeRegExp(s: string) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** 从已有 objectKey 解析同批最大序号，供编辑页续号。 */
+function maxAttachmentSeqFromKeys(keys: string[], prefix: string): number {
+  const re = new RegExp(
+    `^${escapeRegExp(TosObjectKeyPrefix.LIVE_REPORT_ATTACHMENT)}${escapeRegExp(prefix)}_(\\d+)_`,
+  );
+  let max = 0;
+  for (const key of keys) {
+    const m = key.match(re);
+    if (m) max = Math.max(max, Number(m[1]));
+  }
+  return max;
+}
+
+/**
+ * `{前缀}_{NN}_{真实文件名}`，目录统一 `live-report/attachment/`。
+ * 取号即 +1，上传失败也不回退，避免重名。
+ */
+function takeAttachmentObjectKey(fileName: string) {
+  const seq = String(nextAttachmentSeq.value).padStart(2, "0");
+  nextAttachmentSeq.value += 1;
+  return `${TosObjectKeyPrefix.LIVE_REPORT_ATTACHMENT}${attachmentBatchPrefix.value}_${seq}_${safeName(fileName)}`;
 }
 
 async function upload(file: File, onProgress?: (percent: number) => void) {
   const cfg = await store.ensureTosConfig();
-  const objectKey = attachmentKey(file.name);
+  const objectKey = takeAttachmentObjectKey(file.name);
   const res = await handleUpload({
     ...cfg,
     name: objectKey,
@@ -386,7 +425,6 @@ async function save() {
       await updateLiveReport(id.value, { planTimes });
     } else {
       const payload: SaveReportPayload = {
-        id: id.value,
         title: form.title,
         content: form.content,
         planTimes,
@@ -395,7 +433,7 @@ async function save() {
         coverFileSize: form.coverFileSize,
         coverMimeType: form.coverMimeType,
         coverMaterialId: form.coverMaterialId,
-        hostId: form.hostId,
+        hostId: Number(form.hostId),
         attachments: form.attachments,
       };
       if (editing.value) await updateLiveReport(id.value, payload);
@@ -417,6 +455,7 @@ async function init() {
       const d = await getLiveReport(id.value);
       status.value = d.status;
       bound.value = d.boundLiveCount;
+      attachmentBatchPrefix.value = d.id;
       Object.assign(form, {
         title: d.title,
         content: d.content,
@@ -429,6 +468,11 @@ async function init() {
         hostId: d.host.id,
         attachments: d.attachments.map((x) => ({ ...x })),
       });
+      nextAttachmentSeq.value =
+        maxAttachmentSeqFromKeys(
+          form.attachments.map((x) => x.objectKey),
+          attachmentBatchPrefix.value,
+        ) + 1;
       selectedCoverId.value = d.coverMaterialId || "";
       employees.value = [{ id: d.host.id, userName: d.host.userName, avatar: d.host.avatar }];
       originalCount.value = d.status === "passed" ? d.planTimes.length : 0;
@@ -579,6 +623,15 @@ onMounted(init);
               />
             </label>
             <small>支持 doc、docx、pdf，单份不超过 10MB，最多 20 份</small>
+            <div v-for="(f, i) in form.attachments" :key="f.objectKey" class="file">
+              <img :src="getMaterialFileIcon(f.name)" class="file-icon" alt="" />
+              <b>{{ f.name }}</b>
+              <span>{{ (f.fileSize / 1024 / 1024).toFixed(2) }}MB</span>
+              <button type="button" @click="previewDocument()">预览</button>
+              <button type="button" @click="downloadAttachment(f)">下载</button>
+              <button type="button" @click="form.attachments.splice(i, 1)">删除</button>
+            </div>
+            <!-- 上传中/失败占位固定在列表底部，成功后 append 到 attachments 仍在底部 -->
             <div v-for="p in pendingUploads" :key="p.uid" class="file file-pending">
               <img :src="getMaterialFileIcon(p.name)" class="file-icon" alt="" />
               <b>{{ p.name }}</b>
@@ -606,14 +659,6 @@ onMounted(init);
               <span v-else />
               <span />
             </div>
-            <div v-for="(f, i) in form.attachments" :key="f.objectKey" class="file">
-              <img :src="getMaterialFileIcon(f.name)" class="file-icon" alt="" />
-              <b>{{ f.name }}</b>
-              <span>{{ (f.fileSize / 1024 / 1024).toFixed(2) }}MB</span>
-              <button type="button" @click="previewDocument()">预览</button>
-              <button type="button" @click="downloadAttachment(f)">下载</button>
-              <button type="button" @click="form.attachments.splice(i, 1)">删除</button>
-            </div>
           </div>
         </div>
         <MaterialPickerDialog
@@ -626,12 +671,7 @@ onMounted(init);
           default-type="image"
           @confirm="onCoverConfirm"
         />
-        <ElImageViewer
-          v-if="coverPreview && form.coverUrl"
-          :url-list="[form.coverUrl]"
-          teleported
-          @close="coverPreview = false"
-        />
+        <ImagePreview v-model="coverPreview" :items="coverPreviewItems" />
       </template>
     </div>
 

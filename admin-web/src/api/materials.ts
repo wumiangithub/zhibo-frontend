@@ -257,11 +257,12 @@ export function updateMaterialRiskAudit(
   return put<MaterialListItem>(`/materials/risk-audit/${id}`, { status });
 }
 
-/** 素材审核流水：`action` 为 `ai` / `risk` */
+/** 素材审核流水：`action` 为 `submit` / `ai` / `risk` */
 export interface MaterialAuditRecord {
   id: string;
-  action: "ai" | "risk" | string;
-  result: "passed" | "rejected";
+  action: "submit" | "ai" | "risk" | string;
+  /** submit 无 result */
+  result?: "passed" | "rejected";
   operatorId: number;
   operatorName: string;
   departmentName?: string;
@@ -271,6 +272,34 @@ export interface MaterialAuditRecord {
 /** GET /api/v1/materials/audits/{id} */
 export function listMaterialAudits(id: string) {
   return get<{ list: MaterialAuditRecord[] }>(`/materials/audits/${encodeURIComponent(id)}`);
+}
+
+/**
+ * 接口未带 submit 时，展示层按上传信息补一条「发起申请」（倒序末尾）。
+ * 与直播管理 `ensureActivitySubmitAudit` 同口径；后端 listAudits 也会合成。
+ */
+export function ensureMaterialSubmitAudit(
+  rows: MaterialAuditRecord[],
+  opts?: {
+    uploadedTime?: string;
+    uploaderName?: string;
+    departmentName?: string;
+    uploaderId?: number;
+  },
+): MaterialAuditRecord[] {
+  const hasSubmit = rows.some((r) => r.action === "submit");
+  if (hasSubmit) return rows;
+  return [
+    ...rows,
+    {
+      id: "synthetic-submit",
+      action: "submit",
+      operatorId: opts?.uploaderId ?? 0,
+      operatorName: opts?.uploaderName?.trim() || "系统",
+      departmentName: opts?.departmentName,
+      createdTime: opts?.uploadedTime ?? "",
+    },
+  ];
 }
 
 /** DELETE /api/v1/materials/delete/{id} 软删 */

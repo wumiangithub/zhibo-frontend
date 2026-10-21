@@ -10,6 +10,7 @@ export const TosObjectKeyPrefix = {
   MATERIAL_VIDEO: "material/video/",
   MATERIAL_DOCUMENT: "material/document/",
   MATERIAL_ARTICLE: "material/article/",
+  /** 报备材料扁平目录；对象名见直播报备契约 `{前缀}_{NN}_{真实文件名}` */
   LIVE_REPORT_ATTACHMENT: "live-report/attachment/",
   ACTIVITY_MEMBER_AVATAR: "activity/member-avatar/",
   ACTIVITY_COVER: "activity/cover/",

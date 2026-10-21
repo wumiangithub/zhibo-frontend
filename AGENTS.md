@@ -9,58 +9,29 @@
 
 总控可以改你的代码。不要改后端，也不要改 `zhibo-wxmini`，不要打开父目录 `zhibo` 当工作区。
 
-1. [docs/前端协作.md](docs/前端协作.md)
-2. [docs/进度.md](docs/进度.md)
+## 必读文档（细则只在下面两份里维护，本文件不重复抄）
+
+1. **[docs/前端协作.md](docs/前端协作.md)** — 协作流程、问清再干、端口/代理、分页/依赖等已定约束、可改范围  
+2. **[docs/设计规范.md](docs/设计规范.md)** — 主题 token、**公用组件表**（图片预览、审核记录侧栏等）、模块分区  
+3. [docs/进度.md](docs/进度.md) — 当前进度与阻塞项  
 
 缺接口写在 `docs/进度.md` 阻塞项。提交前缀 `[frontend]`。
 
-## 主键 / 外键类型（D56，强制）
+改 UI 共用能力或约束前：先查设计规范「公用组件」；协作/流程问题先查前端协作。**禁止**在本文件再写一套与上述文档重复的细则。
 
-类型跟库走，**禁止**把数字 id 改成十进制 string：
+## 契约红线（shared 决策，本仓强制）
 
-- 库列 `INT` / `BIGINT`（含 `rs_mainkey_id`、员工/部门/角色 id、`hostIds` / `ownerIds` / `hostId`、审核人、上传人）→ TypeScript `number`，请求/响应 JSON 也是数字。
-- 库列 UUID / `VARCHAR`（活动 / 课程 / 素材 / 报备 id）→ `string`。
-- 下拉、Map、表单字段的 key / value 与接口类型一致，不要 `Map<string, …>` 去装员工 id。
-- 例外：确知可能超过 JS `Number.MAX_SAFE_INTEGER` 的外部大整数才用 string，并在该字段说明原因（当前仅订单中心 `spuId`）。
-- 观看端进出场 `userId` 是第三方观众标识，不是员工 `rs_mainkey_id`，保持 string。
+细则以 `../zhibo-shared/docs/API约定.md` / `决策.md` 为准，此处只列提醒：
 
-细则见 `../zhibo-shared/docs/API约定.md`「通则 · 主键 / 外键类型」。
-
-## 路径前缀（D63，强制）
-
-- 本站 axios `baseURL` 为 **`/api/v1`**；业务封装写相对路径（如 `/live-reports/list` → 实际 `GET /api/v1/live-reports/list`）。
-- **只改 baseURL**。禁止 `import … from "@/api/v1/..."`，禁止建 `src/api/v1/`；模块仍 `@/api/auth` 等。
-- 细则见 `../zhibo-shared/docs/API约定.md`「通则 · 路径前缀」。
-
-## 工作区安全（D64，红线）
-
-- **禁止**用 `git checkout HEAD --` / `git restore` / `git reset --hard` / `git clean -fd` 覆盖或删除未提交 WIP（含「修乱码」「修错误替换」）。
-- 危险操作前先 commit（用户授权）或 `git stash push -u`。
-- 细则：`../zhibo-shared/docs/工作区与Git安全.md`。
-
-## 路径命名（D62，强制）
-
-- 封装管理端 API 时路径必须带动作段（如 `/activities/create`、`/live-reports/list`），**禁止**靠 HTTP 方法区分同名 URL。
-- 单业务 id 放末尾（如 `/activities/audits/${id}`、`/activities/members/list/${id}`），禁止 `/activities/${id}/audits`；多 id 用 params/body。
-- 素材/课程/org/watch 等封装已按 D62 改完；对齐契约与决策。细则见 `../zhibo-shared/docs/API约定.md`「通则 · 路径命名」。
-
-## 图片 / 文件上传（D60，强制）
-
-- **禁止**调用 `POST /api/v1/uploads/image`（微吼代理）及前端 `uploadImage`；该接口已废弃。
-- 一律：`GET /api/v1/uploads/tos-sts` → 浏览器直传 TOS → CDN/可访问 URL；管理端用 `admin-web/src/utils/tosUpload.ts`（或素材中心既有路径）。
-- 对象 key **必须**用 `../zhibo-shared/docs/API约定.md` tos-sts「对象 key 目录」表中的前缀；新功能先登记前缀再编码，禁止自创或塞进 `upload/`。
-
-## 依赖版本（D36，强制）
-
-- `admin-web` / `live-web` 的 `package.json`：**禁止** `^`、`~`、`*`、`latest`，版本写到补丁号。
-- 必须提交 `package-lock.json`；装依赖优先 `npm ci`。
-- 已有 `.npmrc`：`save-exact=true`。新增包后检查没有浮动范围。
-- 升级第三方库：改 `package.json` + 重装更新 lock，写进进度说明原因；不要默默升小版本。
+| 编号 | 要点 |
+|------|------|
+| D56 | 库 `INT`/`BIGINT` id → TS `number`；UUID → `string`；勿把员工 id 当 string |
+| D60 | 上传只走 TOS STS；禁微吼 `uploadImage`；objectKey 用契约目录表前缀 |
+| D62 | API 路径带动作段；单业务 id 放末尾 |
+| D63 | axios `baseURL=/api/v1`；禁 `@/api/v1/...` 模块路径 |
+| D64 | 禁 `git checkout/restore/reset --hard/clean -fd` 覆盖未提交 WIP |
+| D36 | `package.json` 无 `^`/`~`；交 lock；优先 `npm ci` |
 
 ## 代码评审
 
 另有一个**技术总监** agent 只做 code review，结论写在 `../zhibo-shared/docs/代码评审.md`，他不改你的代码。有派给「前端」的条目就修，修完把那条状态改成 `已修` 并留一句怎么改的；不认同可以填 `不修` + 原因，别默默跳过。
-
-## 问清再干（用户约定）
-
-用户提的所有问题/需求：**有不清楚的先问用户，问清楚再动手；没有不清楚的就直接干。** 细则见 [docs/前端协作.md](docs/前端协作.md)。
