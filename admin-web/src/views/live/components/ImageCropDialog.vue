@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { ElDialog, ElButton } from "element-plus";
+import { ElDialog, ElButton, ElMessage } from "element-plus";
 import Cropper from "cropperjs";
 import "cropperjs/dist/cropper.css";
 
@@ -36,7 +36,10 @@ const CROP_ASPECT_OPTIONS: CropAspect[] = [
 const props = withDefaults(
   defineProps<{
     visible: boolean;
-    /** 本地预览 ObjectURL */
+    /**
+     * 待裁剪图：本地 `blob:` / 选图 ObjectURL，或 TOS CDN 远程 URL。
+     * 远程图会先拉成 blob 再裁（开发态走 `/cdn-media` 代理），避免 `crossorigin` + 桶未配 CORS 时裂图。
+     */
     src: string;
     /** 固定比例，或可选模式下的初始比例 */
     aspect?: CropAspect;
@@ -57,7 +60,12 @@ const emit = defineEmits<{
 const imgRef = ref<HTMLImageElement | null>(null);
 const cropSize = ref({ w: 0, h: 0 });
 const selectedAspect = ref<CropAspect>(props.aspect);
+/** 实际喂给 cropper 的 src（远程已转成本地 blob） */
+const displaySrc = ref("");
+const loadingSrc = ref(false);
+const cropperReady = ref(false);
 let cropper: Cropper | null = null;
+let blobUrlToRevoke = "";
 
 const open = computed({
   get: () => props.visible,
@@ -67,6 +75,47 @@ const open = computed({
 const displayAspect = computed(() =>
   props.aspectSelectable ? selectedAspect.value : props.aspect,
 );
+
+/**
+ * 开发态把 TOS CDN / 原生域名换成同源 `/cdn-media`（与 downloadFile / fileInfo 一致）。
+ * 用 includes + replace，避免 startsWith 因尾斜杠不一致没命中。
+ */
+function toFetchableMediaUrl(url: string): string {
+  if (import.meta.env.VITE_APP_ENV !== "dev") return url;
+  for (const key of ["VITE_APP_TOS_CDN_URL", "VITE_APP_TOS_NATIVE_URL"] as const) {
+    const base = String(import.meta.env[key] || "").replace(/\/$/, "");
+    if (base && url.includes(base)) return url.replace(base, "/cdn-media");
+  }
+  return url;
+}
+
+function revokePreparedBlob() {
+  if (blobUrlToRevoke) {
+    URL.revokeObjectURL(blobUrlToRevoke);
+    blobUrlToRevoke = "";
+  }
+}
+
+/**
+ * 远程图不能直接 `crossorigin=anonymous` 挂 img（桶 CORS 未配会裂图且 canvas 脏）。
+ * 先 fetch→blob URL，裁剪与导出都走同源 blob。
+ */
+async function prepareDisplaySrc(raw: string): Promise<string> {
+  revokePreparedBlob();
+  if (!raw) return "";
+  if (!/^https?:\/\//i.test(raw)) return raw;
+
+  loadingSrc.value = true;
+  try {
+    const res = await fetch(toFetchableMediaUrl(raw));
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    blobUrlToRevoke = URL.createObjectURL(blob);
+    return blobUrlToRevoke;
+  } finally {
+    loadingSrc.value = false;
+  }
+}
 
 function resolveAspectRatio(aspect: CropAspect, img: HTMLImageElement | null): number {
   if (aspect === "原图比例") {
@@ -81,6 +130,7 @@ function resolveAspectRatio(aspect: CropAspect, img: HTMLImageElement | null): n
 function destroyCropper() {
   cropper?.destroy();
   cropper = null;
+  cropperReady.value = false;
 }
 
 function syncSize() {
@@ -104,47 +154,66 @@ function onSelectAspect(aspect: CropAspect) {
   applyAspectRatio(aspect);
 }
 
+function startCropper() {
+  if (!imgRef.value || cropper || !displaySrc.value) return;
+  cropper = new Cropper(imgRef.value, {
+    aspectRatio: resolveAspectRatio(displayAspect.value, imgRef.value),
+    viewMode: 1,
+    dragMode: "move",
+    autoCropArea: 1,
+    responsive: true,
+    background: false,
+    guides: true,
+    center: true,
+    highlight: false,
+    cropBoxMovable: true,
+    cropBoxResizable: true,
+    toggleDragModeOnDblclick: false,
+    ready() {
+      cropperReady.value = true;
+      syncSize();
+    },
+    crop() {
+      syncSize();
+    },
+  });
+}
+
 async function onOpened() {
   destroyCropper();
   selectedAspect.value = props.aspect;
+  try {
+    displaySrc.value = await prepareDisplaySrc(props.src);
+  } catch (e) {
+    displaySrc.value = "";
+    ElMessage.error(e instanceof Error ? e.message : "图片加载失败，无法裁剪");
+    open.value = false;
+    return;
+  }
   await nextTick();
   const el = imgRef.value;
-  if (!el || !props.src) return;
-
-  const start = () => {
-    if (!imgRef.value || cropper) return;
-    cropper = new Cropper(imgRef.value, {
-      aspectRatio: resolveAspectRatio(displayAspect.value, imgRef.value),
-      viewMode: 1,
-      dragMode: "move",
-      autoCropArea: 1,
-      responsive: true,
-      background: false,
-      guides: true,
-      center: true,
-      highlight: false,
-      cropBoxMovable: true,
-      cropBoxResizable: true,
-      toggleDragModeOnDblclick: false,
-      ready() {
-        syncSize();
-      },
-      crop() {
-        syncSize();
-      },
-    });
-  };
+  if (!el || !displaySrc.value) return;
 
   if (el.complete && el.naturalWidth > 0) {
-    start();
+    startCropper();
   } else {
-    el.addEventListener("load", start, { once: true });
+    el.addEventListener("load", () => startCropper(), { once: true });
+    el.addEventListener(
+      "error",
+      () => {
+        ElMessage.error("图片加载失败，无法裁剪");
+        open.value = false;
+      },
+      { once: true },
+    );
   }
 }
 
 function onClosed() {
   destroyCropper();
   cropSize.value = { w: 0, h: 0 };
+  displaySrc.value = "";
+  revokePreparedBlob();
 }
 
 watch(
@@ -155,13 +224,14 @@ watch(
   },
 );
 
-onBeforeUnmount(destroyCropper);
+onBeforeUnmount(() => {
+  destroyCropper();
+  revokePreparedBlob();
+});
 
 function onCancel() {
   open.value = false;
 }
-
-const remoteSrc = computed(() => /^https?:\/\//i.test(props.src));
 
 function onConfirm() {
   if (!cropper) return;
@@ -222,11 +292,14 @@ function onConfirm() {
     >
       当前比例：{{ aspect }}
     </p>
-    <div class="crop-stage">
+    <div
+      v-loading="loadingSrc"
+      class="crop-stage"
+    >
       <img
+        v-if="displaySrc"
         ref="imgRef"
-        :src="src"
-        :crossorigin="remoteSrc ? 'anonymous' : undefined"
+        :src="displaySrc"
         alt="待裁剪图片"
         class="crop-stage__img"
       >
@@ -239,6 +312,7 @@ function onConfirm() {
       <ElButton @click="onCancel">取消</ElButton>
       <ElButton
         type="primary"
+        :disabled="loadingSrc || !cropperReady"
         @click="onConfirm"
       >确认</ElButton>
     </template>

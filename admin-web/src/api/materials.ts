@@ -214,7 +214,7 @@ export function moveMaterial(id: string, groupId: string) {
   return put<MaterialListItem>(`/materials/group/${id}`, { groupId });
 }
 
-/** PUT /api/v1/materials/image/{id} 裁剪替换。待审核 400。成功后两审回到 pending。 */
+/** PUT /api/v1/materials/image/{id} 替换原图内容。待审核 400。列表「裁剪」走 create 新增，不调本接口。 */
 export function replaceMaterialImage(
   id: string,
   payload: { url: string; objectKey: string; fileSize?: number; meta?: string },

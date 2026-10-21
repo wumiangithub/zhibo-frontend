@@ -8,12 +8,15 @@ import {
   ElDropdownItem,
   ElDropdownMenu,
   ElInput,
+  ElMessage,
+  ElMessageBox,
   ElOption,
   ElPagination,
   ElSelect,
   ElTooltip,
 } from "element-plus";
 import {
+  deleteLiveReport,
   listLiveReports,
   REPORT_STATUS_LABEL,
   type LiveReport,
@@ -144,9 +147,30 @@ function openAuditRecords(row: LiveReport) {
   auditDrawerVisible.value = true;
 }
 
+async function onDelete(row: LiveReport) {
+  try {
+    await ElMessageBox.confirm("删除后不可恢复", "删除报备", {
+      type: "warning",
+      confirmButtonText: "删除",
+      cancelButtonText: "取消",
+    });
+  } catch {
+    return;
+  }
+  try {
+    await deleteLiveReport(row.id);
+    ElMessage.success("已删除");
+    void fetchList();
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "删除失败");
+  }
+}
+
 function onMoreCommand(command: string, row: LiveReport) {
   if (command === "audit" && canAudit(row)) {
     void router.push(`/live-reports/audit/${row.id}`);
+  } else if (command === "delete") {
+    void onDelete(row);
   }
 }
 
@@ -379,6 +403,12 @@ onMounted(fetchList);
                         :disabled="!canAudit(item)"
                       >
                         去审核
+                      </ElDropdownItem>
+                      <ElDropdownItem
+                        command="delete"
+                        divided
+                      >
+                        删除
                       </ElDropdownItem>
                     </ElDropdownMenu>
                   </template>

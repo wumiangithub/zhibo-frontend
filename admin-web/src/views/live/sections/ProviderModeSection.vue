@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { ElRadioGroup, ElRadioButton, ElIcon } from "element-plus";
+import {
+  ElRadioGroup,
+  ElRadioButton,
+  ElIcon,
+  ElSwitch,
+  ElDialog,
+} from "element-plus";
 import { Check } from "@element-plus/icons-vue";
 import { useMarkDirty } from "@/composables/useLeaveConfirm";
 import FormRow from "../components/FormRow.vue";
@@ -26,6 +32,8 @@ const props = defineProps<{
 }>();
 
 const markDirty = useMarkDirty();
+/** 超低延迟说明弹窗 */
+const latencyTipVisible = ref(false);
 
 /** 暂未开放：仅展示，不可点选（编辑历史数据靠 readonly 只读展示） */
 const DISABLED_PROVIDERS = new Set<LiveProvider>(["aliyun", "tencent"]);
@@ -271,7 +279,68 @@ watch(
           </label>
         </div>
       </FormRow>
+
+      <!-- 定稿：新建/编辑均展示；默认开；禁切换（创建后微吼也不支持改） -->
+      <FormRow
+        label="超低延迟:"
+        info="默认开启，创建后不可修改。"
+      >
+        <div class="latency-row">
+          <ElSwitch
+            :model-value="form.ultraLowLatency"
+            disabled
+          />
+          <span class="latency-row__hint">
+            开启后，直播间可实现超低延迟体验，但同时会增加流量消耗
+          </span>
+          <a
+            class="latency-tip-link"
+            href="javascript:;"
+            @click.prevent="latencyTipVisible = true"
+          >查看说明</a>
+        </div>
+      </FormRow>
     </div>
+
+    <ElDialog
+      v-model="latencyTipVisible"
+      title="超低延迟说明"
+      width="520px"
+      align-center
+      destroy-on-close
+    >
+      <p class="latency-tip__desc">
+        直播间开启超低延迟后，直播间延迟≈1s，流量消耗将按 3 倍计算，具体对比如下：
+      </p>
+      <table class="latency-tip__table">
+        <thead>
+          <tr>
+            <th />
+            <th>低延迟直播</th>
+            <th>超低延迟直播</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>直播延迟</td>
+            <td>5~8s</td>
+            <td class="is-hl">≈1s</td>
+          </tr>
+          <tr>
+            <td>流量消耗</td>
+            <td>22.5GB</td>
+            <td class="is-hl">60.0GB</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3">
+              *流量消耗按照：码率500kbps，直播间100人，观看1h来估算
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </ElDialog>
   </div>
 </template>
 
@@ -477,5 +546,57 @@ watch(
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--color-text-placeholder);
+}
+.latency-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.latency-row__hint {
+  font-size: 12px;
+  color: #999;
+}
+.latency-tip-link {
+  font-size: 12px;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.latency-tip-link:hover {
+  opacity: 0.85;
+}
+.latency-tip__desc {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #666;
+}
+.latency-tip__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: #333;
+  text-align: center;
+}
+.latency-tip__table th,
+.latency-tip__table td {
+  border: 1px solid #e4e7ed;
+  padding: 12px 10px;
+}
+.latency-tip__table th {
+  font-weight: 500;
+  background: #fafafa;
+}
+.latency-tip__table .is-hl {
+  color: #f5222d;
+}
+.latency-tip__table tfoot td {
+  text-align: left;
+  font-size: 12px;
+  color: #999;
+  background: #fff;
+  padding: 10px 12px;
 }
 </style>

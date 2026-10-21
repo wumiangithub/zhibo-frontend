@@ -1,4 +1,4 @@
-import { get, post, put } from "./http";
+import { del, get, post, put } from "./http";
 
 export type ReportStatus = "pending" | "passed" | "rejected";
 
@@ -102,4 +102,9 @@ export function auditLiveReport(id: string, result: "passed" | "rejected", reaso
 
 export function listLiveReportAudits(id: string) {
   return get<{ list: ReportAudit[] }>(`/live-reports/audits/${id}`);
+}
+
+/** 软删报备（写 deleted_time / 删除人）；已绑定直播仍可删，不级联删活动 */
+export function deleteLiveReport(id: string) {
+  return del<{ id: string }>(`/live-reports/delete/${id}`);
 }

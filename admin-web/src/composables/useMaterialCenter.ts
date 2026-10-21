@@ -3,6 +3,7 @@ import { ElMessage } from "element-plus";
 import {
   createMaterialGroup,
   createMaterials,
+  deleteMaterial,
   deleteMaterialGroup,
   listMaterialGroups,
   listMaterials,
@@ -276,6 +277,17 @@ export function useMaterialCenter(options: UseMaterialCenterOptions = {}) {
     }
   }
 
+  /** 软删（写 deleted_time）；不删 TOS。任意审核状态均可。 */
+  async function removeMaterialItem(item: MaterialListItem) {
+    try {
+      await deleteMaterial(item.id);
+      await refreshAll();
+      ElMessage.success("已删除");
+    } catch (err: unknown) {
+      ElMessage.error(errMsg(err, "删除失败"));
+    }
+  }
+
   return {
     materialType,
     groupKeyword,
@@ -303,5 +315,6 @@ export function useMaterialCenter(options: UseMaterialCenterOptions = {}) {
     renameMaterialItem,
     toggleAiAudit,
     toggleRiskAudit,
+    removeMaterialItem,
   };
 }

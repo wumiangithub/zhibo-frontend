@@ -2,12 +2,13 @@
 import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
+  deleteLiveReport,
   getLiveReport,
   REPORT_STATUS_LABEL,
   type LiveReport,
   type ReportAttachment,
 } from "@/api/liveReport";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { getMaterialFileIcon } from "@/views/settings/materials/materialFileIcons";
 import { previewDocument } from "@/utils/documentPreview";
 import { downloadFiles } from "@/utils/downloadFile";
@@ -44,6 +45,26 @@ async function downloadAttachment(f: ReportAttachment) {
   if (!res.success) ElMessage.error("下载失败");
 }
 
+async function onDelete() {
+  if (!data.value) return;
+  try {
+    await ElMessageBox.confirm("删除后不可恢复", "删除报备", {
+      type: "warning",
+      confirmButtonText: "删除",
+      cancelButtonText: "取消",
+    });
+  } catch {
+    return;
+  }
+  try {
+    await deleteLiveReport(data.value.id);
+    ElMessage.success("已删除");
+    void router.push("/live-reports");
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "删除失败");
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -71,6 +92,7 @@ onMounted(load);
               编辑
             </UiButton>
             <UiButton @click="audits = true">审核记录</UiButton>
+            <UiButton @click="onDelete">删除</UiButton>
           </div>
         </header>
         <dl>

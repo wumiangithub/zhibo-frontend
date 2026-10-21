@@ -45,7 +45,6 @@ import {
   MATERIAL_AUDIT_LABEL,
   materialAvailabilityLabel,
   moveMaterial,
-  replaceMaterialImage,
   type MaterialAuditStatus,
   type MaterialCenterType,
   type MaterialListItem,
@@ -89,6 +88,7 @@ const {
   renameMaterialItem,
   toggleAiAudit,
   toggleRiskAudit,
+  removeMaterialItem,
 } = useMaterialCenter({ initialType: initialCenterType() });
 
 const primaryLabel = computed(() =>
@@ -241,7 +241,29 @@ function onMoreCommand(cmd: string, row: MaterialListItem) {
   }
   if (cmd === "risk") {
     void toggleRiskAudit(row);
+    return;
   }
+  if (cmd === "delete") {
+    void confirmDelete(row);
+  }
+}
+
+async function confirmDelete(row: MaterialListItem) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除「${row.name || "未命名"}」？删除后列表不再显示（云端文件保留）。`,
+      "删除素材",
+      {
+        type: "warning",
+        confirmButtonText: "删除",
+        cancelButtonText: "取消",
+        confirmButtonClass: "el-button--danger",
+      },
+    );
+  } catch {
+    return;
+  }
+  await removeMaterialItem(row);
 }
 
 function openMove(row: MaterialListItem) {
@@ -272,10 +294,6 @@ async function confirmMove() {
 }
 
 function openCrop(row: MaterialListItem) {
-  if (isMaterialAuditPending(row)) {
-    ElMessage.warning("审核中不可编辑");
-    return;
-  }
   if (!row.url) {
     ElMessage.warning("暂无图片地址");
     return;
@@ -285,30 +303,42 @@ function openCrop(row: MaterialListItem) {
   cropVisible.value = true;
 }
 
+/** 列表裁剪：上传 TOS 后登记为**新**图片素材（同分组），不替换原图；任意审核状态均可。 */
 async function onCropConfirm(file: File) {
   const row = cropRow.value;
   if (!row || cropSaving.value) return;
+  const groupId = row.groupId;
+  if (!groupId) {
+    ElMessage.warning("原图缺少分组，无法登记裁剪结果");
+    return;
+  }
   cropSaving.value = true;
   try {
+    const base = (row.name || "image").replace(/\.[^.]+$/, "") || "image";
+    const named = new File([file], `${base}_裁剪.jpg`, { type: "image/jpeg" });
     const config = await useMaterialsStore().ensureTosConfig();
-    const objectKey = buildMaterialObjectKey("image", file.name);
+    const objectKey = buildMaterialObjectKey("image", named.name);
     const result = await handleUpload({
       ...config,
       name: objectKey,
-      file,
-      fileSize: file.size,
+      file: named,
+      fileSize: named.size,
     });
     if (!result || result.cancelled) throw new Error("裁剪上传已取消");
     const url = resolveMaterialAccessUrl(
       typeof result.Location === "string" ? result.Location : undefined,
       objectKey,
     );
-    await replaceMaterialImage(row.id, {
-      url,
-      objectKey,
-      fileSize: file.size,
-    });
-    ElMessage.success("已裁剪，重新进入审核");
+    await registerAfterUpload(groupId, [
+      {
+        name: named.name,
+        url,
+        objectKey,
+        fileSize: named.size,
+        mimeType: "image/jpeg",
+      },
+    ]);
+    ElMessage.success("已新增裁剪图片");
     await refreshAll();
   } catch (err: unknown) {
     ElMessage.error(err instanceof Error ? err.message : "裁剪失败");
@@ -590,7 +620,6 @@ async function onEditName(row: MaterialListItem) {
                         <ElDropdownItem
                           v-if="materialType === 'image'"
                           command="crop"
-                          :disabled="isMaterialAuditPending(row as MaterialListItem)"
                         >
                           裁剪
                         </ElDropdownItem>
@@ -622,6 +651,13 @@ async function onEditName(row: MaterialListItem) {
                               ? "风控合规驳回"
                               : "风控合规通过"
                           }}
+                        </ElDropdownItem>
+                        <ElDropdownItem
+                          command="delete"
+                          divided
+                          type="danger"
+                        >
+                          删除
                         </ElDropdownItem>
                       </ElDropdownMenu>
                     </template>
