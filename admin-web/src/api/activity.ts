@@ -204,8 +204,8 @@ export interface CreateActivityPayload {
   title: string;
   startTime: string;
   type: number;
-  /** 录播选「直播回放」：微吼回放列表 id */
-  recordId?: string;
+  /** 录播选「直播回放」：微吼回放列表 id（JSON number） */
+  recordId?: number;
   /** 录播选「素材视频」：本站视频素材 UUID（库 record_material_id；与详情回显同名） */
   recordMaterialId?: string;
   /** type=4：是否定时 → 微吼 is_timing；默认 true；省略按 true */
@@ -355,7 +355,8 @@ export function updateActivitySales(id: ActivityId, payload: UpdateSalesPayload)
 }
 
 export interface ActivityRecordItem {
-  id: string;
+  /** 微吼 create-demand 的 record_id（JSON number） */
+  id: number;
   title: string;
   duration?: string;
   createdTime?: string;

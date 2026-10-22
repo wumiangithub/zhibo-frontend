@@ -56,7 +56,7 @@ const recordSourceLabel = computed(() => {
 });
 
 function clearRecord() {
-  props.form.recordId = "";
+  props.form.recordId = null;
   props.form.materialId = "";
   props.form.recordLabel = "";
   props.form.recordSource = "";
@@ -64,11 +64,19 @@ function clearRecord() {
 
 const recordDisplayId = computed(() => {
   if (props.form.recordSource === "video") return props.form.materialId;
-  if (props.form.recordSource === "live") return props.form.recordId;
+  if (props.form.recordSource === "live" && props.form.recordId != null) {
+    return String(props.form.recordId);
+  }
   return "";
 });
 
-const hasRecordSelection = computed(() => Boolean(recordDisplayId.value.trim()));
+const hasRecordSelection = computed(() => {
+  if (props.form.recordSource === "video") return Boolean(props.form.materialId.trim());
+  if (props.form.recordSource === "live") {
+    return props.form.recordId != null && props.form.recordId > 0;
+  }
+  return false;
+});
 
 function onClearRecord() {
   clearRecord();
@@ -77,14 +85,14 @@ function onClearRecord() {
 
 function onPickVideo(item: MaterialListItem) {
   props.form.materialId = item.id.trim();
-  props.form.recordId = "";
+  props.form.recordId = null;
   props.form.recordLabel = item.name;
   props.form.recordSource = "video";
   markDirty();
 }
 
 function onPickLivePlayback(payload: { live: VhallLiveItem; playback: VhallPlaybackItem }) {
-  props.form.recordId = payload.playback.id.trim();
+  props.form.recordId = payload.playback.id;
   props.form.materialId = "";
   props.form.recordLabel = `${payload.live.title} · ${payload.playback.title}`;
   props.form.recordSource = "live";
@@ -129,7 +137,7 @@ watch(
         || props.form.recordLabel
         || props.form.recordSource
       ) {
-        props.form.recordId = "";
+        props.form.recordId = null;
         props.form.materialId = "";
         props.form.recordLabel = "";
         props.form.recordSource = "";

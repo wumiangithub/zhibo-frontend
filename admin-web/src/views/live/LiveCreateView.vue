@@ -52,8 +52,8 @@ function buildPayload(): CreateActivityPayload {
     payload.isTiming = form.isTiming;
     if (form.recordSource === "video" && form.materialId.trim()) {
       payload.recordMaterialId = form.materialId.trim();
-    } else if (form.recordSource === "live" && form.recordId.trim()) {
-      payload.recordId = form.recordId.trim();
+    } else if (form.recordSource === "live" && form.recordId != null && form.recordId > 0) {
+      payload.recordId = form.recordId;
     }
   }
   if (form.detailCover) payload.coverUrl = form.detailCover;

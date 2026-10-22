@@ -41,8 +41,8 @@ export interface LiveFormState {
   startTime: string;
   endDate: string;
   endTime: string;
-  /** type=4 + 选「直播回放」：微吼 record_id */
-  recordId: string;
+  /** type=4 + 选「直播回放」：微吼 record_id（JSON number）；未选为 null */
+  recordId: number | null;
   /** type=4 + 选「素材视频」：本站素材 UUID → 后端 create-by-url */
   materialId: string;
   /** 选中资源展示名 */
@@ -106,7 +106,7 @@ export function useLiveForm() {
     startTime: "",
     endDate: "",
     endTime: "",
-    recordId: "",
+    recordId: null,
     materialId: "",
     recordLabel: "",
     recordSource: "",
@@ -168,7 +168,7 @@ export function useLiveForm() {
     }
     if (form.mode === "recorded" && form.provider === "vhall") {
       const hasVideo = form.recordSource === "video" && form.materialId.trim();
-      const hasLive = form.recordSource === "live" && form.recordId.trim();
+      const hasLive = form.recordSource === "live" && form.recordId != null && form.recordId > 0;
       if (!hasVideo && !hasLive) {
         return "录播模式请选择视频或直播回放资源";
       }

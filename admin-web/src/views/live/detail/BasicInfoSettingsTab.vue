@@ -72,12 +72,12 @@ function applyDetail(d: ActivityDetail) {
   // 录播素材回显；替换视频保存时传 recordMaterialId → ready 可能变 0
   if (d.type === 4 && d.recordMaterialId) {
     form.materialId = d.recordMaterialId;
-    form.recordId = "";
+    form.recordId = null;
     form.recordSource = "video";
     form.recordLabel = form.recordLabel || "已选素材";
   } else {
     form.materialId = "";
-    form.recordId = "";
+    form.recordId = null;
     form.recordSource = "";
     form.recordLabel = "";
   }

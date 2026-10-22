@@ -29,9 +29,9 @@ export interface VhallLiveQuery {
   states?: number[];
 }
 
-/** 某场活动下的回放记录 */
+/** 某场活动下的回放记录；id = create-demand 的 record_id（JSON number） */
 export interface VhallPlaybackItem {
-  id: string;
+  id: number;
   title: string;
   duration?: string;
   createdTime?: string;

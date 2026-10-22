@@ -50,7 +50,7 @@ const pickedLiveId = ref("");
 const playbackVisible = ref(false);
 const playbackLoading = ref(false);
 const playbackList = ref<VhallPlaybackItem[]>([]);
-const pickedPlaybackId = ref("");
+const pickedPlaybackId = ref<number | null>(null);
 const pendingLive = ref<VhallLiveItem | null>(null);
 
 const STATE_OPTIONS = (Object.entries(STATE_LABEL) as [string, string][]).map(
