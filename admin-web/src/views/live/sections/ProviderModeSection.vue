@@ -211,7 +211,7 @@ watch(
         v-if="form.mode === 'recorded'"
         label="回放资源:"
         required
-        info="素材视频走 create 的 materialId；历史直播回放走 recordId。二者只传其一。"
+        info="素材视频走 create 的 recordMaterialId；历史直播回放走 recordId。二者只传其一。"
       >
         <div class="record-picker">
           <div class="record-picker__btns">

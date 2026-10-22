@@ -203,8 +203,8 @@ export interface CreateActivityPayload {
   type: number;
   /** 录播选「直播回放」：微吼回放列表 id */
   recordId?: string;
-  /** 录播选「素材视频」：本站视频素材 UUID */
-  materialId?: string;
+  /** 录播选「素材视频」：本站视频素材 UUID（库 record_material_id；与详情回显同名） */
+  recordMaterialId?: string;
   /** type=4：是否定时 → 微吼 is_timing；默认 true；省略按 true */
   isTiming?: boolean;
   introduction?: string;
@@ -218,12 +218,12 @@ export interface CreateActivityPayload {
   autoList: boolean;
   /** 主播员工 id（rs_mainkey_id），1～20 */
   hostIds: number[];
+  /** 绑定已通过直播报备 UUID；创建必填 */
+  reportId: string;
   ownerIds?: number[];
   products?: ActivityProduct[];
   /** 课件素材 UUID，最多 100 */
   coursewareMaterialIds?: string[];
-  /** 绑定的已通过直播报备 UUID */
-  reportId?: string;
 }
 
 export function createActivity(payload: CreateActivityPayload) {
@@ -314,8 +314,8 @@ export interface UpdateActivityPayload {
   ownerIds?: number[];
   products?: ActivityProduct[];
   coursewareMaterialIds?: string[];
-  /** 仅录播：替换素材视频，ready→0 */
-  materialId?: string;
+  /** 仅录播：替换素材视频，ready→0（与创建/详情同名 recordMaterialId） */
+  recordMaterialId?: string;
 }
 
 export function updateActivity(id: ActivityId, payload: UpdateActivityPayload) {

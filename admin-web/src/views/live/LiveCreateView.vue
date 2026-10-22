@@ -42,7 +42,7 @@ function buildPayload(): CreateActivityPayload {
     autoList: form.autoList,
     hostIds: form.hostIds.slice(0, 1).map((id) => Number(id)),
   };
-  if (form.reportId) payload.reportId = form.reportId;
+  payload.reportId = form.reportId.trim();
   const intro = form.intro.trim();
   if (intro) payload.introduction = intro;
   if (form.endDate && form.endTime) {
@@ -51,7 +51,7 @@ function buildPayload(): CreateActivityPayload {
   if (form.mode === "recorded") {
     payload.isTiming = form.isTiming;
     if (form.recordSource === "video" && form.materialId.trim()) {
-      payload.materialId = form.materialId.trim();
+      payload.recordMaterialId = form.materialId.trim();
     } else if (form.recordSource === "live" && form.recordId.trim()) {
       payload.recordId = form.recordId.trim();
     }

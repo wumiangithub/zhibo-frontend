@@ -69,7 +69,7 @@ function applyDetail(d: ActivityDetail) {
   form.coursewareMaterialIds = form.coursewares.map((c) => c.id);
   form.autoList = d.autoList ?? false;
   form.agreed = true;
-  // 录播素材回显；替换视频保存时传 materialId → ready 可能变 0
+  // 录播素材回显；替换视频保存时传 recordMaterialId → ready 可能变 0
   if (d.type === 4 && d.recordMaterialId) {
     form.materialId = d.recordMaterialId;
     form.recordId = "";
@@ -153,7 +153,7 @@ async function onSave() {
       && form.materialId.trim()
       && form.materialId.trim() !== (props.detail.recordMaterialId ?? "")
     ) {
-      payload.materialId = form.materialId.trim();
+      payload.recordMaterialId = form.materialId.trim();
     }
     await updateActivity(props.activityId, payload);
     ElMessage.success("保存成功，重新进入审核");
