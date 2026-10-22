@@ -62,6 +62,17 @@ const SPREADSHEET_TYPES = ['xls', 'xlsx']
 // 压缩包类型
 const ARCHIVE_TYPES = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2']
 const isDev = import.meta.env.VITE_APP_ENV === 'dev'
+
+/** 开发态把 CDN / 原生域名换成同源 `/cdn-media`，避免直连跨域 */
+function toDevCdnMediaUrl(url) {
+  if (!url || typeof url !== 'string') return url
+  for (const key of ['VITE_APP_TOS_CDN_URL', 'VITE_APP_TOS_NATIVE_URL']) {
+    const base = String(import.meta.env[key] || '').replace(/\/$/, '')
+    if (base && url.includes(base)) return url.replace(base, '/cdn-media')
+  }
+  return url
+}
+
 /**
  * 从 URL 中提取文件后缀（扩展名）
  * @param {string} url - 文件 URL
@@ -139,9 +150,7 @@ async function getTosVideoInfo(videoUrl) {
     // 拼接URL
     const infoUrl = `${videoUrl}${videoUrl.includes('?') ? '&' : '?'}x-tos-process=video/info`
 
-    const proxyUrl = isDev
-      ? infoUrl.replace(import.meta.env.VITE_APP_TOS_CDN_URL, '/cdn-media')
-      : infoUrl
+    const proxyUrl = isDev ? toDevCdnMediaUrl(infoUrl) : infoUrl
     const res = await fetch(proxyUrl)
     const data = await res.json()
 
@@ -259,9 +268,7 @@ async function getTosImageInfo(imageUrl) {
 
   try {
     const infoUrl = `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}x-tos-process=image/info`
-    const proxyUrl = isDev
-      ? infoUrl.replace(import.meta.env.VITE_APP_TOS_CDN_URL, '/cdn-media')
-      : infoUrl
+    const proxyUrl = isDev ? toDevCdnMediaUrl(infoUrl) : infoUrl
     const res = await fetch(proxyUrl)
     const data = await res.json()
 

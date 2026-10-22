@@ -114,7 +114,7 @@ onMounted(load);
               <img :src="getMaterialFileIcon(f.name)" class="file-icon" alt="" />
               <b>{{ f.name }}</b>
               <span>{{ (f.fileSize / 1024 / 1024).toFixed(2) }}MB</span>
-              <button type="button" @click="previewDocument()">预览</button>
+              <button type="button" @click="previewDocument(f.url, f.name)">预览</button>
               <button type="button" @click="downloadAttachment(f)">下载</button>
             </div>
           </dd>

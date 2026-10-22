@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
-import { ElMessage, ElTable, ElTableColumn } from "element-plus";
+import { ref, watch } from "vue";
+import { ElMessage, ElMessageBox, ElTable, ElTableColumn } from "element-plus";
 import {
   updateActivity,
   type ActivityDetail,
@@ -8,11 +8,11 @@ import {
   type ActivityProduct,
 } from "@/api/activity";
 import {
+  batchGetSalerProductDetails,
   isOrderCenterOnShelf,
   orderCenterShelfLabel,
   type OrderCenterProduct,
 } from "@/api/orderCenter";
-import { useLeaveConfirm } from "@/composables/useLeaveConfirm";
 import UiButton from "@/components/ui/UiButton.vue";
 import ProductPickerDialog from "../components/ProductPickerDialog.vue";
 
@@ -23,29 +23,43 @@ const props = defineProps<{
 
 const emit = defineEmits<{ refreshed: [] }>();
 
-const leave = useLeaveConfirm({
-  routeLeave: false,
-  message: "当前修改尚未保存，确认离开？",
-});
-
 const products = ref<ActivityProduct[]>([]);
-/** 弹窗/列表展示用的扩展字段（不落本站） */
+/** 弹窗/列表展示用的扩展字段（不落本站；来自批量详情或选品） */
 const displayMap = ref<Record<string, OrderCenterProduct>>({});
 const pickerVisible = ref(false);
 const saving = ref(false);
+const detailLoading = ref(false);
+/** 避免详情刷新时串台覆盖 */
+let detailFetchSeq = 0;
 
-/** 待审核或未写风控状态时不可改（与基本信息一致） */
-const auditLocked = computed(() => {
-  const status = props.detail.riskStatus;
-  return !status || status === "pending";
-});
+async function hydrateDisplayFromOrderCenter(items: ActivityProduct[]) {
+  const ids = items.map((p) => String(p.spuId)).filter(Boolean);
+  if (!ids.length) {
+    displayMap.value = {};
+    return;
+  }
+  const seq = ++detailFetchSeq;
+  detailLoading.value = true;
+  try {
+    const map = await batchGetSalerProductDetails(ids);
+    if (seq !== detailFetchSeq) return;
+    displayMap.value = map;
+  } catch (e) {
+    if (seq !== detailFetchSeq) return;
+    // 详情补齐失败不挡编辑；仍展示本站快照名称
+    displayMap.value = {};
+    ElMessage.warning(e instanceof Error ? e.message : "商品详情加载失败");
+  } finally {
+    if (seq === detailFetchSeq) detailLoading.value = false;
+  }
+}
 
 function applyDetail(d: ActivityDetail) {
   products.value = (d.products ?? []).map((p) => ({
     spuId: String(p.spuId),
     productName: p.productName,
   }));
-  leave.markClean();
+  void hydrateDisplayFromOrderCenter(products.value);
 }
 
 watch(
@@ -63,11 +77,13 @@ function displayOf(spuId: string): OrderCenterProduct | undefined {
   return displayMap.value[spuId];
 }
 
+/** 名称优先用订单中心实时详情，否则本站绑定快照 */
+function displayName(row: ActivityProduct): string {
+  return displayOf(row.spuId)?.productName || row.productName || row.spuId;
+}
+
 function openPicker() {
-  if (auditLocked.value) {
-    ElMessage.warning("审核中不可编辑");
-    return;
-  }
+  if (saving.value) return;
   if (products.value.length >= 20) {
     ElMessage.warning("关联商品最多 20 个");
     return;
@@ -75,76 +91,88 @@ function openPicker() {
   pickerVisible.value = true;
 }
 
-function onPickerConfirm(items: OrderCenterProduct[]) {
-  const next = items.slice(0, 20).map((p) => ({
-    spuId: String(p.spuId),
-    productName: p.productName.trim() || String(p.spuId),
-  }));
-  const map = { ...displayMap.value };
-  for (const p of items) map[p.spuId] = p;
-  displayMap.value = map;
-  products.value = next;
-  leave.markDirty();
-}
-
-function removeProduct(spuId: string) {
-  if (auditLocked.value) {
-    ElMessage.warning("审核中不可编辑");
-    return;
-  }
-  products.value = products.value.filter((p) => p.spuId !== spuId);
-  leave.markDirty();
-}
-
-async function onSave() {
-  if (auditLocked.value) {
-    ElMessage.warning("审核中不可编辑");
-    return;
-  }
-  if (products.value.length > 20) {
+/** 全量覆盖落库；成功后刷新详情 */
+async function persistProducts(
+  next: ActivityProduct[],
+  okMessage: string,
+): Promise<boolean> {
+  if (next.length > 20) {
     ElMessage.warning("关联商品最多 20 个");
-    return;
+    return false;
   }
   saving.value = true;
   try {
     await updateActivity(props.activityId, {
-      products: products.value.map((p) => ({
+      products: next.map((p) => ({
         spuId: String(p.spuId),
-        productName: p.productName.trim(),
+        productName: p.productName.trim() || String(p.spuId),
       })),
     });
-    ElMessage.success("保存成功，重新进入审核");
-    leave.markClean();
+    products.value = next;
+    ElMessage.success(okMessage);
     emit("refreshed");
+    return true;
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : "保存失败");
+    ElMessage.error(e instanceof Error ? e.message : "操作失败");
+    return false;
   } finally {
     saving.value = false;
   }
 }
 
+async function onPickerConfirm(items: OrderCenterProduct[]) {
+  const next = items.slice(0, 20).map((p) => ({
+    spuId: String(p.spuId),
+    productName: p.productName.trim() || String(p.spuId),
+  }));
+  const ok = await persistProducts(next, "添加成功");
+  if (!ok) return;
+  const map = { ...displayMap.value };
+  for (const p of items) map[p.spuId] = p;
+  displayMap.value = map;
+}
+
+async function removeProduct(spuId: string) {
+  if (saving.value) return;
+  const row = products.value.find((p) => p.spuId === spuId);
+  if (!row) return;
+  const name = displayName(row);
+  try {
+    await ElMessageBox.confirm(
+      `确认将【${name}】移出本场直播吗？移出后观众将无法看到该商品。`,
+      "移除商品",
+      {
+        type: "warning",
+        confirmButtonText: "确认移除",
+        cancelButtonText: "取消",
+      },
+    );
+  } catch {
+    return;
+  }
+  const next = products.value.filter((p) => p.spuId !== spuId);
+  await persistProducts(next, "已移除");
+}
+
+/** 即时落库，无未保存脏态；供父页切 Tab / 离开兼容 */
 defineExpose({
-  isDirty: () => leave.dirty.value,
-  confirmLeave: leave.confirmLeave,
+  isDirty: () => false,
+  confirmLeave: async () => true,
 });
 </script>
 
 <template>
-  <div class="commerce-tab">
+  <div
+    v-loading="saving"
+    class="commerce-tab"
+  >
     <h3 class="panel-title">直播带货</h3>
-
-    <p
-      v-if="auditLocked"
-      class="lock-tip"
-    >
-      审核中不可编辑关联商品；审核通过或驳回后方可修改。
-    </p>
 
     <div class="assoc-head">
       <span class="assoc-label">关联商品</span>
       <UiButton
         variant="outline"
-        :disabled="auditLocked"
+        :disabled="saving"
         @click="openPicker"
       >
         + 添加商品
@@ -152,6 +180,7 @@ defineExpose({
     </div>
 
     <ElTable
+      v-loading="detailLoading"
       :data="products"
       empty-text="暂无关联商品，点击「添加商品」从钱坤云商品库选择"
       class="assoc-table"
@@ -167,7 +196,7 @@ defineExpose({
         min-width="160"
         show-overflow-tooltip
       >
-        <template #default="{ row }">{{ row.productName }}</template>
+        <template #default="{ row }">{{ displayName(row) }}</template>
       </ElTableColumn>
       <ElTableColumn
         label="商品别名"
@@ -257,7 +286,7 @@ defineExpose({
           <button
             type="button"
             class="link-btn"
-            :disabled="auditLocked"
+            :disabled="saving"
             @click="removeProduct(row.spuId)"
           >
             移除
@@ -265,16 +294,6 @@ defineExpose({
         </template>
       </ElTableColumn>
     </ElTable>
-
-    <div class="footer">
-      <UiButton
-        variant="primary"
-        :disabled="auditLocked || saving"
-        @click="onSave"
-      >
-        {{ saving ? "保存中…" : "保存" }}
-      </UiButton>
-    </div>
 
     <ProductPickerDialog
       v-model="pickerVisible"
@@ -288,6 +307,7 @@ defineExpose({
 <style scoped>
 .commerce-tab {
   padding: 4px 8px 24px;
+  min-height: 120px;
 }
 .panel-title {
   margin: 0 0 16px;
@@ -297,14 +317,6 @@ defineExpose({
   padding-bottom: 12px;
   border-bottom: 2px solid var(--color-primary, #2f6bff);
   display: inline-block;
-}
-.lock-tip {
-  margin: 0 0 12px;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: #ad6800;
-  background: #fff7e6;
-  border-radius: 4px;
 }
 .assoc-head {
   display: flex;
@@ -330,9 +342,6 @@ defineExpose({
 .link-btn:disabled {
   color: #bfbfbf;
   cursor: not-allowed;
-}
-.footer {
-  margin-top: 24px;
 }
 .shelf {
   display: inline-flex;

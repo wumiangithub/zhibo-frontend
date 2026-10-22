@@ -127,10 +127,13 @@ function downloadByLink(item, type) {
     const hasExtension = /\.[^/.]+$/.test(item.fileName)
     a.download = hasExtension ? item.fileName : `${item.fileName}.${type}`
     a.style = 'display: none'
-    a.href = item.fileUrl.replace(
-      import.meta.env.VITE_APP_TOS_CDN_URL,
-      import.meta.env.VITE_APP_TOS_NATIVE_URL
-    )
+    // 下载回源原生桶（CDN 常无 Content-Disposition: attachment）
+    const cdn = String(import.meta.env.VITE_APP_TOS_CDN_URL || '').replace(/\/$/, '')
+    const native = String(import.meta.env.VITE_APP_TOS_NATIVE_URL || '').replace(/\/$/, '')
+    a.href =
+      cdn && native && item.fileUrl.startsWith(cdn)
+        ? `${native}${item.fileUrl.slice(cdn.length)}`
+        : item.fileUrl
     // 清理函数
     const cleanup = () => {
       if (a.parentNode) {
@@ -170,9 +173,16 @@ function downloadByFetch(item, type) {
         window.URL.revokeObjectURL(objectUrl)
       }
     }
-    const proxyUrl = isDev
-      ? item.fileUrl.replace(import.meta.env.VITE_APP_TOS_CDN_URL, '/cdn-media')
-      : item.fileUrl
+    let proxyUrl = item.fileUrl
+    if (isDev) {
+      for (const key of ['VITE_APP_TOS_CDN_URL', 'VITE_APP_TOS_NATIVE_URL']) {
+        const base = String(import.meta.env[key] || '').replace(/\/$/, '')
+        if (base && proxyUrl.includes(base)) {
+          proxyUrl = proxyUrl.replace(base, '/cdn-media')
+          break
+        }
+      }
+    }
     fetch(`${proxyUrl}`)
       .then((response) => {
         if (!response.ok) {

@@ -9,7 +9,7 @@ export function buildMaterialObjectKey(type: MaterialObjectKind, fileName: strin
   return buildTosObjectKey(`material/${type}/`, fileName);
 }
 
-/** 登记用可访问 URL：优先 TOS Location，否则拼 CDN + objectKey（同 resolveTosAccessUrl） */
+/** 登记用可访问 URL：有 CDN 拼 CDN+key，否则 Location（同 resolveTosAccessUrl） */
 export function resolveMaterialAccessUrl(location: string | undefined, objectKey: string): string {
   return resolveTosAccessUrl(location, objectKey);
 }

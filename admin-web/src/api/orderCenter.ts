@@ -111,8 +111,10 @@ function countSkus(skuList: unknown): { validSku: number; validActivity: number 
   for (const row of skuList) {
     if (!row || typeof row !== "object") continue;
     const o = row as Record<string, unknown>;
+    // 列表接口有 specStatus；详情/批量详情只返回上架 SKU，无该字段时按上架计
+    const hasSpec = Object.prototype.hasOwnProperty.call(o, "specStatus");
     const spec = o.specStatus;
-    const onShelf = spec === 1 || spec === "1";
+    const onShelf = !hasSpec || spec === 1 || spec === "1";
     if (onShelf) validSku += 1;
     const act =
       typeof o.activityStandardPrice === "number"
@@ -263,4 +265,95 @@ export async function listSalerProducts(): Promise<OrderCenterProduct[]> {
     page += 1;
   }
   return all;
+}
+
+interface OrderCenterBatchDetailBody {
+  code?: number | string;
+  msg?: string;
+  message?: string;
+  /** 键 = spuId 字符串；查不到的 id 不出现 */
+  data?: Record<string, unknown>;
+}
+
+/** 本站存的是十进制字符串；对方 body 要 int64，安全整数内再转 number */
+function toOrderCenterSpuIdNumber(spuId: string): number | null {
+  const t = spuId.trim();
+  if (!/^[1-9]\d{0,15}$/.test(t)) return null;
+  const n = Number(t);
+  if (!Number.isSafeInteger(n) || n <= 0) return null;
+  return n;
+}
+
+/**
+ * 业务员端商品批量详情（不经本站后端）。
+ * `POST …/saler/product/detail/batch`，body `{ spuIds }` 长度 1～20。
+ * 查不到（下架/不存在/无可售规格）的 id 不出现在返回 map；整体仍成功。
+ */
+export async function batchGetSalerProductDetails(
+  spuIds: string[],
+): Promise<Record<string, OrderCenterProduct>> {
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of spuIds) {
+    const id = String(raw ?? "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    unique.push(id);
+  }
+  if (!unique.length) return {};
+
+  const numericIds = unique
+    .map(toOrderCenterSpuIdNumber)
+    .filter((n): n is number => n != null)
+    .slice(0, 20);
+  if (!numericIds.length) return {};
+
+  const token = await salerAccessToken();
+  const url = `${orderCenterBase()}/order-center/api/live/saler/product/detail/batch`;
+  let resp;
+  try {
+    resp = await axios.post(
+      url,
+      { spuIds: numericIds },
+      {
+        headers: {
+          "Authorization-Live-Saler": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+        transformResponse: [
+          (data: unknown) => {
+            if (typeof data !== "string") return data;
+            try {
+              return JSON.parse(stringifyBigIntIds(data)) as OrderCenterBatchDetailBody;
+            } catch {
+              return data;
+            }
+          },
+        ],
+      },
+    );
+  } catch (e) {
+    throw new Error(axiosErrorMessage(e, "批量拉取商品详情失败"));
+  }
+
+  const body = resp.data as OrderCenterBatchDetailBody;
+  if (!isOrderCenterSuccess(body?.code)) {
+    throw new Error(body?.msg || body?.message || "批量拉取商品详情失败");
+  }
+
+  const rawMap = body.data;
+  if (!rawMap || typeof rawMap !== "object") return {};
+
+  const out: Record<string, OrderCenterProduct> = {};
+  for (const [key, row] of Object.entries(rawMap)) {
+    const mapped = mapProduct(row);
+    if (!mapped) continue;
+    // 批量详情只返回可售商品（有上架 SKU），补齐列表里的上架态展示
+    if (mapped.status == null) {
+      mapped.status = ORDER_CENTER_PRODUCT_STATUS.ON_SHELF;
+    }
+    out[mapped.spuId || String(key)] = mapped;
+  }
+  return out;
 }

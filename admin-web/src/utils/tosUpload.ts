@@ -23,13 +23,43 @@ export const TosObjectKeyPrefix = {
 export type TosObjectKeyPrefixValue =
   (typeof TosObjectKeyPrefix)[keyof typeof TosObjectKeyPrefix];
 
-/** 可访问 URL：优先 TOS Location，否则拼 CDN + objectKey */
+function tosCdnBase(): string {
+  return String(import.meta.env.VITE_APP_TOS_CDN_URL || "").replace(/\/$/, "");
+}
+
+function tosNativeBase(): string {
+  return String(import.meta.env.VITE_APP_TOS_NATIVE_URL || "").replace(/\/$/, "");
+}
+
+/** 是否已配置独立 CDN / 自定义域名（与原生桶域名不同才算） */
+export function isTosCdnConfigured(): boolean {
+  const cdn = tosCdnBase();
+  const native = tosNativeBase();
+  return Boolean(cdn) && cdn !== native;
+}
+
+/**
+ * 把已落库的原生桶 URL 改写成 CDN（历史数据 / Location 回写）。
+ * 非 TOS 原生前缀则原样返回。
+ */
+export function rewriteTosUrlToCdn(url: string): string {
+  const cdn = tosCdnBase();
+  const native = tosNativeBase();
+  if (!cdn || !url) return url;
+  if (native && url.startsWith(native)) return `${cdn}${url.slice(native.length)}`;
+  return url;
+}
+
+/**
+ * 可访问 URL：有 CDN 时一律拼 CDN + objectKey（不落原生 Location）。
+ * 未配 CDN 时退回 TOS Location / objectKey。
+ */
 export function resolveTosAccessUrl(location: string | undefined, objectKey: string): string {
-  if (location && /^https?:\/\//i.test(location)) return location;
-  const base = String(import.meta.env.VITE_APP_TOS_CDN_URL || "").replace(/\/$/, "");
+  const base = tosCdnBase();
   const key = objectKey.replace(/^\//, "");
-  if (!base) return location || key;
-  return `${base}/${key}`;
+  if (base) return `${base}/${key}`;
+  if (location && /^https?:\/\//i.test(location)) return location;
+  return location || key;
 }
 
 /** `{prefix}{timestamp}_{filename}`；prefix 无尾斜杠时自动补 `/` */
