@@ -19,6 +19,7 @@ import ShareDialog from "@/components/share/ShareDialog.vue";
 import BasicSettingsTab from "./detail/BasicSettingsTab.vue";
 import BroadcastSettingsTab from "./detail/BroadcastSettingsTab.vue";
 import LiveDataTab from "./detail/LiveDataTab.vue";
+import CommerceSettingsTab from "./detail/CommerceSettingsTab.vue";
 import PlaceholderModuleTab from "./detail/PlaceholderModuleTab.vue";
 
 type TabKey = "basic" | "broadcast" | "commerce" | "userOps" | "data";
@@ -35,7 +36,13 @@ const detail = ref<ActivityDetail | null>(null);
 const pageError = ref("");
 const readyRefreshing = ref(false);
 const basicTabRef = ref<InstanceType<typeof BasicSettingsTab> | null>(null);
+const commerceTabRef = ref<InstanceType<typeof CommerceSettingsTab> | null>(null);
 const shareVisible = ref(false);
+
+type DirtyTab = {
+  isDirty: () => boolean;
+  confirmLeave: () => Promise<boolean>;
+};
 
 /** 录播且尚未就绪：显示转码状态旁的刷新按钮 */
 const showReadyRefresh = computed(() => {
@@ -80,24 +87,31 @@ const timeRange = computed(() => {
   return end ? `${start} 至 ${end}` : start;
 });
 
-async function confirmLeaveBasicIfNeeded(): Promise<boolean> {
-  if (activeTab.value !== "basic") return true;
-  const tab = basicTabRef.value as
-    | { isDirty: () => boolean; confirmLeave: () => Promise<boolean> }
-    | null;
+function currentDirtyTab(): DirtyTab | null {
+  if (activeTab.value === "basic") {
+    return (basicTabRef.value as DirtyTab | null) ?? null;
+  }
+  if (activeTab.value === "commerce") {
+    return (commerceTabRef.value as DirtyTab | null) ?? null;
+  }
+  return null;
+}
+
+async function confirmLeaveDirtyIfNeeded(): Promise<boolean> {
+  const tab = currentDirtyTab();
   if (!tab?.isDirty?.()) return true;
   return tab.confirmLeave();
 }
 
 async function setTab(key: TabKey) {
   if (key === activeTab.value) return;
-  if (!(await confirmLeaveBasicIfNeeded())) return;
+  if (!(await confirmLeaveDirtyIfNeeded())) return;
   const query: Record<string, string> = {};
   if (key !== "basic") query.tab = key;
   void router.replace({ path: route.path, query });
 }
 
-onBeforeRouteLeave(async () => confirmLeaveBasicIfNeeded());
+onBeforeRouteLeave(async () => confirmLeaveDirtyIfNeeded());
 
 async function fetchDetail(opts?: { silent?: boolean }) {
   const silent = opts?.silent === true;
@@ -285,9 +299,12 @@ watch(id, fetchDetail);
             @error="pageError = $event"
             @refreshed="fetchDetail"
           />
-          <PlaceholderModuleTab
+          <CommerceSettingsTab
             v-else-if="activeTab === 'commerce'"
-            title="直播带货"
+            ref="commerceTabRef"
+            :activity-id="id"
+            :detail="detail"
+            @refreshed="fetchDetail"
           />
           <PlaceholderModuleTab
             v-else-if="activeTab === 'userOps'"

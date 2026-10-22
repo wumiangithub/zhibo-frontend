@@ -189,7 +189,10 @@ export interface ListQuery {
   page?: number;
   pageSize?: number;
   keyword?: string;
+  /** 单值状态筛选；与 states 同时传时以后端 states 为准 */
   state?: number;
+  /** 多选状态，逗号分隔如 `3,5`；录播「选择直播」用 */
+  states?: string;
   provider?: LiveProvider;
   shelfStatus?: ShelfStatus;
   startFrom?: string;

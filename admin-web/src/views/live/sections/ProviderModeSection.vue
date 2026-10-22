@@ -255,7 +255,7 @@ watch(
 
       <FormRow
         v-if="form.mode === 'recorded'"
-        label="是否定时:"
+        label="定时直播:"
         required
         info="选「是」时开始时间作为定时开播时间"
       >

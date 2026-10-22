@@ -25,6 +25,8 @@ export interface VhallLiveQuery {
   page?: number;
   pageSize?: number;
   keyword?: string;
+  /** 直播状态多选（1～5），传给 activities/list 的 states */
+  states?: number[];
 }
 
 /** 某场活动下的回放记录 */
@@ -57,10 +59,15 @@ function mapActivityToLive(item: ActivityListItem): VhallLiveItem {
  * 即 GET /api/v1/activities/list?provider=vhall&page&pageSize&keyword
  */
 export async function listVhallLives(query: VhallLiveQuery = {}): Promise<VhallLiveListData> {
+  const states =
+    query.states && query.states.length > 0
+      ? [...new Set(query.states.filter((s) => s >= 1 && s <= 5))].join(",")
+      : undefined;
   const data = await listActivities({
     page: query.page ?? 1,
     pageSize: query.pageSize ?? 20,
     keyword: query.keyword,
+    states,
     provider: "vhall",
   });
   return {

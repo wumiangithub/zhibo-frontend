@@ -1,12 +1,23 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { ElDialog, ElInput, ElButton, ElMessage, ElMessageBox, ElRadio } from "element-plus";
+import {
+  ElDialog,
+  ElInput,
+  ElButton,
+  ElMessage,
+  ElMessageBox,
+  ElRadio,
+  ElSelect,
+  ElOption,
+  ElPagination,
+} from "element-plus";
 import {
   listVhallLives,
   listVhallLiveRecords,
   type VhallLiveItem,
   type VhallPlaybackItem,
 } from "@/api/recordResource";
+import { STATE_LABEL } from "@/api/activity";
 import UiButton from "@/components/ui/UiButton.vue";
 
 const props = defineProps<{
@@ -28,10 +39,12 @@ const loading = ref(false);
 const confirming = ref(false);
 const listError = ref("");
 const keyword = ref("");
+/** 直播状态多选；空 = 不过滤；默认「结束」 */
+const selectedStates = ref<number[]>([3]);
 const list = ref<VhallLiveItem[]>([]);
 const total = ref(0);
 const page = ref(1);
-const pageSize = 10;
+const pageSize = ref(10);
 const pickedLiveId = ref("");
 
 const playbackVisible = ref(false);
@@ -40,18 +53,28 @@ const playbackList = ref<VhallPlaybackItem[]>([]);
 const pickedPlaybackId = ref("");
 const pendingLive = ref<VhallLiveItem | null>(null);
 
-const STATE_MAP: Record<number, string> = {
-  1: "直播中",
-  2: "未开始",
-  3: "已结束",
-  4: "点播",
-  5: "回放",
-};
-
-const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize)));
+const STATE_OPTIONS = (Object.entries(STATE_LABEL) as [string, string][]).map(
+  ([value, label]) => ({ value: Number(value), label }),
+);
 
 function stateText(item: VhallLiveItem) {
-  return item.stateLabel || STATE_MAP[item.state ?? -1] || "--";
+  return item.stateLabel || STATE_LABEL[item.state ?? -1] || "--";
+}
+
+function onFilterChange() {
+  page.value = 1;
+  void fetchLives();
+}
+
+function onPageChange(p: number) {
+  page.value = p;
+  void fetchLives();
+}
+
+function onPageSizeChange(s: number) {
+  pageSize.value = s;
+  page.value = 1;
+  void fetchLives();
 }
 
 function timeText(item: VhallLiveItem) {
@@ -65,8 +88,9 @@ async function fetchLives() {
   try {
     const data = await listVhallLives({
       page: page.value,
-      pageSize,
+      pageSize: pageSize.value,
       keyword: keyword.value.trim() || undefined,
+      states: selectedStates.value.length > 0 ? selectedStates.value : undefined,
     });
     list.value = data.list ?? [];
     total.value = data.total ?? 0;
@@ -138,7 +162,9 @@ watch(
   (open) => {
     if (!open) return;
     keyword.value = "";
+    selectedStates.value = [3];
     page.value = 1;
+    pageSize.value = 10;
     pickedLiveId.value = "";
     listError.value = "";
     playbackVisible.value = false;
@@ -172,11 +198,28 @@ watch(
         >
           刷新
         </UiButton>
+        <ElSelect
+          v-model="selectedStates"
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+          clearable
+          placeholder="直播状态"
+          style="width: 200px"
+          @change="onFilterChange"
+        >
+          <ElOption
+            v-for="opt in STATE_OPTIONS"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </ElSelect>
         <ElInput
           v-model="keyword"
           clearable
           placeholder="搜索直播名称"
-          style="width: 240px; margin-left: auto"
+          style="width: 220px; margin-left: auto"
           @keyup.enter="page = 1; fetchLives()"
         />
         <UiButton
@@ -247,21 +290,17 @@ watch(
       </div>
 
       <div class="pager">
-        <span>共 {{ total }} 条 · 第 {{ page }}/{{ pageCount }} 页</span>
-        <UiButton
-          variant="default"
-          :disabled="page <= 1 || loading"
-          @click="page--; fetchLives()"
-        >
-          上一页
-        </UiButton>
-        <UiButton
-          variant="default"
-          :disabled="page >= pageCount || loading"
-          @click="page++; fetchLives()"
-        >
-          下一页
-        </UiButton>
+        <ElPagination
+          background
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="total"
+          :page-size="pageSize"
+          :current-page="page"
+          :page-sizes="[10, 20, 50]"
+          :disabled="loading"
+          @current-change="onPageChange"
+          @size-change="onPageSizeChange"
+        />
       </div>
     </div>
 
@@ -356,17 +395,19 @@ watch(
   flex: none;
 }
 .list-scroll {
-  flex: 1;
-  min-height: 160px;
-  max-height: min(360px, calc(100vh - 280px));
+  flex: none;
+  height: 360px;
   overflow-x: hidden;
   overflow-y: auto;
   border: 1px solid var(--color-border-light);
   border-radius: 4px;
 }
 .empty {
-  padding: 48px 0;
-  text-align: center;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
   color: var(--color-text-placeholder);
   font-size: 13px;
 }
@@ -430,12 +471,8 @@ watch(
 }
 .pager {
   display: flex;
-  align-items: center;
   justify-content: flex-end;
-  gap: 8px;
   margin-top: 12px;
-  font-size: 12px;
-  color: var(--color-text-placeholder);
   flex: none;
 }
 .pb-hint {
