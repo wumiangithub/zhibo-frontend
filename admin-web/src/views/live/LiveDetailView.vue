@@ -44,6 +44,12 @@ const showReadyRefresh = computed(() => {
   return (d.ready ?? ActivityReady.OK) !== ActivityReady.OK;
 });
 
+/** 定时录播不支持主持人参会，顶栏「开播」勿再拉 host */
+const timedHostUnsupported = computed(() => {
+  const d = detail.value;
+  return !!d && d.type === 4 && (d.isTiming ?? true);
+});
+
 const sideNav = [
   { key: "basic" as const, label: "基本设置" },
   { key: "broadcast" as const, label: "开播设置" },
@@ -126,7 +132,7 @@ function refreshReadyStatus() {
 }
 
 async function goLive() {
-  if (!detail.value?.canBroadcast) return;
+  if (!detail.value?.canBroadcast || timedHostUnsupported.value) return;
   try {
     const { hostUrl } = await getHostUrl(id.value);
     window.open(hostUrl, "_blank", "noopener");
@@ -212,7 +218,12 @@ watch(id, fetchDetail);
         <div class="summary-actions">
           <UiButton
             variant="default"
-            :disabled="!detail.canBroadcast"
+            :disabled="!detail.canBroadcast || timedHostUnsupported"
+            :title="
+              timedHostUnsupported
+                ? '定时直播不支持主持人参会'
+                : undefined
+            "
             @click="goLive"
           >
             开播
@@ -269,6 +280,8 @@ watch(id, fetchDetail);
             :start-time="detail.startTime"
             :provider="detail.provider"
             :host-locked="!!detail.reportId"
+            :activity-type="detail.type"
+            :is-timing="detail.isTiming"
             @error="pageError = $event"
             @refreshed="fetchDetail"
           />

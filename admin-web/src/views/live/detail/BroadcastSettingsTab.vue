@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { Refresh } from "@element-plus/icons-vue";
 import { ElIcon, ElMessage } from "element-plus";
 import {
@@ -25,8 +25,19 @@ const props = withDefaults(
     startTime?: string;
     provider: LiveProvider;
     hostLocked?: boolean;
+    /** 活动 type：4=录播 */
+    activityType?: number | null;
+    /** 录播是否定时；省略按 true */
+    isTiming?: boolean | null;
   }>(),
-  { canBroadcast: false, liveTitle: "", startTime: "", hostLocked: false },
+  {
+    canBroadcast: false,
+    liveTitle: "",
+    startTime: "",
+    hostLocked: false,
+    activityType: null,
+    isTiming: null,
+  },
 );
 const emit = defineEmits<{ error: [msg: string]; refreshed: [] }>();
 
@@ -39,9 +50,18 @@ const otherMethod = ref<"push" | "passcode">("push");
 const pushProtocol = ref<"rtmp" | "srt">("rtmp");
 const showSrt = computed(() => props.provider === "tencent");
 
+/**
+ * 微吼定时录播不支持主持人参会：开播方式整块只展示提示，勿再拉 host / 推流。
+ */
+const timedHostUnsupported = computed(
+  () => props.activityType === 4 && (props.isTiming ?? true),
+);
+
 const rtmpServer = ref("");
 const rtmpStreamKey = ref("");
 const rtmpExpireTime = ref("");
+/** 推流区本地错误，不上顶栏，避免与并行请求互相覆盖闪烁 */
+const pushError = ref("");
 /** 推流状态：null 未查到；0 无流；1 有流 */
 const streamStatus = ref<number | null>(null);
 const streamStatusLoading = ref(false);
@@ -50,6 +70,9 @@ const hostLink = ref("");
 let pushSeq = 0;
 let statusSeq = 0;
 let hostSeq = 0;
+
+/** 进入本 Tab 清掉详情顶栏残留错误，避免上次失败文案挂着 */
+onMounted(() => emit("error", ""));
 
 function shownOrEmpty(value: string | undefined) {
   const text = (value ?? "").trim();
@@ -96,19 +119,20 @@ async function loadRtmp() {
   rtmpServer.value = "";
   rtmpStreamKey.value = "";
   rtmpExpireTime.value = "";
+  pushError.value = "";
   try {
     const data = await getPushStream(props.activityId);
     if (seq !== pushSeq) return;
     rtmpServer.value = (data.streamAddress ?? "").trim();
     rtmpStreamKey.value = (data.streamCode ?? "").trim();
     rtmpExpireTime.value = (data.expireTime ?? "").trim();
-    emit("error", "");
+    pushError.value = "";
   } catch (e) {
     if (seq !== pushSeq) return;
     rtmpServer.value = "";
     rtmpStreamKey.value = "";
     rtmpExpireTime.value = "";
-    emit("error", e instanceof Error ? e.message : "获取推流地址失败");
+    pushError.value = e instanceof Error ? e.message : "获取推流地址失败";
   }
 }
 
@@ -120,19 +144,37 @@ async function loadStreamStatus() {
     const data = await getStreamStatus(props.activityId);
     if (seq !== statusSeq) return;
     streamStatus.value = data.status === 1 ? 1 : 0;
-    emit("error", "");
   } catch (e) {
     if (seq !== statusSeq) return;
     streamStatus.value = null;
-    emit("error", e instanceof Error ? e.message : "获取推流状态失败");
+    if (!pushError.value) {
+      pushError.value = e instanceof Error ? e.message : "获取推流状态失败";
+    }
   } finally {
     if (seq === statusSeq) streamStatusLoading.value = false;
   }
 }
 
 watch(
-  () => [otherMethod.value, pushProtocol.value, props.activityId] as const,
-  ([method, protocol]) => {
+  () =>
+    [
+      otherMethod.value,
+      pushProtocol.value,
+      props.activityId,
+      timedHostUnsupported.value,
+    ] as const,
+  ([method, protocol, , unsupported]) => {
+    if (unsupported) {
+      pushSeq += 1;
+      statusSeq += 1;
+      rtmpServer.value = "";
+      rtmpStreamKey.value = "";
+      rtmpExpireTime.value = "";
+      streamStatus.value = null;
+      streamStatusLoading.value = false;
+      pushError.value = "";
+      return;
+    }
     if (method === "push" && protocol === "rtmp") {
       void loadRtmp();
       void loadStreamStatus();
@@ -142,6 +184,7 @@ watch(
     statusSeq += 1;
     streamStatus.value = null;
     streamStatusLoading.value = false;
+    pushError.value = "";
   },
   { immediate: true },
 );
@@ -162,10 +205,12 @@ async function loadHostLink() {
 }
 
 watch(
-  () => [otherMethod.value, props.activityId] as const,
-  ([method]) => {
-    if (method !== "passcode") {
+  () =>
+    [otherMethod.value, props.activityId, timedHostUnsupported.value] as const,
+  ([method, , unsupported]) => {
+    if (unsupported || method !== "passcode") {
       hostSeq += 1;
+      hostLink.value = "";
       return;
     }
     broadcastPasscode.value = randomPasscode();
@@ -226,7 +271,7 @@ function copyAllPasscodeInfo() {
 }
 
 async function openHost() {
-  if (!props.canBroadcast) return;
+  if (!props.canBroadcast || timedHostUnsupported.value) return;
   opening.value = true;
   try {
     const { hostUrl } = await getHostUrl(props.activityId);
@@ -255,284 +300,301 @@ async function openHost() {
     </div>
 
     <template v-if="subTab === 'method'">
-      <section class="block">
-        <h3 class="block-title">邀请主播</h3>
-        <p class="block-desc">
-          可将开播权限分享给他人，对方通过链接或客户端以主播身份进入直播间。
+      <section
+        v-if="timedHostUnsupported"
+        class="block"
+      >
+        <p class="broadcast-unsupported">
+          定时直播不支持主持人参会，本场无法通过开播设置进入主持/推流/口令开播。到达开播时间后将按定时录播自动播出。
         </p>
-        <UiButton
-          variant="outline"
-          @click="inviteHostVisible = true"
-        >
-          邀请主播
-        </UiButton>
-        <InviteHostDialog
-          v-model="inviteHostVisible"
-          :activity-id="activityId"
-          :live-title="liveTitle"
-          :start-time="startTime"
-        />
       </section>
 
-      <section class="block">
-        <h3 class="block-title">自己开播</h3>
-        <div class="host-cards">
-          <div class="host-card">
-            <div class="host-card__icon">PC</div>
-            <div class="host-card__body">
-              <p class="host-card__name">钱坤云直播客户端</p>
-              <p class="host-card__desc">专业模式 / 标准模式，适合电脑摄像头或推流开播</p>
-              <div class="host-card__actions">
-                <UiButton
-                  variant="primary"
-                  @click="toast('「客户端开播」暂未开放')"
-                >
-                  客户端开播
-                </UiButton>
+      <template v-else>
+        <section class="block">
+          <h3 class="block-title">邀请主播</h3>
+          <p class="block-desc">
+            可将开播权限分享给他人，对方通过链接或客户端以主播身份进入直播间。
+          </p>
+          <UiButton
+            variant="outline"
+            @click="inviteHostVisible = true"
+          >
+            邀请主播
+          </UiButton>
+          <InviteHostDialog
+            v-model="inviteHostVisible"
+            :activity-id="activityId"
+            :live-title="liveTitle"
+            :start-time="startTime"
+          />
+        </section>
+
+        <section class="block">
+          <h3 class="block-title">自己开播</h3>
+          <div class="host-cards">
+            <div class="host-card">
+              <div class="host-card__icon">PC</div>
+              <div class="host-card__body">
+                <p class="host-card__name">钱坤云直播客户端</p>
+                <p class="host-card__desc">专业模式 / 标准模式，适合电脑摄像头或推流开播</p>
+                <div class="host-card__actions">
+                  <UiButton
+                    variant="primary"
+                    @click="toast('「客户端开播」暂未开放')"
+                  >
+                    客户端开播
+                  </UiButton>
+                  <UiButton
+                    variant="link"
+                    @click="toast('「客户端下载」暂未开放')"
+                  >
+                    下载客户端
+                  </UiButton>
+                </div>
+              </div>
+            </div>
+
+            <div class="host-card">
+              <div class="host-card__icon is-app">APP</div>
+              <div class="host-card__body">
+                <p class="host-card__name">钱坤云直播 APP</p>
+                <p class="host-card__desc">支持美颜、屏幕共享等，适合手机端开播</p>
+                <div class="host-card__actions">
+                  <UiButton
+                    variant="primary"
+                    @click="toast('「APP 开播」暂未开放')"
+                  >
+                    APP 开播
+                  </UiButton>
+                </div>
                 <UiButton
                   variant="link"
-                  @click="toast('「客户端下载」暂未开放')"
+                  class="mt-2"
+                  @click="toast('「小程序开播」暂未开放')"
                 >
-                  下载客户端
+                  钱坤云直播小程序
                 </UiButton>
               </div>
             </div>
-          </div>
 
-          <div class="host-card">
-            <div class="host-card__icon is-app">APP</div>
-            <div class="host-card__body">
-              <p class="host-card__name">钱坤云直播 APP</p>
-              <p class="host-card__desc">支持美颜、屏幕共享等，适合手机端开播</p>
-              <div class="host-card__actions">
-                <UiButton
-                  variant="primary"
-                  @click="toast('「APP 开播」暂未开放')"
-                >
-                  APP 开播
-                </UiButton>
-              </div>
-              <UiButton
-                variant="link"
-                class="mt-2"
-                @click="toast('「小程序开播」暂未开放')"
-              >
-                钱坤云直播小程序
-              </UiButton>
-            </div>
-          </div>
-
-          <div class="host-card">
-            <div class="host-card__icon is-web">Web</div>
-            <div class="host-card__body">
-              <p class="host-card__name">网页开播</p>
-              <p class="host-card__desc">浏览器直接打开主持人控制台，无需安装客户端</p>
-              <div class="host-card__actions">
-                <UiButton
-                  variant="primary"
-                  :disabled="opening || !canBroadcast"
-                  @click="openHost"
-                >
-                  {{ opening ? "打开中…" : "网页开播" }}
-                </UiButton>
-                <p
-                  v-if="!canBroadcast"
-                  class="host-card__hint"
-                >
-                  需风控已通过、已上架，且直播状态为预告或已结束
-                </p>
+            <div class="host-card">
+              <div class="host-card__icon is-web">Web</div>
+              <div class="host-card__body">
+                <p class="host-card__name">网页开播</p>
+                <p class="host-card__desc">浏览器直接打开主持人控制台，无需安装客户端</p>
+                <div class="host-card__actions">
+                  <UiButton
+                    variant="primary"
+                    :disabled="opening || !canBroadcast"
+                    @click="openHost"
+                  >
+                    {{ opening ? "打开中…" : "网页开播" }}
+                  </UiButton>
+                  <p
+                    v-if="!canBroadcast"
+                    class="host-card__hint"
+                  >
+                    需风控已通过、已上架，且直播状态为预告或已结束
+                  </p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="block">
-        <h3 class="block-title">其他方式开播</h3>
-        <div class="other-card">
-          <div class="method-tabs">
-            <button
-              type="button"
-              class="method-tab"
-              :class="{ 'is-active': otherMethod === 'push' }"
-              @click="otherMethod = 'push'"
-            >
-              第三方推流到直播间
-            </button>
-            <button
-              type="button"
-              class="method-tab"
-              :class="{ 'is-active': otherMethod === 'passcode' }"
-              @click="otherMethod = 'passcode'"
-            >
-              口令开播
-            </button>
-          </div>
-
-          <template v-if="otherMethod === 'push'">
-            <p class="method-desc">
-              OBS摄像机 适合双机位开播，支持桌面共享/屏幕捕获
-            </p>
-            <div class="protocol-row">
-              <label class="protocol-option">
-                <input
-                  v-model="pushProtocol"
-                  type="radio"
-                  value="rtmp"
-                >
-                rtmp推流
-              </label>
-              <label
-                v-if="showSrt"
-                class="protocol-option"
-              >
-                <input
-                  v-model="pushProtocol"
-                  type="radio"
-                  value="srt"
-                >
-                srt推流
-                <span class="protocol-hint">低延迟/更稳定</span>
-              </label>
-            </div>
-            <div class="copy-row">
-              <span class="copy-label">服务器：</span>
-              <input
-                class="copy-input"
-                type="text"
-                readonly
-                :value="currentPush.server"
-                placeholder="暂无推流地址"
-              >
-              <UiButton
-                variant="default"
-                @click="copyValue(currentPush.server)"
-              >
-                复制
-              </UiButton>
-            </div>
-            <div class="copy-row">
-              <span class="copy-label">串流密钥：</span>
-              <input
-                class="copy-input"
-                type="text"
-                readonly
-                :value="currentPush.streamKey"
-                placeholder="暂无串流密钥"
-              >
-              <UiButton
-                variant="default"
-                @click="copyValue(currentPush.streamKey)"
-              >
-                复制
-              </UiButton>
-            </div>
-            <p
-              v-if="pushProtocol === 'rtmp' && rtmpExpireTime"
-              class="expire-note"
-            >
-              有效期至 {{ rtmpExpireTime }}
-            </p>
-            <div
-              v-if="pushProtocol === 'rtmp'"
-              class="stream-status-row"
-            >
-              <span class="copy-label">推流状态：</span>
-              <span
-                class="status-text"
-                :class="{
-                  'is-ok': streamStatus === 1,
-                  'is-miss':
-                    streamStatus === 0 ||
-                    (streamStatus === null && !streamStatusLoading),
-                }"
-              >{{ streamStatusText }}</span>
+        <section class="block">
+          <h3 class="block-title">其他方式开播</h3>
+          <div class="other-card">
+            <div class="method-tabs">
               <button
                 type="button"
-                class="status-refresh"
-                :disabled="streamStatusLoading"
-                title="刷新推流状态"
-                @click="loadStreamStatus"
+                class="method-tab"
+                :class="{ 'is-active': otherMethod === 'push' }"
+                @click="otherMethod = 'push'"
               >
-                <ElIcon
-                  class="status-refresh__icon"
-                  :class="{ 'is-spinning': streamStatusLoading }"
-                  :size="14"
-                >
-                  <Refresh />
-                </ElIcon>
+                第三方推流到直播间
               </button>
-              <UiButton
-                variant="primary"
-                :disabled="!canStartLive"
-                @click="startThirdPartyLive"
+              <button
+                type="button"
+                class="method-tab"
+                :class="{ 'is-active': otherMethod === 'passcode' }"
+                @click="otherMethod = 'passcode'"
               >
-                {{ startingLive ? "开播中…" : "开始直播" }}
-              </UiButton>
+                口令开播
+              </button>
             </div>
-            <div class="push-notes">
-              <p>1、推流域名不固定，复制时请仔细检查。为防止串流，每次推流只能用一种地址</p>
-              <p>2、为保证观看质量与流量消耗，推荐设置码率1000~2000之间，分辨率在1080P或以下</p>
-            </div>
-          </template>
 
-          <template v-else>
-            <p class="passcode-desc">
-              发送口令信息给主播即可开播，开播链接与直播口令为主播专用，请勿随意转发
-            </p>
-            <div class="passcode-card">
-              <div class="passcode-row">
-                <span class="passcode-label">直播名称：</span>
-                <span class="passcode-value">{{ liveNameText }}</span>
+            <template v-if="otherMethod === 'push'">
+              <p class="method-desc">
+                OBS摄像机 适合双机位开播，支持桌面共享/屏幕捕获
+              </p>
+              <div class="protocol-row">
+                <label class="protocol-option">
+                  <input
+                    v-model="pushProtocol"
+                    type="radio"
+                    value="rtmp"
+                  >
+                  rtmp推流
+                </label>
+                <label
+                  v-if="showSrt"
+                  class="protocol-option"
+                >
+                  <input
+                    v-model="pushProtocol"
+                    type="radio"
+                    value="srt"
+                  >
+                  srt推流
+                  <span class="protocol-hint">低延迟/更稳定</span>
+                </label>
               </div>
-              <div class="passcode-row">
-                <span class="passcode-label">直播时间：</span>
-                <span class="passcode-value">{{ liveTimeText }}</span>
+              <p
+                v-if="pushError"
+                class="push-error"
+              >
+                {{ pushError }}
+              </p>
+              <div class="copy-row">
+                <span class="copy-label">服务器：</span>
+                <input
+                  class="copy-input"
+                  type="text"
+                  readonly
+                  :value="currentPush.server"
+                  placeholder="暂无推流地址"
+                >
+                <UiButton
+                  variant="default"
+                  @click="copyValue(currentPush.server)"
+                >
+                  复制
+                </UiButton>
               </div>
-              <div class="passcode-row">
-                <span class="passcode-label">直播口令：</span>
-                <span class="passcode-value">{{ passcodeText }}</span>
+              <div class="copy-row">
+                <span class="copy-label">串流密钥：</span>
+                <input
+                  class="copy-input"
+                  type="text"
+                  readonly
+                  :value="currentPush.streamKey"
+                  placeholder="暂无串流密钥"
+                >
+                <UiButton
+                  variant="default"
+                  @click="copyValue(currentPush.streamKey)"
+                >
+                  复制
+                </UiButton>
+              </div>
+              <p
+                v-if="pushProtocol === 'rtmp' && rtmpExpireTime"
+                class="expire-note"
+              >
+                有效期至 {{ rtmpExpireTime }}
+              </p>
+              <div
+                v-if="pushProtocol === 'rtmp'"
+                class="stream-status-row"
+              >
+                <span class="copy-label">推流状态：</span>
+                <span
+                  class="status-text"
+                  :class="{
+                    'is-ok': streamStatus === 1,
+                    'is-miss':
+                      streamStatus === 0 ||
+                      (streamStatus === null && !streamStatusLoading),
+                  }"
+                >{{ streamStatusText }}</span>
                 <button
                   type="button"
-                  class="passcode-reset"
-                  @click="resetPasscode"
+                  class="status-refresh"
+                  :disabled="streamStatusLoading"
+                  title="刷新推流状态"
+                  @click="loadStreamStatus"
                 >
                   <ElIcon
-                    class="passcode-reset__icon"
+                    class="status-refresh__icon"
+                    :class="{ 'is-spinning': streamStatusLoading }"
                     :size="14"
                   >
                     <Refresh />
                   </ElIcon>
-                  重置口令
                 </button>
+                <UiButton
+                  variant="primary"
+                  :disabled="!canStartLive"
+                  @click="startThirdPartyLive"
+                >
+                  {{ startingLive ? "开播中…" : "开始直播" }}
+                </UiButton>
               </div>
-              <div class="passcode-row">
-                <span class="passcode-label">口令开播链接：</span>
-                <span class="passcode-value">{{ hostLinkText }}</span>
-                <span class="passcode-aside">主播专用链接，请勿随意转发</span>
+              <div class="push-notes">
+                <p>1、推流域名不固定，复制时请仔细检查。为防止串流，每次推流只能用一种地址</p>
+                <p>2、为保证观看质量与流量消耗，推荐设置码率1000~2000之间，分辨率在1080P或以下</p>
               </div>
-              <div class="passcode-row">
-                <span class="passcode-label">观众观看链接：</span>
-                <span class="passcode-value">{{ watchLinkText }}</span>
+            </template>
+
+            <template v-else>
+              <p class="passcode-desc">
+                发送口令信息给主播即可开播，开播链接与直播口令为主播专用，请勿随意转发
+              </p>
+              <div class="passcode-card">
+                <div class="passcode-row">
+                  <span class="passcode-label">直播名称：</span>
+                  <span class="passcode-value">{{ liveNameText }}</span>
+                </div>
+                <div class="passcode-row">
+                  <span class="passcode-label">直播时间：</span>
+                  <span class="passcode-value">{{ liveTimeText }}</span>
+                </div>
+                <div class="passcode-row">
+                  <span class="passcode-label">直播口令：</span>
+                  <span class="passcode-value">{{ passcodeText }}</span>
+                  <button
+                    type="button"
+                    class="passcode-reset"
+                    @click="resetPasscode"
+                  >
+                    <ElIcon
+                      class="passcode-reset__icon"
+                      :size="14"
+                    >
+                      <Refresh />
+                    </ElIcon>
+                    重置口令
+                  </button>
+                </div>
+                <div class="passcode-row">
+                  <span class="passcode-label">口令开播链接：</span>
+                  <span class="passcode-value">{{ hostLinkText }}</span>
+                  <span class="passcode-aside">主播专用链接，请勿随意转发</span>
+                </div>
+                <div class="passcode-row">
+                  <span class="passcode-label">观众观看链接：</span>
+                  <span class="passcode-value">{{ watchLinkText }}</span>
+                </div>
               </div>
-            </div>
-            <div class="passcode-actions">
-              <UiButton
-                variant="outline"
-                @click="copyPasscode"
-              >
-                复制口令
-              </UiButton>
-              <UiButton
-                variant="primary"
-                @click="copyAllPasscodeInfo"
-              >
-                复制全部信息
-              </UiButton>
-            </div>
-          </template>
-        </div>
-      </section>
+              <div class="passcode-actions">
+                <UiButton
+                  variant="outline"
+                  @click="copyPasscode"
+                >
+                  复制口令
+                </UiButton>
+                <UiButton
+                  variant="primary"
+                  @click="copyAllPasscodeInfo"
+                >
+                  复制全部信息
+                </UiButton>
+              </div>
+            </template>
+          </div>
+        </section>
+      </template>
     </template>
 
     <RoleSettingsPanel
@@ -671,6 +733,22 @@ async function openHost() {
   margin: 16px 0 12px;
   font-size: 13px;
   color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+.broadcast-unsupported {
+  margin: 0;
+  padding: 16px 20px;
+  border-radius: 8px;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  font-size: 14px;
+  color: #ad6800;
+  line-height: 1.6;
+}
+.push-error {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #f5222d;
   line-height: 1.5;
 }
 .protocol-row {
