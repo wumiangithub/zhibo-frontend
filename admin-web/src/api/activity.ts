@@ -153,6 +153,8 @@ export interface ActivityDetail extends ActivityListItem {
   pv?: number;
   fullEmbedShareLink?: string;
   ultraLowLatency?: boolean;
+  /** type=4：是否定时；非录播可空 */
+  isTiming?: boolean;
   virtualAvatar?: boolean;
   warmupType?: string;
   warmupUrl?: string;
@@ -203,6 +205,8 @@ export interface CreateActivityPayload {
   recordId?: string;
   /** 录播选「素材视频」：本站视频素材 UUID */
   materialId?: string;
+  /** type=4：是否定时 → 微吼 is_timing；默认 true；省略按 true */
+  isTiming?: boolean;
   introduction?: string;
   endTime?: string;
   viewerStyle?: string;

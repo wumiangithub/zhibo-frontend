@@ -26,7 +26,7 @@ export function resolveDefaultOwner(user: AuthUser | null | undefined): {
   return { ownerIds: [id], knownOwners: [{ id, userName, avatar }] };
 }
 
-export type LiveMode = "video" | "recorded" | "voice";
+export type LiveMode = "video" | "interactive" | "recorded" | "voice";
 export type ViewerStyle = "traditional" | "immersive";
 
 export interface LiveFormState {
@@ -49,6 +49,8 @@ export interface LiveFormState {
   recordLabel: string;
   /** 选择来源：素材视频 / 微吼直播回放 */
   recordSource: "" | "video" | "live";
+  /** type=4：是否定时（微吼 is_timing）；默认 true */
+  isTiming: boolean;
   detailCover: string;
   detailHtml: string;
   /** 绑定的已通过直播报备 UUID；空表示未绑定 */
@@ -84,9 +86,11 @@ export interface LiveFormState {
   agreed: boolean;
 }
 
+/** 对齐微吼 webinar_type：1 音频 / 2 视频 / 3 互动；本站 4 录播走 create-demand */
 export const MODE_TO_TYPE: Record<LiveMode, number> = {
-  video: 2,
   voice: 1,
+  video: 2,
+  interactive: 3,
   recorded: 4,
 };
 
@@ -106,6 +110,7 @@ export function useLiveForm() {
     materialId: "",
     recordLabel: "",
     recordSource: "",
+    isTiming: true,
     detailCover: "",
     detailHtml: "",
     reportId: "",
@@ -168,7 +173,8 @@ export function useLiveForm() {
         return "录播模式请选择视频或直播回放资源";
       }
     }
-    if (!form.hostIds.length) return "请选择主播";
+    if (!form.reportId.trim()) return "请绑定直播报备";
+    if (!form.hostIds.length) return "请绑定直播报备以导入主播";
     if (form.ownerIds.length > 20) return "归属人最多选择 20 人";
     if (form.products.length > 20) return "关联商品最多 20 个";
     if (form.coursewareMaterialIds.length > 100) return "课件资料最多 100 个";

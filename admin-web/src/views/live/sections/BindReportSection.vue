@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { ElMessage, ElOption, ElSelect } from "element-plus";
+import { Check } from "@element-plus/icons-vue";
+import { ElIcon, ElMessage, ElOption, ElSelect } from "element-plus";
 import { getLiveReport, listLiveReports, type LiveReport } from "@/api/liveReport";
 import { useMarkDirty } from "@/composables/useLeaveConfirm";
 import FormRow from "../components/FormRow.vue";
@@ -32,12 +33,14 @@ function applyReport(report: LiveReport) {
   form.endDate = end?.date ?? "";
   form.endTime = end?.time ?? "";
   form.detailCover = report.coverUrl?.trim() || "";
-  if (report.host?.id) {
-    form.hostIds = [report.host.id];
+  if (report.host?.id != null) {
+    // 与 LiveFormState.hostIds（string[]）及提交 number[] 对齐：表单内存字符串 id
+    form.hostIds = [String(report.host.id)];
     form.reportHost = {
       id: report.host.id,
-      userName: report.host.userName,
+      userName: (report.host.userName ?? "").trim() || String(report.host.id),
       avatar: report.host.avatar,
+      departmentName: report.host.departmentName?.trim() || undefined,
     };
   } else {
     form.hostIds = [];
@@ -54,9 +57,9 @@ function clearReport() {
   markDirty();
 }
 
+/** 选中后输入框只展示报备标题，不展示报备 ID / 主播 */
 function optionLabel(row: LiveReport) {
-  const host = row.host?.userName?.trim();
-  return host ? `${row.title} / ${host}` : row.title;
+  return row.title?.trim() || row.id;
 }
 
 async function loadPassed(keyword?: string) {
@@ -122,10 +125,12 @@ onMounted(() => {
       filterable
       remote
       clearable
+      fit-input-width
       :remote-method="loadPassed"
       :loading="loading"
       placeholder="请选择已通过的直播报备"
-      style="width: 360px"
+      style="width: 680px"
+      popper-class="bind-report-select-popper"
       @update:model-value="onChange"
       @visible-change="(open: boolean) => open && loadPassed()"
     >
@@ -134,7 +139,74 @@ onMounted(() => {
         :key="row.id"
         :label="optionLabel(row)"
         :value="row.id"
-      />
+      >
+        <div class="report-opt">
+          <span class="report-opt__id">【报备ID：{{ row.id }}】</span>
+          <span class="report-opt__title">{{ row.title }}</span>
+          <ElIcon
+            v-if="form.reportId === row.id"
+            class="report-opt__check"
+          >
+            <Check />
+          </ElIcon>
+        </div>
+      </ElOption>
     </ElSelect>
   </FormRow>
 </template>
+
+<!-- popper 挂到 body，样式必须非 scoped -->
+<style>
+.bind-report-select-popper.el-select__popper,
+.bind-report-select-popper {
+  width: 680px !important;
+  min-width: 680px !important;
+  max-width: none !important;
+}
+.bind-report-select-popper .el-select-dropdown__item {
+  height: 34px;
+  line-height: 34px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.bind-report-select-popper .report-opt {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+.bind-report-select-popper .report-opt__id {
+  flex: none;
+  box-sizing: border-box;
+  /* 【报备ID：】+ 36 位 UUID + 】，固定宽便于右侧标题竖向对齐 */
+  width: 340px;
+  font-size: 12px;
+  color: #999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.bind-report-select-popper .report-opt__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bind-report-select-popper .report-opt__check {
+  flex: none;
+  margin-left: 8px;
+  font-size: 14px;
+  color: var(--color-primary, #409eff);
+}
+.bind-report-select-popper .el-select-dropdown__item.is-selected .report-opt__title {
+  color: var(--color-primary, #409eff);
+  font-weight: 500;
+}
+</style>

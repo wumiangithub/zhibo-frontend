@@ -18,6 +18,7 @@ import { PROVIDER_LABEL, type LiveProvider } from "@/api/activity";
 import type { MaterialListItem } from "@/api/materials";
 import type { VhallLiveItem, VhallPlaybackItem } from "@/api/recordResource";
 import videoIcon from "@/assets/images/live/video.svg?raw";
+import interactiveIcon from "@/assets/images/live/interactive.svg?raw";
 import recordIcon from "@/assets/images/live/record.svg?raw";
 import voiceIcon from "@/assets/images/live/voice.svg?raw";
 
@@ -92,6 +93,7 @@ function onPickLivePlayback(payload: { live: VhallLiveItem; playback: VhallPlayb
 
 const modeOptions = [
   { v: "video" as const, t: "视频直播", d: "摄像头/推流", icon: videoIcon },
+  { v: "interactive" as const, t: "互动直播", d: "多人连麦互动", icon: interactiveIcon },
   { v: "recorded" as const, t: "录播直播", d: "播放录制视频", icon: recordIcon },
   { v: "voice" as const, t: "语音直播", d: "纯音频", icon: voiceIcon, disabled: true },
 ];
@@ -249,6 +251,21 @@ watch(
             请选择素材视频或历史直播回放
           </p>
         </div>
+      </FormRow>
+
+      <FormRow
+        v-if="form.mode === 'recorded'"
+        label="是否定时:"
+        required
+        info="选「是」时开始时间作为定时开播时间"
+      >
+        <ElRadioGroup
+          v-model="form.isTiming"
+          @change="markDirty"
+        >
+          <ElRadioButton :value="true">是</ElRadioButton>
+          <ElRadioButton :value="false">否</ElRadioButton>
+        </ElRadioGroup>
       </FormRow>
 
       <MaterialVideoPicker

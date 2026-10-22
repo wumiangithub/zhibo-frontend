@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
+import { Refresh } from "@element-plus/icons-vue";
+import { ElIcon } from "element-plus";
 import {
   ActivityReady,
   activityReadyLabel,
@@ -31,8 +33,16 @@ const loading = ref(true);
 const error = ref("");
 const detail = ref<ActivityDetail | null>(null);
 const pageError = ref("");
+const readyRefreshing = ref(false);
 const basicTabRef = ref<InstanceType<typeof BasicSettingsTab> | null>(null);
 const shareVisible = ref(false);
+
+/** 录播且尚未就绪：显示转码状态旁的刷新按钮 */
+const showReadyRefresh = computed(() => {
+  const d = detail.value;
+  if (!d || d.type !== 4) return false;
+  return (d.ready ?? ActivityReady.OK) !== ActivityReady.OK;
+});
 
 const sideNav = [
   { key: "basic" as const, label: "基本设置" },
@@ -83,16 +93,36 @@ async function setTab(key: TabKey) {
 
 onBeforeRouteLeave(async () => confirmLeaveBasicIfNeeded());
 
-async function fetchDetail() {
-  loading.value = true;
-  error.value = "";
+async function fetchDetail(opts?: { silent?: boolean }) {
+  const silent = opts?.silent === true;
+  if (silent) {
+    if (readyRefreshing.value) return;
+    readyRefreshing.value = true;
+  } else {
+    loading.value = true;
+    error.value = "";
+  }
   try {
     detail.value = await getActivity(id.value);
+    if (silent) pageError.value = "";
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "加载失败";
+    const msg = e instanceof Error ? e.message : "加载失败";
+    if (silent) {
+      pageError.value = msg;
+    } else {
+      error.value = msg;
+    }
   } finally {
-    loading.value = false;
+    if (silent) {
+      readyRefreshing.value = false;
+    } else {
+      loading.value = false;
+    }
   }
+}
+
+function refreshReadyStatus() {
+  void fetchDetail({ silent: true });
 }
 
 async function goLive() {
@@ -159,6 +189,22 @@ watch(id, fetchDetail);
                   'is-fail': detail.ready === ActivityReady.FAIL,
                 }"
               >【{{ activityReadyLabel(detail.ready) }}】</span>
+              <button
+                v-if="showReadyRefresh"
+                type="button"
+                class="ready-refresh"
+                :disabled="readyRefreshing"
+                title="刷新转码状态"
+                @click="refreshReadyStatus"
+              >
+                <ElIcon
+                  class="ready-refresh__icon"
+                  :class="{ 'is-spinning': readyRefreshing }"
+                  :size="14"
+                >
+                  <Refresh />
+                </ElIcon>
+              </button>
             </h1>
             <p class="summary-time">直播时间: {{ timeRange }}</p>
           </div>
@@ -308,16 +354,19 @@ watch(id, fetchDetail);
 }
 .summary-title {
   margin: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 8px;
   font-size: 16px;
   font-weight: 600;
   color: var(--color-text);
   line-height: 1.4;
 }
 .ready-badge {
-  margin-left: 8px;
   font-size: 14px;
   font-weight: 500;
-  vertical-align: middle;
+  line-height: 1;
 }
 .ready-badge.is-ok {
   color: #389e0d;
@@ -327,6 +376,37 @@ watch(id, fetchDetail);
 }
 .ready-badge.is-fail {
   color: #cf1322;
+}
+.ready-refresh {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.ready-refresh:hover:not(:disabled) {
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+.ready-refresh:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.ready-refresh__icon.is-spinning {
+  animation: ready-spin 0.8s linear infinite;
+}
+@keyframes ready-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .summary-time {
   margin: 8px 0 0;

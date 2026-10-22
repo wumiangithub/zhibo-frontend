@@ -37,7 +37,8 @@ async function submitAudit() {
   if (result.value === "rejected" && !text) { ElMessage.warning("驳回时请填写理由"); return; }
   submitting.value = true;
   try {
-    const updated = await auditLiveReport(id.value, result.value, result.value === "rejected" ? text : undefined);
+    // 通过/驳回均落库理由；驳回必填，通过选填
+    const updated = await auditLiveReport(id.value, result.value, text || undefined);
     if (detail.value) detail.value.status = updated.status;
     audits.value = (await listLiveReportAudits(id.value)).list ?? [];
     reason.value = "";

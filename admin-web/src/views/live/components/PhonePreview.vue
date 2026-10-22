@@ -9,7 +9,7 @@ defineProps<{
   /** 详情封面，有则盖在播放器区 */
   coverUrl?: string;
   /** video | recorded | voice */
-  mode?: "video" | "recorded" | "voice";
+  mode?: "video" | "interactive" | "recorded" | "voice";
   /** traditional | immersive */
   viewerStyle?: "traditional" | "immersive";
 }>();

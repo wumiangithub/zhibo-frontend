@@ -154,110 +154,115 @@ watch(
     width="800px"
     align-center
     destroy-on-close
+    class="vhall-live-picker"
   >
-    <p
-      v-if="listError"
-      class="err-tip"
-    >
-      {{ listError }}
-    </p>
-
-    <div class="toolbar">
-      <UiButton
-        variant="default"
-        :disabled="loading"
-        @click="fetchLives"
+    <div class="picker-layout">
+      <p
+        v-if="listError"
+        class="err-tip"
       >
-        刷新
-      </UiButton>
-      <ElInput
-        v-model="keyword"
-        clearable
-        placeholder="搜索直播名称"
-        style="width: 240px; margin-left: auto"
-        @keyup.enter="page = 1; fetchLives()"
-      />
-      <UiButton
-        variant="outline"
-        @click="page = 1; fetchLives()"
-      >
-        搜索
-      </UiButton>
-    </div>
+        {{ listError }}
+      </p>
 
-    <div
-      v-if="loading"
-      class="empty"
-    >
-      加载中…
-    </div>
-    <div
-      v-else-if="list.length === 0"
-      class="empty"
-    >
-      暂无直播
-    </div>
-    <table
-      v-else
-      class="tbl"
-    >
-      <thead>
-        <tr>
-          <th class="col-radio" />
-          <th>直播名称</th>
-          <th>直播时间</th>
-          <th>状态</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="item in list"
-          :key="item.id"
-          :class="{ 'is-active': pickedLiveId === item.id }"
-          @click="pickedLiveId = item.id"
+      <div class="toolbar">
+        <UiButton
+          variant="default"
+          :disabled="loading"
+          @click="fetchLives"
         >
-          <td class="col-radio">
-            <ElRadio
-              v-model="pickedLiveId"
-              :value="item.id"
-              @click.stop
-            />
-          </td>
-          <td>
-            <div class="live-cell">
-              <div class="thumb">
-                <img
-                  v-if="item.coverUrl"
-                  :src="item.coverUrl"
-                  alt=""
-                >
-                <span v-else>直播</span>
-              </div>
-              <span class="live-title">{{ item.title }}</span>
-            </div>
-          </td>
-          <td>{{ timeText(item) }}</td>
-          <td>{{ stateText(item) }}</td>
-        </tr>
-      </tbody>
-    </table>
+          刷新
+        </UiButton>
+        <ElInput
+          v-model="keyword"
+          clearable
+          placeholder="搜索直播名称"
+          style="width: 240px; margin-left: auto"
+          @keyup.enter="page = 1; fetchLives()"
+        />
+        <UiButton
+          variant="outline"
+          @click="page = 1; fetchLives()"
+        >
+          搜索
+        </UiButton>
+      </div>
 
-    <div class="pager">
-      <span>共 {{ total }} 条 · 第 {{ page }}/{{ pageCount }} 页</span>
-      <UiButton
-        variant="default"
-        :disabled="page <= 1 || loading"
-        @click="page--; fetchLives()"
-      >
-        上一页
-      </UiButton>
-      <UiButton
-        variant="default"
-        :disabled="page >= pageCount || loading"
-        @click="page++; fetchLives()"
-      >
-        下一页
-      </UiButton>
+      <div class="list-scroll">
+        <div
+          v-if="loading"
+          class="empty"
+        >
+          加载中…
+        </div>
+        <div
+          v-else-if="list.length === 0"
+          class="empty"
+        >
+          暂无直播
+        </div>
+        <table
+          v-else
+          class="tbl"
+        >
+          <thead>
+            <tr>
+              <th class="col-radio" />
+              <th>直播名称</th>
+              <th>直播时间</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="item in list"
+              :key="item.id"
+              :class="{ 'is-active': pickedLiveId === item.id }"
+              @click="pickedLiveId = item.id"
+            >
+              <td class="col-radio">
+                <ElRadio
+                  v-model="pickedLiveId"
+                  :value="item.id"
+                  @click.stop
+                />
+              </td>
+              <td>
+                <div class="live-cell">
+                  <div class="thumb">
+                    <img
+                      v-if="item.coverUrl"
+                      :src="item.coverUrl"
+                      alt=""
+                    >
+                    <span v-else>直播</span>
+                  </div>
+                  <span class="live-title">{{ item.title }}</span>
+                </div>
+              </td>
+              <td>{{ timeText(item) }}</td>
+              <td>{{ stateText(item) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pager">
+        <span>共 {{ total }} 条 · 第 {{ page }}/{{ pageCount }} 页</span>
+        <UiButton
+          variant="default"
+          :disabled="page <= 1 || loading"
+          @click="page--; fetchLives()"
+        >
+          上一页
+        </UiButton>
+        <UiButton
+          variant="default"
+          :disabled="page >= pageCount || loading"
+          @click="page++; fetchLives()"
+        >
+          下一页
+        </UiButton>
+      </div>
     </div>
 
     <template #footer>
@@ -320,6 +325,12 @@ watch(
 </template>
 
 <style scoped>
+.picker-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0;
+}
 .mock-tip,
 .err-tip {
   margin: 0 0 10px;
@@ -342,6 +353,16 @@ watch(
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
+  flex: none;
+}
+.list-scroll {
+  flex: 1;
+  min-height: 160px;
+  max-height: min(360px, calc(100vh - 280px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-light);
+  border-radius: 4px;
 }
 .empty {
   padding: 48px 0;
@@ -363,6 +384,9 @@ watch(
   color: var(--color-text-secondary);
 }
 .tbl th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   background: #fafbfc;
   color: var(--color-text-placeholder);
   font-weight: 500;
@@ -412,6 +436,7 @@ watch(
   margin-top: 12px;
   font-size: 12px;
   color: var(--color-text-placeholder);
+  flex: none;
 }
 .pb-hint {
   margin: 0 0 12px;
@@ -455,5 +480,25 @@ watch(
   gap: 10px;
   font-size: 12px;
   color: var(--color-text-placeholder);
+}
+</style>
+
+<!-- ElDialog 挂到 body，壳层样式需非 scoped -->
+<style>
+.vhall-live-picker.el-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 80px);
+}
+.vhall-live-picker .el-dialog__header,
+.vhall-live-picker .el-dialog__footer {
+  flex: none;
+}
+.vhall-live-picker .el-dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 12px;
+  padding-bottom: 8px;
 }
 </style>

@@ -20,6 +20,8 @@ export interface ReportHost {
   id: number;
   userName: string;
   avatar?: string;
+  /** 现查主播所在部门；无则省略 */
+  departmentName?: string;
 }
 
 export interface LiveReport {

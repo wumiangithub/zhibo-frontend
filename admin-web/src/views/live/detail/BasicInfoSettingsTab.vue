@@ -34,7 +34,7 @@ const auditLocked = computed(() => {
 const TYPE_TO_MODE: Record<number, LiveMode> = {
   1: "voice",
   2: "video",
-  3: "video",
+  3: "interactive",
   4: "recorded",
 };
 
@@ -59,8 +59,8 @@ function applyDetail(d: ActivityDetail) {
   form.detailCover = d.coverUrl ?? "";
   form.detailHtml = d.detailHtml ?? "";
   // UI 单选：后端若返回多人，只取第一人回显
-  form.hostIds = (d.hosts ?? []).map((h) => h.id).slice(0, 1);
-  form.ownerIds = (d.owners ?? []).map((o) => o.id);
+  form.hostIds = (d.hosts ?? []).map((h) => String(h.id)).slice(0, 1);
+  form.ownerIds = (d.owners ?? []).map((o) => String(o.id));
   form.products = (d.products ?? []).map((p) => ({
     spuId: String(p.spuId),
     productName: p.productName,
@@ -135,7 +135,7 @@ async function onSave() {
       coverUrl: form.detailCover || undefined,
       detailHtml: form.detailHtml?.trim() || undefined,
       autoList: form.autoList,
-      hostIds: form.hostIds.slice(0, 1),
+      hostIds: form.hostIds.slice(0, 1).map((id) => Number(id)),
       ownerIds: [...form.ownerIds],
       products: form.products.map((p) => ({
         spuId: String(p.spuId),
@@ -193,6 +193,7 @@ defineExpose({
         :form="form"
         :known-hosts="detail.hosts"
         :known-owners="detail.owners"
+        :host-locked="!!detail.reportId"
       />
     </div>
 

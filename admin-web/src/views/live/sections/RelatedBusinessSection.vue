@@ -7,13 +7,18 @@ import RelatedProductsSection from "./RelatedProductsSection.vue";
 import CoursewareSection from "./CoursewareSection.vue";
 import AutoListSection from "./AutoListSection.vue";
 
-defineProps<{
-  form: LiveFormState;
-  /** 详情回显：主播姓名 */
-  knownHosts?: EmployeeItem[];
-  /** 详情回显：归属人姓名 */
-  knownOwners?: EmployeeItem[];
-}>();
+withDefaults(
+  defineProps<{
+    form: LiveFormState;
+    /** 详情回显：主播姓名 */
+    knownHosts?: EmployeeItem[];
+    /** 详情回显：归属人姓名 */
+    knownOwners?: EmployeeItem[];
+    /** 主播禁止手选（新建：仅从报备导入；设置：已绑报备时锁定） */
+    hostLocked?: boolean;
+  }>(),
+  { hostLocked: false },
+);
 </script>
 
 <template>
@@ -23,6 +28,7 @@ defineProps<{
       <HostSection
         :form="form"
         :known="knownHosts"
+        :locked="hostLocked"
       />
       <OwnerSection
         :form="form"

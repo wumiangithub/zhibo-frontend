@@ -40,7 +40,7 @@ function buildPayload(): CreateActivityPayload {
     viewerStyle: form.viewerStyle,
     ultraLowLatency: form.ultraLowLatency,
     autoList: form.autoList,
-    hostIds: form.hostIds.slice(0, 1),
+    hostIds: form.hostIds.slice(0, 1).map((id) => Number(id)),
   };
   if (form.reportId) payload.reportId = form.reportId;
   const intro = form.intro.trim();
@@ -49,6 +49,7 @@ function buildPayload(): CreateActivityPayload {
     payload.endTime = `${form.endDate} ${form.endTime}:00`;
   }
   if (form.mode === "recorded") {
+    payload.isTiming = form.isTiming;
     if (form.recordSource === "video" && form.materialId.trim()) {
       payload.materialId = form.materialId.trim();
     } else if (form.recordSource === "live" && form.recordId.trim()) {

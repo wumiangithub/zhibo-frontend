@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { ElMessage, ElOption, ElSelect } from "element-plus";
+import { ElInput, ElMessage, ElOption, ElSelect } from "element-plus";
 import { listEmployees, type EmployeeItem } from "@/api/activity";
 import { useMarkDirty } from "@/composables/useLeaveConfirm";
 import FormRow from "../components/FormRow.vue";
 import type { LiveFormState } from "../composables/useLiveForm";
 
-const props = defineProps<{
-  form: LiveFormState;
-  /** 详情回显时带姓名 / 头像 */
-  known?: EmployeeItem[];
-}>();
+const props = withDefaults(
+  defineProps<{
+    form: LiveFormState;
+    /** 详情回显时带姓名 / 头像 */
+    known?: EmployeeItem[];
+    /** 禁止手选/清除；主播仅由绑定直播报备导入 */
+    locked?: boolean;
+  }>(),
+  { locked: false },
+);
 const form = props.form;
 const markDirty = useMarkDirty();
 
@@ -19,15 +24,32 @@ const options = ref<EmployeeItem[]>([]);
 const selected = ref<EmployeeItem | null>(null);
 const brokenAvatar = ref<Record<string, boolean>>({});
 
+function idKey(id: string | number | null | undefined) {
+  if (id == null || id === "") return "";
+  return String(id);
+}
+
 /** UI 单选；契约仍为 hostIds 数组，长度 0 或 1 */
-const hostId = computed(() => form.hostIds[0] ?? "");
+const hostId = computed(() => idKey(form.hostIds[0]));
+
+const lockedDisplayName = computed(() => {
+  const name = selected.value?.userName?.trim();
+  if (name && name !== hostId.value) return name;
+  return "";
+});
+
+function toEmployeeId(raw: string | number): number {
+  return typeof raw === "number" ? raw : Number(raw);
+}
 
 function mergeEmployee(a?: EmployeeItem, b?: EmployeeItem): EmployeeItem | undefined {
   if (!a && !b) return undefined;
-  const id = a?.id || b?.id || "";
+  const raw = a?.id ?? b?.id;
+  if (raw == null || raw === ("" as unknown)) return undefined;
+  const fallback = idKey(raw);
   return {
-    id,
-    userName: (a?.userName || b?.userName || id).trim() || id,
+    id: toEmployeeId(raw),
+    userName: (a?.userName || b?.userName || fallback).trim() || fallback,
     avatar: a?.avatar?.trim() || b?.avatar?.trim() || undefined,
     departmentName:
       a?.departmentName?.trim() || b?.departmentName?.trim() || undefined,
@@ -43,14 +65,21 @@ function syncSelected(id: string) {
     selected.value = null;
     return;
   }
-  const fromOpt = options.value.find((o) => o.id === id);
-  const fromKnown = (props.known ?? []).find((k) => k.id === id);
+  const fromOpt = options.value.find((o) => idKey(o.id) === id);
+  const fromKnown = (props.known ?? []).find((k) => idKey(k.id) === id);
+  const prev = selected.value && idKey(selected.value.id) === id ? selected.value : undefined;
   selected.value =
     mergeEmployee(fromOpt, fromKnown) ??
-    mergeEmployee(selected.value?.id === id ? selected.value : undefined, fromKnown) ?? {
-      id,
-      userName: id,
+    mergeEmployee(prev, fromKnown) ??
+    mergeEmployee(fromKnown, undefined) ?? {
+      id: toEmployeeId(id),
+      userName: fromKnown?.userName?.trim() || id,
     };
+  // 保证下拉能解析出 label（避免只显示裸 id）
+  const emp = selected.value;
+  if (emp && !options.value.some((o) => idKey(o.id) === id)) {
+    options.value = [emp, ...options.value];
+  }
 }
 
 async function loadEmployees(keyword?: string) {
@@ -59,16 +88,23 @@ async function loadEmployees(keyword?: string) {
     const data = await listEmployees(keyword);
     const list = data.list ?? [];
     const map = new Map<string, EmployeeItem>();
-    for (const o of list) map.set(o.id, o);
+    for (const o of list) map.set(idKey(o.id), o);
     for (const o of props.known ?? []) {
-      map.set(o.id, mergeEmployee(map.get(o.id), o)!);
+      map.set(idKey(o.id), mergeEmployee(map.get(idKey(o.id)), o)!);
     }
     if (selected.value) {
-      map.set(selected.value.id, mergeEmployee(map.get(selected.value.id), selected.value)!);
+      const sid = idKey(selected.value.id);
+      map.set(sid, mergeEmployee(map.get(sid), selected.value)!);
     }
     if (hostId.value && !map.has(hostId.value)) {
-      const known = (props.known ?? []).find((k) => k.id === hostId.value);
-      map.set(hostId.value, known ?? { id: hostId.value, userName: hostId.value });
+      const known = (props.known ?? []).find((k) => idKey(k.id) === hostId.value);
+      map.set(
+        hostId.value,
+        known ?? {
+          id: toEmployeeId(hostId.value),
+          userName: hostId.value,
+        },
+      );
     }
     options.value = [...map.values()];
     syncSelected(hostId.value);
@@ -87,9 +123,10 @@ function normalizeToSingle() {
   }
 }
 
-function onChange(id: string | null | undefined) {
-  const next = id ? [String(id)] : [];
-  if (next.length === form.hostIds.length && next[0] === form.hostIds[0]) {
+function onChange(id: string | number | null | undefined) {
+  if (props.locked) return;
+  const next = id != null && id !== "" ? [idKey(id)] : [];
+  if (next.length === form.hostIds.length && idKey(next[0]) === idKey(form.hostIds[0])) {
     syncSelected(next[0] ?? "");
     return;
   }
@@ -99,6 +136,7 @@ function onChange(id: string | null | undefined) {
 }
 
 function clearHost() {
+  if (props.locked) return;
   form.hostIds = [];
   selected.value = null;
   markDirty();
@@ -115,7 +153,12 @@ function avatarOf(emp: EmployeeItem) {
 }
 
 watch(
-  () => [form.hostIds.join(","), (props.known ?? []).map((k) => `${k.id}:${k.avatar ?? ""}`).join(",")],
+  () => [
+    form.hostIds.map((id) => idKey(id)).join(","),
+    (props.known ?? [])
+      .map((k) => `${idKey(k.id)}:${k.userName}:${k.departmentName ?? ""}:${k.avatar ?? ""}`)
+      .join(","),
+  ],
   () => {
     normalizeToSingle();
     syncSelected(hostId.value);
@@ -124,7 +167,7 @@ watch(
 );
 
 onMounted(() => {
-  void loadEmployees();
+  if (!props.locked) void loadEmployees();
 });
 </script>
 
@@ -132,9 +175,19 @@ onMounted(() => {
   <FormRow
     label="主播:"
     required
+    :info="locked ? '不可手选，请先绑定直播报备后自动带入' : undefined"
   >
     <div class="host-wrap">
+      <!-- 锁定：只读展示姓名，避免 ElSelect 无 option 时回退显示裸 id -->
+      <ElInput
+        v-if="locked"
+        :model-value="lockedDisplayName"
+        disabled
+        placeholder="请先绑定直播报备"
+        style="width: 320px"
+      />
       <ElSelect
+        v-else
         :model-value="hostId || undefined"
         filterable
         remote
@@ -148,9 +201,9 @@ onMounted(() => {
       >
         <ElOption
           v-for="emp in options"
-          :key="emp.id"
+          :key="idKey(emp.id)"
           :label="emp.userName"
-          :value="emp.id"
+          :value="idKey(emp.id)"
         >
           <span class="host-option">
             <span class="host-option__avatar">
@@ -158,7 +211,7 @@ onMounted(() => {
                 v-if="avatarOf(emp)"
                 :src="avatarOf(emp)"
                 alt=""
-                @error="onAvatarError(emp.id)"
+                @error="onAvatarError(idKey(emp.id))"
               >
               <svg
                 v-else
@@ -204,6 +257,7 @@ onMounted(() => {
             class="host-tag__dept"
           >{{ deptOf(selected) }}</span>
           <i
+            v-if="!locked"
             class="host-tag__x"
             @click="clearHost"
           >×</i>

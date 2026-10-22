@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   ElButton,
@@ -86,12 +86,6 @@ function toApiPlanTimes(rows: PlanTimeRow[]): PlanTime[] {
   }));
 }
 
-function hostLabel(x: EmployeeItem): string {
-  const name = x.userName?.trim() || x.id;
-  const dept = x.departmentName?.trim() || "";
-  return dept ? `${name} / ${dept}` : name;
-}
-
 function startOfToday() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -153,11 +147,136 @@ const form = reactive({
   coverFileSize: 0,
   coverMimeType: "",
   coverMaterialId: "",
-  hostId: "",
+  hostId: "" as string | number,
   attachments: [] as ReportAttachment[],
 });
-const employees = ref<EmployeeItem[]>([]);
+
+/** 主播选择：对齐归属人（下拉带头像，选中后下方 tag 也带头像；部门灰色跟在姓名后） */
 const hostLoading = ref(false);
+const hostOptions = ref<EmployeeItem[]>([]);
+const selectedHost = ref<EmployeeItem | null>(null);
+const knownHost = ref<EmployeeItem | null>(null);
+const brokenAvatar = ref<Record<string, boolean>>({});
+
+function idKey(id: string | number | null | undefined) {
+  if (id == null || id === "") return "";
+  return String(id);
+}
+
+function mergeEmployee(a?: EmployeeItem | null, b?: EmployeeItem | null): EmployeeItem | undefined {
+  if (!a && !b) return undefined;
+  const raw = a?.id ?? b?.id;
+  if (raw == null || raw === ("" as unknown)) return undefined;
+  const id = typeof raw === "number" ? raw : Number(raw);
+  const fallback = idKey(raw);
+  return {
+    id: Number.isFinite(id) ? id : 0,
+    userName: (a?.userName || b?.userName || fallback).trim() || fallback,
+    avatar: a?.avatar?.trim() || b?.avatar?.trim() || undefined,
+    departmentName:
+      a?.departmentName?.trim() || b?.departmentName?.trim() || undefined,
+  };
+}
+
+function deptOf(emp: EmployeeItem) {
+  return emp.departmentName?.trim() || "";
+}
+
+function hostAvatarOf(emp: EmployeeItem) {
+  const url = emp.avatar?.trim();
+  if (!url || brokenAvatar.value[idKey(emp.id)]) return "";
+  return url;
+}
+
+function onHostAvatarError(id: string | number) {
+  brokenAvatar.value = { ...brokenAvatar.value, [idKey(id)]: true };
+}
+
+function syncSelectedHost() {
+  const id = idKey(form.hostId);
+  if (!id) {
+    selectedHost.value = null;
+    return;
+  }
+  const fromOpt = hostOptions.value.find((o) => idKey(o.id) === id) ?? null;
+  const fromKnown =
+    knownHost.value && idKey(knownHost.value.id) === id ? knownHost.value : null;
+  const prev =
+    selectedHost.value && idKey(selectedHost.value.id) === id
+      ? selectedHost.value
+      : null;
+  selectedHost.value =
+    mergeEmployee(fromOpt, fromKnown) ??
+    mergeEmployee(prev, fromKnown) ??
+    mergeEmployee(fromKnown, null) ??
+    mergeEmployee(fromOpt, null) ?? {
+      id: Number(id) || 0,
+      userName: id,
+    };
+  // 保证 ElSelect 能解析 label（避免回退显示裸 id）
+  if (
+    selectedHost.value &&
+    !hostOptions.value.some((o) => idKey(o.id) === id)
+  ) {
+    hostOptions.value = [selectedHost.value, ...hostOptions.value];
+  }
+}
+
+async function loadEmployees(keyword?: string) {
+  hostLoading.value = true;
+  try {
+    const data = await listEmployees(keyword);
+    const list = data.list ?? [];
+    const map = new Map<string, EmployeeItem>();
+    for (const o of list) map.set(idKey(o.id), o);
+    if (knownHost.value) {
+      const kid = idKey(knownHost.value.id);
+      map.set(kid, mergeEmployee(map.get(kid), knownHost.value)!);
+    }
+    if (selectedHost.value) {
+      const sid = idKey(selectedHost.value.id);
+      map.set(sid, mergeEmployee(map.get(sid), selectedHost.value)!);
+    }
+    const currentId = idKey(form.hostId);
+    if (currentId && !map.has(currentId)) {
+      map.set(currentId, {
+        id: Number(currentId) || 0,
+        userName: currentId,
+      });
+    }
+    hostOptions.value = [...map.values()];
+    syncSelectedHost();
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "加载员工失败");
+  } finally {
+    hostLoading.value = false;
+  }
+}
+
+function onHostChange(id: string | number | null | undefined) {
+  form.hostId = id == null || id === "" ? "" : id;
+  syncSelectedHost();
+  if (selectedHost.value) knownHost.value = selectedHost.value;
+  else knownHost.value = null;
+}
+
+function clearHost() {
+  form.hostId = "";
+  selectedHost.value = null;
+  knownHost.value = null;
+}
+
+watch(
+  () => [
+    idKey(form.hostId),
+    knownHost.value
+      ? `${idKey(knownHost.value.id)}:${knownHost.value.userName}`
+      : "",
+  ],
+  () => syncSelectedHost(),
+  { immediate: true },
+);
+
 const saving = ref(false);
 const uploading = ref(false);
 /** 串行上传时展示当前/排队文件的百分比，避免只有 uploading 布尔。 */
@@ -271,25 +390,6 @@ function removeCover() {
 async function downloadAttachment(f: ReportAttachment) {
   const res = await downloadFiles([{ fileUrl: f.url, fileName: f.name }], { useLink: true });
   if (!res.success) ElMessage.error("下载失败");
-}
-
-async function loadEmployees(keyword?: string) {
-  hostLoading.value = true;
-  try {
-    const data = await listEmployees(keyword);
-    const list = data.list ?? [];
-    const map = new Map<string, EmployeeItem>();
-    for (const o of list) map.set(o.id, o);
-    if (form.hostId && !map.has(form.hostId)) {
-      const keep = employees.value.find((x) => x.id === form.hostId);
-      if (keep) map.set(keep.id, keep);
-    }
-    employees.value = [...map.values()];
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : "加载员工失败");
-  } finally {
-    hostLoading.value = false;
-  }
 }
 
 async function onFiles(e: Event) {
@@ -474,7 +574,11 @@ async function init() {
           attachmentBatchPrefix.value,
         ) + 1;
       selectedCoverId.value = d.coverMaterialId || "";
-      employees.value = [{ id: d.host.id, userName: d.host.userName, avatar: d.host.avatar }];
+      knownHost.value = {
+        id: d.host.id,
+        userName: d.host.userName,
+        avatar: d.host.avatar,
+      };
       originalCount.value = d.status === "passed" ? d.planTimes.length : 0;
       if (d.status === "pending" || d.boundLiveCount > 0) {
         ElMessage.warning("当前报备不可编辑");
@@ -594,20 +698,83 @@ onMounted(init);
         </div>
         <div class="field">
           <label><i>*</i> 主播</label>
-          <ElSelect
-            v-model="form.hostId"
-            filterable
-            remote
-            :remote-method="loadEmployees"
-            :loading="hostLoading"
-            placeholder="请输入主播姓名搜索"
-            @visible-change="(open: boolean) => open && loadEmployees()"
-          >
-            <ElOption v-for="x in employees" :key="x.id" :label="hostLabel(x)" :value="x.id">
-              <span>{{ x.userName?.trim() || x.id }}</span>
-              <span v-if="x.departmentName?.trim()" class="host-dept"> / {{ x.departmentName.trim() }}</span>
-            </ElOption>
-          </ElSelect>
+          <div class="host-wrap">
+            <ElSelect
+              :model-value="form.hostId === '' ? undefined : form.hostId"
+              filterable
+              remote
+              clearable
+              :remote-method="loadEmployees"
+              :loading="hostLoading"
+              placeholder="请输入主播姓名搜索"
+              style="width: 360px"
+              @update:model-value="onHostChange"
+              @visible-change="(open: boolean) => open && loadEmployees()"
+            >
+              <ElOption
+                v-for="emp in hostOptions"
+                :key="idKey(emp.id)"
+                :label="emp.userName"
+                :value="emp.id"
+              >
+                <span class="host-option">
+                  <span class="host-option__avatar">
+                    <img
+                      v-if="hostAvatarOf(emp)"
+                      :src="hostAvatarOf(emp)"
+                      alt=""
+                      @error="onHostAvatarError(emp.id)"
+                    >
+                    <svg
+                      v-else
+                      class="host-option__icon"
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" />
+                    </svg>
+                  </span>
+                  <span>{{ emp.userName }}</span>
+                  <span
+                    v-if="deptOf(emp)"
+                    class="host-option__dept"
+                  >{{ deptOf(emp) }}</span>
+                </span>
+              </ElOption>
+            </ElSelect>
+            <div
+              v-if="selectedHost"
+              class="host-tags"
+            >
+              <span class="host-tag">
+                <span class="host-tag__avatar">
+                  <img
+                    v-if="hostAvatarOf(selectedHost)"
+                    :src="hostAvatarOf(selectedHost)"
+                    alt=""
+                    @error="onHostAvatarError(selectedHost.id)"
+                  >
+                  <svg
+                    v-else
+                    class="host-tag__icon"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" />
+                  </svg>
+                </span>
+                <span class="host-tag__name">{{ selectedHost.userName }}</span>
+                <span
+                  v-if="deptOf(selectedHost)"
+                  class="host-tag__dept"
+                >{{ deptOf(selectedHost) }}</span>
+                <i
+                  class="host-tag__x"
+                  @click="clearHost"
+                >×</i>
+              </span>
+            </div>
+          </div>
         </div>
         <div class="field">
           <label><i>*</i> 直播报备材料</label>
@@ -741,8 +908,79 @@ small {
   color: #999;
   font-size: 12px;
 }
-.host-dept {
+.host-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.host-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.host-option__dept,
+.host-tag__dept {
   color: #999;
+  font-size: 12px;
+}
+.host-option__avatar,
+.host-tag__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #d9d9d9;
+  color: #fff;
+  flex-shrink: 0;
+}
+.host-option__avatar img,
+.host-tag__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.host-option__icon,
+.host-tag__icon {
+  width: 12px;
+  height: 12px;
+}
+.host-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 10px 12px;
+  background: #f5f6f8;
+  border-radius: 6px;
+}
+.host-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  color: #333;
+  border: 1px solid #e8e8e8;
+  border-radius: 16px;
+  padding: 4px 10px 4px 4px;
+  font-size: 13px;
+}
+.host-tag__name {
+  line-height: 1;
+}
+.host-tag__x {
+  cursor: pointer;
+  font-style: normal;
+  color: #999;
+  line-height: 1;
+  font-size: 14px;
+}
+.host-tag__x:hover {
+  color: #f5222d;
 }
 .cover-box {
   position: relative;
