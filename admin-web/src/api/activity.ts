@@ -278,10 +278,6 @@ export function startActivityLive(id: ActivityId) {
   );
 }
 
-export function getEmbedUrl(id: ActivityId) {
-  return get<{ embedUrl: string }>(`/activities/embed/${id}`);
-}
-
 export interface StatsOverview {
   id: ActivityId;
   title: string;

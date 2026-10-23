@@ -2,7 +2,6 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
-  getEmbedUrl,
   updateActivity,
   endActivity,
   deleteActivity,
@@ -22,9 +21,6 @@ const emit = defineEmits<{ refreshed: [] }>();
 
 const router = useRouter();
 const copied = ref("");
-const embedUrl = ref("");
-const embedError = ref("");
-const embedLoading = ref(false);
 const error = ref("");
 
 const editing = ref(false);
@@ -72,19 +68,6 @@ async function copyHost() {
 
 function copyWatchLink() {
   void copy(buildAudienceWatchUrl(props.activityId), "观看链接已复制");
-}
-
-async function loadEmbed() {
-  embedLoading.value = true;
-  embedError.value = "";
-  try {
-    const { embedUrl: url } = await getEmbedUrl(props.activityId);
-    embedUrl.value = url;
-  } catch (e) {
-    embedError.value = e instanceof Error ? e.message : "获取嵌入地址失败";
-  } finally {
-    embedLoading.value = false;
-  }
 }
 
 function startEdit() {
@@ -246,13 +229,6 @@ async function confirmDelete() {
       >
         复制分享链接
       </UiButton>
-      <UiButton
-        variant="default"
-        :disabled="embedLoading"
-        @click="loadEmbed"
-      >
-        {{ embedLoading ? "加载中…" : "加载后台嵌入预览" }}
-      </UiButton>
     </div>
 
     <p
@@ -267,24 +243,6 @@ async function confirmDelete() {
     >
       {{ error }}
     </p>
-    <p
-      v-if="embedError"
-      class="tip is-err"
-    >
-      {{ embedError }}
-    </p>
-
-    <div
-      v-if="embedUrl"
-      class="embed-wrap"
-    >
-      <iframe
-        :src="embedUrl"
-        class="embed-frame"
-        allowfullscreen
-        allow="fullscreen; autoplay"
-      />
-    </div>
 
     <Teleport to="body">
       <div
@@ -430,15 +388,6 @@ async function confirmDelete() {
 }
 .tip.is-err {
   color: var(--color-danger);
-}
-.embed-wrap {
-  margin-top: 16px;
-}
-.embed-frame {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
 }
 .modal-mask {
   position: fixed;
