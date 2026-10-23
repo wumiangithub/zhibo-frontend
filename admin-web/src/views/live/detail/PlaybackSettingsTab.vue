@@ -121,7 +121,7 @@ async function onDownload(row: ActivityRecordItem) {
       return;
     }
     if (status === 0) {
-      ElMessage.info("回放尚未开始打包，请稍后重试");
+      ElMessage.info("已提交回放打包任务，请稍后再次点击下载");
       return;
     }
     if (status === 3) {
