@@ -25,30 +25,47 @@ export const ORDER_CENTER_PRODUCT_STATUS_LABEL: Record<OrderCenterProductStatus,
   [ORDER_CENTER_PRODUCT_STATUS.OFF_SHELF]: "下架",
 };
 
-/** 业务员端商品列表项（订单中心；展示字段按对方响应尽量映射） */
+/** 订单中心通用 id+名称（老师 / 部门） */
+export interface OrderCenterIdName {
+  id: string;
+  name: string;
+}
+
+/** 业务员端商品列表/详情项（订单中心；展示字段按对方响应映射） */
 export interface OrderCenterProduct {
   spuId: string;
   productName: string;
   coverImg?: string;
-  /** SPU 上架状态，见 ORDER_CENTER_PRODUCT_STATUS */
+  /** SPU 上架状态，见 ORDER_CENTER_PRODUCT_STATUS；列表接口过滤后恒为 3 */
   status?: number;
   productWind?: number;
   /** 上架 SKU 数 */
   validSkuCount?: number;
   /** 带有效活动价的 SKU 数 */
   validActivityCount?: number;
-  /** 以下字段对方列表未必有；有则展示 */
+  /** 商品简称（详情 productShortname；列表无此字段） */
   productAlias?: string;
   categoryName?: string;
+  /** 归属部门名称（bmidName） */
   belongDeptName?: string;
+  /** 售卖部门名称（sellDepartments[].name 顿号拼接） */
   salesDeptName?: string;
+  /** 关联老师展示文案（优先 teachers[].name，兼容 teacherNames[]） */
   teacherNames?: string;
+  /** 关联老师结构化（列表/详情新增） */
+  teachers?: OrderCenterIdName[];
+  /** 售卖部门结构化 */
+  sellDepartments?: OrderCenterIdName[];
+  /** 归属部门 ID（0=未配置） */
+  bmid?: string;
   updateTime?: string;
 }
 
 export interface SalerProductListQuery {
   page?: number;
   pageSize?: number;
+  /** 商品名称模糊搜索（对方去首尾空格；空串不过滤） */
+  productName?: string;
 }
 
 export interface SalerProductListResult {
@@ -104,6 +121,26 @@ function asOptionalString(v: unknown): string | undefined {
   return undefined;
 }
 
+/** 解析 `{ id, name }[]`；查不到名称的条目对方不返回 */
+function mapIdNameList(raw: unknown): OrderCenterIdName[] | undefined {
+  if (!Array.isArray(raw) || !raw.length) return undefined;
+  const out: OrderCenterIdName[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const o = row as Record<string, unknown>;
+    const id = o.id != null ? String(o.id).trim() : "";
+    const name = typeof o.name === "string" ? o.name.trim() : String(o.name ?? "").trim();
+    if (!id || !name) continue;
+    out.push({ id, name });
+  }
+  return out.length ? out : undefined;
+}
+
+function joinNames(items: OrderCenterIdName[] | undefined): string | undefined {
+  if (!items?.length) return undefined;
+  return items.map((t) => t.name).join("、") || undefined;
+}
+
 function countSkus(skuList: unknown): { validSku: number; validActivity: number } {
   if (!Array.isArray(skuList)) return { validSku: 0, validActivity: 0 };
   let validSku = 0;
@@ -133,13 +170,24 @@ function mapProduct(row: unknown): OrderCenterProduct | null {
     typeof o.productName === "string" ? o.productName.trim() : String(o.productName ?? "").trim();
   if (!spuId || !productName) return null;
   const { validSku, validActivity } = countSkus(o.skuList);
-  const teachers = o.teacherNames;
-  let teacherNames: string | undefined;
-  if (Array.isArray(teachers)) {
-    teacherNames = teachers.map((t) => String(t).trim()).filter(Boolean).join("、") || undefined;
-  } else {
-    teacherNames = asOptionalString(teachers);
+  const teachers = mapIdNameList(o.teachers);
+  // 兼容旧 teacherNames: string[]；新接口优先 teachers
+  let teacherNames = joinNames(teachers);
+  if (!teacherNames) {
+    const legacy = o.teacherNames;
+    if (Array.isArray(legacy)) {
+      teacherNames =
+        legacy.map((t) => String(t).trim()).filter(Boolean).join("、") || undefined;
+    } else {
+      teacherNames = asOptionalString(legacy);
+    }
   }
+  const sellDepartments = mapIdNameList(o.sellDepartments);
+  const bmidRaw = o.bmid;
+  const bmid =
+    bmidRaw != null && bmidRaw !== "" && Number(bmidRaw) !== 0
+      ? String(bmidRaw)
+      : undefined;
   return {
     spuId,
     productName,
@@ -157,12 +205,18 @@ function mapProduct(row: unknown): OrderCenterProduct | null {
       asOptionalString(o.category) ??
       asOptionalString(o.classifyName),
     belongDeptName:
+      asOptionalString(o.bmidName) ??
       asOptionalString(o.belongDeptName) ??
       asOptionalString(o.deptName) ??
       asOptionalString(o.attributionDeptName),
     salesDeptName:
-      asOptionalString(o.salesDeptName) ?? asOptionalString(o.sellDeptName),
+      joinNames(sellDepartments) ??
+      asOptionalString(o.salesDeptName) ??
+      asOptionalString(o.sellDeptName),
     teacherNames,
+    teachers,
+    sellDepartments,
+    bmid,
     updateTime: asOptionalString(o.updateTime) ?? asOptionalString(o.updatedTime),
   };
 }
@@ -207,13 +261,14 @@ export async function listSalerProductsPage(
     query.pageSize != null && query.pageSize > 0
       ? Math.min(query.pageSize, 50)
       : 10;
+  const productName = query.productName?.trim() || undefined;
 
   const url = `${orderCenterBase()}/order-center/api/live/saler/product/list`;
   let resp;
   try {
     resp = await axios.post(
       url,
-      { page, pageSize },
+      { page, pageSize, ...(productName ? { productName } : {}) },
       {
         headers: {
           "Authorization-Live-Saler": `Bearer ${token}`,
@@ -282,6 +337,66 @@ function toOrderCenterSpuIdNumber(spuId: string): number | null {
   const n = Number(t);
   if (!Number.isSafeInteger(n) || n <= 0) return null;
   return n;
+}
+
+interface OrderCenterDetailBody {
+  code?: number | string;
+  msg?: string;
+  message?: string;
+  data?: unknown;
+}
+
+/**
+ * 业务员端商品详情（不经本站后端）。
+ * `POST …/saler/product/detail`，body `{ spuId }`。
+ * 裁剪版：基础信息 + 上架 SKU；含 teachers / bmidName / sellDepartments。
+ */
+export async function getSalerProductDetail(
+  spuId: string,
+): Promise<OrderCenterProduct | null> {
+  const numericId = toOrderCenterSpuIdNumber(spuId);
+  if (numericId == null) return null;
+
+  const token = await salerAccessToken();
+  const url = `${orderCenterBase()}/order-center/api/live/saler/product/detail`;
+  let resp;
+  try {
+    resp = await axios.post(
+      url,
+      { spuId: numericId },
+      {
+        headers: {
+          "Authorization-Live-Saler": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+        transformResponse: [
+          (data: unknown) => {
+            if (typeof data !== "string") return data;
+            try {
+              return JSON.parse(stringifyBigIntIds(data)) as OrderCenterDetailBody;
+            } catch {
+              return data;
+            }
+          },
+        ],
+      },
+    );
+  } catch (e) {
+    throw new Error(axiosErrorMessage(e, "拉取商品详情失败"));
+  }
+
+  const body = resp.data as OrderCenterDetailBody;
+  if (!isOrderCenterSuccess(body?.code)) {
+    throw new Error(body?.msg || body?.message || "拉取商品详情失败");
+  }
+  const mapped = mapProduct(body.data);
+  if (!mapped) return null;
+  // 详情只返回可售（有上架 SKU）商品，补齐上架态展示
+  if (mapped.status == null) {
+    mapped.status = ORDER_CENTER_PRODUCT_STATUS.ON_SHELF;
+  }
+  return mapped;
 }
 
 /**

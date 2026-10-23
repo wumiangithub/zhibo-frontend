@@ -18,6 +18,7 @@ import {
   type VhallPlaybackItem,
 } from "@/api/recordResource";
 import { STATE_LABEL } from "@/api/activity";
+import { resolveCreatedTime } from "@/utils/createdTime";
 import UiButton from "@/components/ui/UiButton.vue";
 
 const props = defineProps<{
@@ -346,7 +347,7 @@ watch(
           <p class="pb-meta">
             <span>ID：{{ pb.id }}</span>
             <span v-if="pb.duration">时长：{{ pb.duration }}</span>
-            <span v-if="pb.createdAt">{{ pb.createdAt }}</span>
+            <span v-if="resolveCreatedTime(pb)">{{ resolveCreatedTime(pb) }}</span>
           </p>
         </div>
       </li>

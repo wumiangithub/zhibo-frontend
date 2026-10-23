@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import DefaultLayout from "@/layouts/DefaultLayout.vue";
 import { isLoggedIn } from "@/utils/authSession";
-import { HOST_INVITE_PATH_PREFIX } from "@/utils/liveLinks";
+import { HOST_INVITE_PATH_PREFIX, LIVE_STUDIO_PATH_PREFIX } from "@/utils/liveLinks";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -120,11 +120,17 @@ const router = createRouter({
         },
       ],
     },
-    /** 主播邀请页：邀请链接落地，独立壳。后续在此把打开链接的登录用户加入本场主播。 */
+    /** 主播邀请页：邀请链接落地，独立壳。 */
     {
       path: `${HOST_INVITE_PATH_PREFIX}/:activityId`,
       name: "host-invite",
       component: () => import("@/views/live/HostInviteView.vue"),
+    },
+    /** 开播页：iframe 嵌微吼角色参会地址，独立壳（需摄像头/麦克风）。 */
+    {
+      path: `${LIVE_STUDIO_PATH_PREFIX}/:activityId`,
+      name: "live-studio",
+      component: () => import("@/views/live/LiveStudioView.vue"),
     },
     /** 直播中控台列表：侧栏新窗口打开，独立壳，不套 DefaultLayout */
     {

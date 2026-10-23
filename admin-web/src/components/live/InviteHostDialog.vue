@@ -3,7 +3,8 @@ import { computed, ref, watch } from "vue";
 import { ElDialog } from "element-plus";
 import UiButton from "@/components/ui/UiButton.vue";
 import { copyText } from "@/utils/copyText";
-import { buildAudienceWatchUrl, buildHostInviteUrl } from "@/utils/liveLinks";
+import { buildAudienceWatchUrl, buildRoleInviteUrl } from "@/utils/liveLinks";
+import { ActivityMemberRole } from "@/views/live/detail/role/roleTypes";
 
 const PLATFORM_NAME = "钱坤云直播平台";
 
@@ -11,6 +12,8 @@ const props = withDefaults(
   defineProps<{
     modelValue: boolean;
     activityId: string;
+    /** 发出邀约的当前员工，与微信邀请弹窗同一套链接参数 */
+    inviterId: number;
     liveTitle?: string;
     startTime?: string;
   }>(),
@@ -33,7 +36,10 @@ function shown(value: string | undefined) {
 
 const titleText = computed(() => shown(props.liveTitle));
 const timeText = computed(() => shown(props.startTime));
-const hostUrl = computed(() => buildHostInviteUrl(props.activityId));
+/** 与角色设置微信邀请弹窗共用 buildRoleInviteUrl，固定为主播角色 */
+const hostUrl = computed(() =>
+  buildRoleInviteUrl(props.activityId, ActivityMemberRole.HOST, props.inviterId),
+);
 const watchUrl = computed(() => buildAudienceWatchUrl(props.activityId));
 
 const qrSrc = ref("");

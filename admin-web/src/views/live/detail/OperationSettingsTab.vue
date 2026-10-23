@@ -2,7 +2,6 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
-  getHostUrl,
   getEmbedUrl,
   updateActivity,
   endActivity,
@@ -11,7 +10,8 @@ import {
   type ActivityId,
 } from "@/api/activity";
 import UiButton from "@/components/ui/UiButton.vue";
-import { buildAudienceWatchUrl } from "@/utils/liveLinks";
+import { buildAudienceWatchUrl, buildLiveStudioPath } from "@/utils/liveLinks";
+import { ActivityMemberRole } from "@/views/live/detail/role/roleTypes";
 
 const props = defineProps<{
   activityId: ActivityId;
@@ -58,24 +58,16 @@ async function copy(text: string, label: string) {
   }
 }
 
-async function openHost() {
+function openHost() {
   if (!canBroadcast.value) return;
-  try {
-    const { hostUrl } = await getHostUrl(props.activityId);
-    window.open(hostUrl, "_blank", "noopener");
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : "获取开播链接失败";
-  }
+  void router.push(buildLiveStudioPath(props.activityId, ActivityMemberRole.HOST));
 }
 
 async function copyHost() {
   if (!canBroadcast.value) return;
-  try {
-    const { hostUrl } = await getHostUrl(props.activityId);
-    await copy(hostUrl, "开播链接已复制，可粘贴到有摄像头的电脑打开");
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : "获取开播链接失败";
-  }
+  const path = buildLiveStudioPath(props.activityId, ActivityMemberRole.HOST);
+  const url = `${window.location.origin.replace(/\/$/, "")}${path}`;
+  await copy(url, "开播页链接已复制");
 }
 
 function copyWatchLink() {

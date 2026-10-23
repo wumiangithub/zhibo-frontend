@@ -17,7 +17,6 @@ import {
 } from "element-plus";
 import {
   deleteActivity,
-  getHostUrl,
   listActivities,
   ActivityReady,
   activityReadyLabel,
@@ -34,7 +33,8 @@ import {
 import ImagePreview from "@/components/ImagePreview.vue";
 import type { ImagePreviewItem } from "@/components/ImagePreview.vue";
 import ShareDialog from "@/components/share/ShareDialog.vue";
-import { buildAudienceWatchUrl } from "@/utils/liveLinks";
+import { buildAudienceWatchUrl, buildLiveStudioPath } from "@/utils/liveLinks";
+import { ActivityMemberRole } from "@/views/live/detail/role/roleTypes";
 import AuditRecordsDrawer from "./components/AuditRecordsDrawer.vue";
 import { exportLiveRows } from "./exportLiveRows";
 
@@ -184,14 +184,9 @@ function onExport() {
   exportLiveRows(rows);
 }
 
-async function goLive(item: ActivityListItem) {
+function goLive(item: ActivityListItem) {
   if (!item.canBroadcast) return;
-  try {
-    const { hostUrl } = await getHostUrl(item.id);
-    window.open(hostUrl, "_blank", "noopener");
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : "获取开播链接失败");
-  }
+  void router.push(buildLiveStudioPath(item.id, ActivityMemberRole.HOST));
 }
 
 function openShare(item: ActivityListItem) {

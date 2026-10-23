@@ -4,6 +4,7 @@ import {
   STATE_LABEL,
   type ActivityListItem,
 } from "./activity";
+import { resolveCreatedTime, type CreatedTimeFields } from "@/utils/createdTime";
 
 /** 选择直播弹窗用的列表项（来自本站活动列表，已筛 provider=vhall） */
 export interface VhallLiveItem {
@@ -36,6 +37,10 @@ export interface VhallPlaybackItem {
   duration?: string;
   createdTime?: string;
   coverUrl?: string;
+  /** 体积（KB），微吼 storage */
+  storage?: string;
+  /** 到期时间，微吼 save_time */
+  saveTime?: string;
 }
 
 export interface VhallPlaybackListData {
@@ -79,9 +84,17 @@ export async function listVhallLives(query: VhallLiveQuery = {}): Promise<VhallL
 /**
  * 某场本站活动（微吼）下的回放记录。
  * GET /api/v1/activities/records/{id} → list[].id 为 create-demand 的 record_id
+ * 时间字段：优先 createdTime，兼容未映射的 createdAt（微吼原名 created_at）
  */
-export function listVhallLiveRecords(activityId: string) {
-  return get<VhallPlaybackListData>(
+export async function listVhallLiveRecords(activityId: string): Promise<VhallPlaybackListData> {
+  const data = await get<{ total: number; list: (VhallPlaybackItem & CreatedTimeFields)[] }>(
     `/activities/records/${encodeURIComponent(activityId)}`,
   );
+  return {
+    total: data.total ?? 0,
+    list: (data.list ?? []).map((item) => ({
+      ...item,
+      createdTime: resolveCreatedTime(item) || undefined,
+    })),
+  };
 }

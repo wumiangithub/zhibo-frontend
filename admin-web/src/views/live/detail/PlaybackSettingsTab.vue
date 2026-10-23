@@ -11,6 +11,7 @@ import {
   ElInputNumber,
 } from "element-plus";
 import {
+  getActivityRecordDownload,
   listActivityRecords,
   updateActivityPlayback,
   type ActivityDetail,
@@ -19,6 +20,7 @@ import {
   type PlaybackValidityType,
 } from "@/api/activity";
 import { useLeaveConfirm } from "@/composables/useLeaveConfirm";
+import { resolveCreatedTime } from "@/utils/createdTime";
 import FormRow from "../components/FormRow.vue";
 import UiButton from "@/components/ui/UiButton.vue";
 
@@ -43,6 +45,7 @@ const leave = useLeaveConfirm({ routeLeave: false });
 const records = ref<ActivityRecordItem[]>([]);
 const recordsLoading = ref(false);
 const recordsError = ref("");
+const downloadingId = ref<number | null>(null);
 
 function applyDetail(d: ActivityDetail) {
   form.playbackEnabled = d.playbackEnabled ?? true;
@@ -91,12 +94,46 @@ async function onToggleEnabled(val: boolean | string | number) {
   }
 }
 
-function onDownload(row: ActivityRecordItem) {
-  if (row.downloadUrl) {
-    window.open(row.downloadUrl, "_blank", "noopener");
+/** 微吼 storage 单位为 KB */
+function formatStorageKb(raw?: string | null): string {
+  if (raw == null || String(raw).trim() === "") return "";
+  const s = String(raw).trim();
+  if (/kb$/i.test(s)) return s;
+  return `${s} KB`;
+}
+
+async function onDownload(row: ActivityRecordItem) {
+  if (!row.id) {
+    ElMessage.warning("回放 id 无效");
     return;
   }
-  ElMessage.info("暂无下载地址");
+  if (downloadingId.value === row.id) return;
+  downloadingId.value = row.id;
+  try {
+    const data = await getActivityRecordDownload(props.activityId, row.id);
+    const status = data.status;
+    if (status === 1 && data.downloadUrl) {
+      window.open(data.downloadUrl, "_blank", "noopener");
+      return;
+    }
+    if (status === 2) {
+      ElMessage.info(`回放打包中（${data.progress ?? 0}%），请稍后重试`);
+      return;
+    }
+    if (status === 0) {
+      ElMessage.info("回放尚未开始打包，请稍后重试");
+      return;
+    }
+    if (status === 3) {
+      ElMessage.error("回放打包失败，请稍后重试");
+      return;
+    }
+    ElMessage.info("暂无下载地址");
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "获取下载地址失败");
+  } finally {
+    downloadingId.value = null;
+  }
 }
 
 async function onSave() {
@@ -236,8 +273,24 @@ defineExpose({
             width="100"
           />
           <ElTableColumn
-            prop="createdAt"
+            label="体积"
+            width="110"
+          >
+            <template #default="{ row }">
+              {{ formatStorageKb(row.storage) }}
+            </template>
+          </ElTableColumn>
+          <ElTableColumn
             label="生成时间"
+            width="180"
+          >
+            <template #default="{ row }">
+              {{ resolveCreatedTime(row) }}
+            </template>
+          </ElTableColumn>
+          <ElTableColumn
+            prop="saveTime"
+            label="到期时间"
             width="180"
           />
           <ElTableColumn
@@ -247,8 +300,9 @@ defineExpose({
             <template #default="{ row }">
               <a
                 class="dl-link"
+                :class="{ 'is-busy': downloadingId === row.id }"
                 @click.prevent="onDownload(row)"
-              >下载</a>
+              >{{ downloadingId === row.id ? "获取中…" : "下载" }}</a>
             </template>
           </ElTableColumn>
         </ElTable>
@@ -304,6 +358,10 @@ defineExpose({
   color: var(--color-primary);
   cursor: pointer;
   font-size: 13px;
+}
+.dl-link.is-busy {
+  opacity: 0.6;
+  pointer-events: none;
 }
 .err {
   color: #cf1322;

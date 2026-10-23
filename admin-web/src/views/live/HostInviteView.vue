@@ -1,31 +1,54 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import {
   acceptActivityMember,
   getActivity,
+  listActivityMembers,
   type ActivityDetail,
 } from "@/api/activity";
+import UiButton from "@/components/ui/UiButton.vue";
+import { useAuthStore } from "@/stores/auth";
+import { decodeInviteToken } from "@/utils/inviteToken";
 import {
+  buildLiveStudioPath,
+  HOST_INVITE_TOKEN_QUERY,
+} from "@/utils/liveLinks";
+import {
+  ActivityMemberRole,
   ACTIVITY_MEMBER_ROLE_LABEL,
   isLiveRoomRole,
   type LiveRoomRole,
 } from "@/views/live/detail/role/roleTypes";
 
 const route = useRoute();
+const router = useRouter();
+const auth = useAuthStore();
+
 const activityId = computed(() => String(route.params.activityId ?? "").trim());
-const inviteRole = computed<LiveRoomRole | null>(() => {
-  const raw = Number(route.query.role);
-  return isLiveRoomRole(raw) ? raw : null;
-});
-const inviterId = computed(() => {
-  const raw = Number(route.query.inviter);
-  return Number.isInteger(raw) && raw > 0 ? raw : null;
+
+/** 只认不透明 `c`，不解析明文 `role` / `inviter`。 */
+const invitePayload = computed(() => {
+  const rawToken = route.query[HOST_INVITE_TOKEN_QUERY];
+  if (typeof rawToken !== "string" || !rawToken.trim()) return null;
+  const decoded = decodeInviteToken(rawToken);
+  if (!decoded || !isLiveRoomRole(decoded.role)) return null;
+  return { role: decoded.role as LiveRoomRole, inviterId: decoded.inviterId };
 });
 
+const inviteRole = computed<LiveRoomRole | null>(
+  () => invitePayload.value?.role ?? null,
+);
+const inviterId = computed(() => invitePayload.value?.inviterId ?? null);
+
+/** `c` 缺失或解不出：链接无效 / 被篡改。 */
+const inviteTokenInvalid = computed(() => invitePayload.value == null);
+
 const loading = ref(true);
+const accepting = ref(false);
 const error = ref("");
 const detail = ref<ActivityDetail | null>(null);
+/** 未加入 / 已加入（含本场已是同角色再次打开） */
 const joined = ref(false);
 const alreadyMember = ref(false);
 const inviterName = ref("");
@@ -37,8 +60,13 @@ const roleLabel = computed(() =>
 const resultText = computed(() => {
   if (!joined.value || !roleLabel.value) return "";
   if (alreadyMember.value) return `你已是本场直播的${roleLabel.value}`;
-  return `你已加入本场直播的${roleLabel.value}`;
+  return `加入成功，你已成为本场直播的${roleLabel.value}`;
 });
+
+/** 主播：立即开播；助理 / 嘉宾：加入直播。都打开第三方主持人/参会页。 */
+const actionLabel = computed(() =>
+  inviteRole.value === ActivityMemberRole.HOST ? "立即开播" : "加入直播",
+);
 
 onMounted(async () => {
   if (!activityId.value) {
@@ -57,6 +85,34 @@ onMounted(async () => {
     loading.value = false;
     return;
   }
+
+  const userId = auth.user?.id;
+  if (userId) {
+    try {
+      const data = await listActivityMembers(activityId.value);
+      const mine = (data.list ?? []).find((row) => row.id === userId);
+      if (mine != null && mine.role === inviteRole.value) {
+        joined.value = true;
+        alreadyMember.value = true;
+      }
+    } catch {
+      // 名单拉失败不挡确认加入；点同意时仍由 accept 接口判定
+    }
+  }
+  loading.value = false;
+});
+
+async function onAccept() {
+  if (
+    accepting.value ||
+    joined.value ||
+    inviteRole.value == null ||
+    inviterId.value == null
+  ) {
+    return;
+  }
+  accepting.value = true;
+  error.value = "";
   try {
     const result = await acceptActivityMember(activityId.value, {
       role: inviteRole.value,
@@ -68,9 +124,14 @@ onMounted(async () => {
   } catch (e) {
     error.value = e instanceof Error ? e.message : "加入开播角色失败";
   } finally {
-    loading.value = false;
+    accepting.value = false;
   }
-});
+}
+
+function onEnterLive() {
+  if (!activityId.value || inviteRole.value == null) return;
+  void router.push(buildLiveStudioPath(activityId.value, inviteRole.value));
+}
 </script>
 
 <template>
@@ -82,7 +143,8 @@ onMounted(async () => {
         v-if="loading"
         class="status"
       >
-        加载中…      </p>
+        加载中…
+      </p>
       <template v-else>
         <p
           v-if="detail"
@@ -102,12 +164,14 @@ onMounted(async () => {
         >
           <span class="label">邀约人：</span>{{ inviterName }}
         </p>
+
         <p
           v-if="resultText"
           class="result"
         >
           {{ resultText }}
         </p>
+
         <p
           v-if="error"
           class="status is-error"
@@ -115,10 +179,37 @@ onMounted(async () => {
           {{ error }}
         </p>
         <p
-          v-else-if="detail && inviteRole == null"
+          v-else-if="detail && inviteTokenInvalid"
           class="note"
         >
-          这条链接没有带开播角色，打开后不会加入名单。        </p>
+          邀请链接无效或已被篡改，请联系邀约人重新发送。
+        </p>
+
+        <div
+          v-if="detail && inviteRole != null && inviterId != null && !error"
+          class="actions"
+        >
+          <template v-if="!joined">
+            <p class="hint">
+              确认后你将以{{ roleLabel }}身份加入本场直播。
+            </p>
+            <UiButton
+              variant="primary"
+              :disabled="accepting"
+              @click="onAccept"
+            >
+              {{ accepting ? "加入中…" : "同意邀请" }}
+            </UiButton>
+          </template>
+          <template v-else>
+            <UiButton
+              variant="primary"
+              @click="onEnterLive"
+            >
+              {{ actionLabel }}
+            </UiButton>
+          </template>
+        </div>
       </template>
     </div>
   </div>
@@ -185,5 +276,14 @@ onMounted(async () => {
   font-size: 13px;
   line-height: 22px;
   color: var(--color-text-placeholder);
+}
+.actions {
+  margin-top: 20px;
+}
+.hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--color-text-secondary);
 }
 </style>

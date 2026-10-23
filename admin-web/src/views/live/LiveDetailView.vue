@@ -7,12 +7,12 @@ import {
   ActivityReady,
   activityReadyLabel,
   getActivity,
-  getHostUrl,
   type ActivityDetail,
   type ActivityId,
 } from "@/api/activity";
 import { getAccessToken } from "@/utils/authSession";
-import { buildAudienceWatchUrl } from "@/utils/liveLinks";
+import { buildAudienceWatchUrl, buildLiveStudioPath } from "@/utils/liveLinks";
+import { ActivityMemberRole } from "@/views/live/detail/role/roleTypes";
 import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 import UiButton from "@/components/ui/UiButton.vue";
 import ShareDialog from "@/components/share/ShareDialog.vue";
@@ -145,14 +145,9 @@ function refreshReadyStatus() {
   void fetchDetail({ silent: true });
 }
 
-async function goLive() {
+function goLive() {
   if (!detail.value?.canBroadcast || timedHostUnsupported.value) return;
-  try {
-    const { hostUrl } = await getHostUrl(id.value);
-    window.open(hostUrl, "_blank", "noopener");
-  } catch (e) {
-    pageError.value = e instanceof Error ? e.message : "获取开播链接失败";
-  }
+  void router.push(buildLiveStudioPath(id.value, ActivityMemberRole.HOST));
 }
 
 function goConsole() {

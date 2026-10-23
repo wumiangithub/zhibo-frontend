@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import { Refresh } from "@element-plus/icons-vue";
 import { ElIcon, ElMessage } from "element-plus";
 import {
@@ -13,8 +14,10 @@ import {
 import { useToast } from "@/composables/useToast";
 import UiButton from "@/components/ui/UiButton.vue";
 import InviteHostDialog from "@/components/live/InviteHostDialog.vue";
+import { useAuthStore } from "@/stores/auth";
 import { copyText } from "@/utils/copyText";
-import { buildAudienceWatchUrl } from "@/utils/liveLinks";
+import { buildAudienceWatchUrl, buildLiveStudioPath } from "@/utils/liveLinks";
+import { ActivityMemberRole } from "@/views/live/detail/role/roleTypes";
 import RoleSettingsPanel from "./role/RoleSettingsPanel.vue";
 
 const props = withDefaults(
@@ -42,9 +45,19 @@ const props = withDefaults(
 const emit = defineEmits<{ error: [msg: string]; refreshed: [] }>();
 
 const { toast } = useToast();
+const auth = useAuthStore();
+const router = useRouter();
 const inviteHostVisible = ref(false);
+
+function openInviteHost() {
+  if (!auth.user?.id) {
+    ElMessage.warning("请重新登录后再邀请");
+    return;
+  }
+  inviteHostVisible.value = true;
+}
+
 const subTab = ref<"method" | "role">("method");
-const opening = ref(false);
 const startingLive = ref(false);
 const otherMethod = ref<"push" | "passcode">("push");
 const pushProtocol = ref<"rtmp" | "srt">("rtmp");
@@ -270,17 +283,9 @@ function copyAllPasscodeInfo() {
   void copyValue(text);
 }
 
-async function openHost() {
+function openHost() {
   if (!props.canBroadcast || timedHostUnsupported.value) return;
-  opening.value = true;
-  try {
-    const { hostUrl } = await getHostUrl(props.activityId);
-    window.open(hostUrl, "_blank", "noopener");
-  } catch (e) {
-    emit("error", e instanceof Error ? e.message : "获取开播链接失败");
-  } finally {
-    opening.value = false;
-  }
+  void router.push(buildLiveStudioPath(props.activityId, ActivityMemberRole.HOST));
 }
 </script>
 
@@ -317,13 +322,15 @@ async function openHost() {
           </p>
           <UiButton
             variant="outline"
-            @click="inviteHostVisible = true"
+            @click="openInviteHost"
           >
             邀请主播
           </UiButton>
           <InviteHostDialog
+            v-if="auth.user?.id"
             v-model="inviteHostVisible"
             :activity-id="activityId"
+            :inviter-id="auth.user.id"
             :live-title="liveTitle"
             :start-time="startTime"
           />
@@ -385,10 +392,10 @@ async function openHost() {
                 <div class="host-card__actions">
                   <UiButton
                     variant="primary"
-                    :disabled="opening || !canBroadcast"
+                    :disabled="!canBroadcast"
                     @click="openHost"
                   >
-                    {{ opening ? "打开中…" : "网页开播" }}
+                    网页开播
                   </UiButton>
                   <p
                     v-if="!canBroadcast"

@@ -1,4 +1,5 @@
 import { get, post, put, del } from "./http";
+import { resolveCreatedTime, type CreatedTimeFields } from "@/utils/createdTime";
 
 export type LiveProvider = "vhall" | "aliyun" | "tencent";
 
@@ -241,8 +242,15 @@ export function getActivity(id: ActivityId) {
   return get<ActivityDetail>(`/activities/detail/${id}`);
 }
 
-export function getHostUrl(id: ActivityId) {
-  return get<{ provider: LiveProvider; hostUrl: string }>(`/activities/host/${id}`);
+/**
+ * 角色参会地址（微吼 page_url）。本站开播页 iframe 用 hostUrl。
+ * @param role 1 主播 / 2 嘉宾 / 3 助理；省略后端按主播
+ */
+export function getHostUrl(id: ActivityId, role?: number) {
+  return get<{ provider: LiveProvider; hostUrl: string; role?: number }>(
+    `/activities/host/${encodeURIComponent(id)}`,
+    { params: role != null ? { role } : undefined },
+  );
 }
 
 export interface PushStreamInfo {
@@ -361,13 +369,39 @@ export interface ActivityRecordItem {
   duration?: string;
   createdTime?: string;
   coverUrl?: string;
+  /** 体积（KB），微吼 storage */
+  storage?: string;
+  /** 到期时间，微吼 save_time */
+  saveTime?: string;
   /** 本轮可能无下载直链 */
   downloadUrl?: string;
 }
 
-export function listActivityRecords(id: ActivityId) {
-  return get<{ total: number; list: ActivityRecordItem[] }>(
+export async function listActivityRecords(id: ActivityId) {
+  const data = await get<{ total: number; list: (ActivityRecordItem & CreatedTimeFields)[] }>(
     `/activities/records/${encodeURIComponent(id)}`,
+  );
+  return {
+    total: data.total ?? 0,
+    list: (data.list ?? []).map((item) => ({
+      ...item,
+      createdTime: resolveCreatedTime(item) || undefined,
+    })),
+  };
+}
+
+/** 微吼 check-download：0 未开始 / 1 已完成 / 2 进行中 / 3 失败 */
+export interface ActivityRecordDownload {
+  recordId: number;
+  downloadUrl?: string;
+  status?: number;
+  progress?: number;
+}
+
+/** GET /activities/records/{id}/download/{recordId} */
+export function getActivityRecordDownload(activityId: ActivityId, recordId: number) {
+  return get<ActivityRecordDownload>(
+    `/activities/records/${encodeURIComponent(activityId)}/download/${recordId}`,
   );
 }
 
@@ -446,13 +480,13 @@ export function listEmployees(keyword?: string) {
   });
 }
 
-/** 开播成员一行。role：1 主播 / 2 助理 / 3 嘉宾（D57） */
+/** 开播成员一行。role：1 主播 / 2 嘉宾 / 3 助理（与微吼 type 一致，D66） */
 export interface ActivityMemberItem {
   /** 员工 rs_mainkey_id */
   id: number;
   userName: string;
   departmentName?: string;
-  /** 1 主播 / 2 助理 / 3 嘉宾 */
+  /** 1 主播 / 2 嘉宾 / 3 助理 */
   role: number;
   nickname?: string;
   avatarUrl?: string;
@@ -470,7 +504,7 @@ export function listActivityMembers(id: ActivityId) {
 
 export interface ActivityMemberBinding {
   id: number;
-  /** 1 主播 / 2 助理 / 3 嘉宾 */
+  /** 1 主播 / 2 嘉宾 / 3 助理 */
   role: number;
   nickname?: string;
   avatarUrl?: string;
@@ -487,7 +521,7 @@ export function replaceActivityMembers(id: ActivityId, members: ActivityMemberBi
 export interface AcceptActivityMemberResult {
   id: number;
   userName: string;
-  /** 1 主播 / 2 助理 / 3 嘉宾 */
+  /** 1 主播 / 2 嘉宾 / 3 助理 */
   role: number;
   alreadyMember: boolean;
   inviterName?: string;

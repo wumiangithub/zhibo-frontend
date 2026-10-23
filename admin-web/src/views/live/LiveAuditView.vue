@@ -184,7 +184,7 @@ watch(id, loadAll);
           empty-text="暂无记录"
         >
           <ElTableColumn
-            prop="createdAt"
+            prop="createdTime"
             label="时间"
             min-width="170"
           />

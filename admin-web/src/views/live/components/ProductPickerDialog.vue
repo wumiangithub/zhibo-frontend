@@ -66,45 +66,19 @@ function dash(v: string | number | undefined | null): string {
   return String(v);
 }
 
-/** 有关键字时本地缓存全量（对方无商品名入参）；无关键字走服务端分页 */
-const allCache = ref<OrderCenterProduct[] | null>(null);
-
-async function loadAllProducts(): Promise<OrderCenterProduct[]> {
-  const all: OrderCenterProduct[] = [];
-  let p = 1;
-  let totalCount = Infinity;
-  while (all.length < totalCount && p <= 20) {
-    const res = await listSalerProductsPage({ page: p, pageSize: 50 });
-    all.push(...res.list);
-    totalCount = res.total;
-    if (!res.list.length) break;
-    p += 1;
-  }
-  return all;
-}
-
+/** 服务端分页；商品名走对方 body.productName 模糊搜 */
 async function fetchPage() {
   loading.value = true;
   try {
     const kw = nameKeyword.value.trim();
-    if (kw) {
-      if (!allCache.value) allCache.value = await loadAllProducts();
-      const filtered = allCache.value.filter((item) =>
-        item.productName.includes(kw),
-      );
-      total.value = filtered.length;
-      const start = (page.value - 1) * pageSize.value;
-      list.value = filtered.slice(start, start + pageSize.value);
-    } else {
-      allCache.value = null;
-      const res = await listSalerProductsPage({
-        page: page.value,
-        pageSize: pageSize.value,
-      });
-      list.value = res.list;
-      total.value = res.total;
-      page.value = res.page;
-    }
+    const res = await listSalerProductsPage({
+      page: page.value,
+      pageSize: pageSize.value,
+      ...(kw ? { productName: kw } : {}),
+    });
+    list.value = res.list;
+    total.value = res.total;
+    page.value = res.page;
     await nextTick();
     syncTableSelection();
   } catch (e) {
@@ -180,7 +154,6 @@ watch(
     if (!open) return;
     draftKeyword.value = "";
     nameKeyword.value = "";
-    allCache.value = null;
     page.value = 1;
     pageSize.value = 10;
     picked.value = (props.selectedProducts ?? []).map((p) => ({
