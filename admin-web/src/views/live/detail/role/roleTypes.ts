@@ -29,6 +29,8 @@ export interface LiveRoomMember {
   /** 员工 rs_mainkey_id */
   id: number;
   userName: string;
+  /** 员工微信头像，实时查员工表 */
+  headimgurl: string;
   departmentName: string;
   /** 1 主播 / 2 嘉宾 / 3 助理（与微吼 type 一致） */
   role: LiveRoomRole;
@@ -91,6 +93,7 @@ export function createRoomMember(
   return {
     id: emp.id,
     userName: emp.userName,
+    headimgurl: "",
     departmentName: emp.departmentName?.trim() ?? "",
     role,
     nickname: emp.userName,

@@ -222,13 +222,6 @@ async function confirmDelete() {
       >
         复制观看链接
       </UiButton>
-      <UiButton
-        v-if="detail.shareLink"
-        variant="default"
-        @click="copy(detail.shareLink!, '分享链接已复制')"
-      >
-        复制分享链接
-      </UiButton>
     </div>
 
     <p

@@ -132,7 +132,6 @@ export interface ActivityListItem {
   /** 录播素材 UUID */
   recordMaterialId?: string;
   viewerStyle?: string;
-  shareLink?: string;
   createdTime?: string;
   shelfStatus?: ShelfStatus;
   riskStatus?: RiskStatus;
@@ -146,13 +145,10 @@ export interface ActivityListItem {
 export interface ActivityDetail extends ActivityListItem {
   provider: LiveProvider;
   providerRoomId?: string;
-  /** @deprecated 仅 vhall 兼容，优先用 providerRoomId */
-  vhallWebinarId?: string;
   introduction?: string;
   endTime?: string;
   verify?: number;
   pv?: number;
-  fullEmbedShareLink?: string;
   ultraLowLatency?: boolean;
   /** type=4：是否定时；非录播可空 */
   isTiming?: boolean;
@@ -481,6 +477,8 @@ export interface ActivityMemberItem {
   /** 员工 rs_mainkey_id */
   id: number;
   userName: string;
+  /** 员工微信头像，实时查员工表；空则不返回 */
+  headimgurl?: string;
   departmentName?: string;
   /** 1 主播 / 2 嘉宾 / 3 助理 */
   role: number;
@@ -507,11 +505,26 @@ export interface ActivityMemberBinding {
   tag?: string;
 }
 
-/** PUT /api/v1/activities/members/save/{id} —— 全量覆盖主播/助理/嘉宾 */
-export function replaceActivityMembers(id: ActivityId, members: ActivityMemberBinding[]) {
-  return put<ActivityMemberListData>(`/activities/members/save/${encodeURIComponent(id)}`, {
+/** POST /api/v1/activities/members/add/{id} —— 只新增这些人，不改已有成员 */
+export function addActivityMembers(id: ActivityId, members: ActivityMemberBinding[]) {
+  return post<ActivityMemberListData>(`/activities/members/add/${encodeURIComponent(id)}`, {
     members,
   });
+}
+
+/** DELETE /api/v1/activities/members/delete/{id} —— 按员工 id 删除，其余不动 */
+export function deleteActivityMembers(id: ActivityId, ids: number[]) {
+  return del<ActivityMemberListData>(`/activities/members/delete/${encodeURIComponent(id)}`, {
+    data: { ids },
+  });
+}
+
+/** PUT /api/v1/activities/members/update/{id} —— 只改这一名成员的昵称、头像、标签 */
+export function updateActivityMember(
+  id: ActivityId,
+  body: { id: number; nickname?: string; avatarUrl?: string; tag?: string },
+) {
+  return put<ActivityMemberListData>(`/activities/members/update/${encodeURIComponent(id)}`, body);
 }
 
 export interface AcceptActivityMemberResult {

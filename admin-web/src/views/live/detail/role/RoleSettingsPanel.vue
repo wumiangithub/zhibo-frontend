@@ -3,8 +3,10 @@ import { ref, watch } from "vue";
 import { ElIcon, ElMessage, ElMessageBox, ElTable, ElTableColumn } from "element-plus";
 import { EditPen } from "@element-plus/icons-vue";
 import {
+  addActivityMembers,
+  deleteActivityMembers,
   listActivityMembers,
-  replaceActivityMembers,
+  updateActivityMember,
   type ActivityId,
   type ActivityMemberBinding,
   type ActivityMemberItem,
@@ -50,6 +52,7 @@ function toRoomMember(item: ActivityMemberItem): LiveRoomMember | null {
   return {
     id: item.id,
     userName: item.userName ?? "",
+    headimgurl: item.headimgurl?.trim() ?? "",
     departmentName: item.departmentName?.trim() ?? "",
     role: item.role,
     nickname: item.nickname?.trim() || item.userName || "",
@@ -87,21 +90,6 @@ async function loadMembers() {
   }
 }
 
-async function persist(next: LiveRoomMember[], successText: string) {
-  if (!props.activityId || saving.value) return;
-  saving.value = true;
-  try {
-    const data = await replaceActivityMembers(props.activityId, toBindings(next));
-    applyList(data.list);
-    ElMessage.success(successText);
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : "保存开播成员失败");
-    throw e;
-  } finally {
-    saving.value = false;
-  }
-}
-
 watch(
   () => props.activityId,
   () => {
@@ -127,10 +115,45 @@ function roleLabel(role: LiveRoomRole) {
 }
 
 async function onSave(next: LiveRoomMember[]) {
+  const current = members.value;
+  const nextById = new Map(next.map((member) => [member.id, member]));
+  const currentIds = new Set(current.map((member) => member.id));
+  const removed = current.filter((member) => !nextById.has(member.id));
+  const roleChanged = current.filter((member) => {
+    const item = nextById.get(member.id);
+    return item != null && item.role !== member.role;
+  });
+  const added = next.filter((member) => !currentIds.has(member.id));
+  const toDelete = [...removed, ...roleChanged].map((member) => member.id);
+  if (added.length === 0 && toDelete.length === 0) return;
+  if (!props.activityId || saving.value) return;
+  saving.value = true;
   try {
-    await persist(next, "已更新角色昵称");
-  } catch {
-    // 错误已提示；抽屉仍关闭，名单保持上次成功态
+    if (added.length > 0) {
+      await addActivityMembers(props.activityId, toBindings(added));
+    }
+    if (toDelete.length > 0) {
+      await deleteActivityMembers(props.activityId, toDelete);
+    }
+    if (roleChanged.length > 0) {
+      const changed = roleChanged
+        .map((member) => nextById.get(member.id))
+        .filter((member): member is LiveRoomMember => member != null);
+      await addActivityMembers(props.activityId, toBindings(changed));
+    }
+    const data = await listActivityMembers(props.activityId);
+    applyList(data.list);
+    ElMessage.success("已保存");
+  } catch (e) {
+    try {
+      const data = await listActivityMembers(props.activityId);
+      applyList(data.list);
+    } catch {
+      // 名单刷新失败时保留上次成功态
+    }
+    ElMessage.error(e instanceof Error ? e.message : "保存开播成员失败");
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -142,14 +165,21 @@ function openEdit(row: LiveRoomMember, mode: "profile" | "tag") {
 
 async function onEditSave(patch: Pick<LiveRoomMember, "nickname" | "avatarUrl" | "tag">) {
   const current = editing.value;
-  if (!current) return;
-  const next = members.value.map((member) =>
-    member.id === current.id ? { ...member, ...patch } : member,
-  );
+  if (!current || !props.activityId || saving.value) return;
+  saving.value = true;
   try {
-    await persist(next, "已保存");
-  } catch {
-    // 错误已提示
+    const data = await updateActivityMember(props.activityId, {
+      id: current.id,
+      nickname: patch.nickname.trim() || undefined,
+      avatarUrl: patch.avatarUrl.trim() || undefined,
+      tag: patch.tag.trim() || undefined,
+    });
+    applyList(data.list);
+    ElMessage.success("已保存");
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "保存开播成员失败");
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -179,11 +209,16 @@ async function onDelete(row: LiveRoomMember) {
   } catch {
     return;
   }
-  const next = members.value.filter((member) => member.id !== row.id);
+  if (!props.activityId || saving.value) return;
+  saving.value = true;
   try {
-    await persist(next, "已删除");
-  } catch {
-    // 错误已提示
+    const data = await deleteActivityMembers(props.activityId, [row.id]);
+    applyList(data.list);
+    ElMessage.success("已删除");
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "删除开播成员失败");
+  } finally {
+    saving.value = false;
   }
 }
 </script>
@@ -222,6 +257,7 @@ async function onDelete(row: LiveRoomMember) {
           <span class="person">
             <MemberAvatar
               :name="row.userName"
+              :url="row.headimgurl"
               :size="32"
             />
             <span>{{ row.userName }}</span>
