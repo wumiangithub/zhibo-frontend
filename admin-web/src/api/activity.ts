@@ -249,6 +249,43 @@ export function getHostUrl(id: ActivityId, role?: number) {
   );
 }
 
+/** 管理端：查本场口令开播口令（旧数据无码则后端补发）。 */
+export function getActivityPasscode(id: ActivityId) {
+  return get<{ passcode: string }>(
+    `/activities/passcode/${encodeURIComponent(id)}`,
+  );
+}
+
+/** 管理端：重置口令，旧码立刻失效。 */
+export function resetActivityPasscode(id: ActivityId) {
+  return post<{ passcode: string }>(
+    `/activities/passcode/reset/${encodeURIComponent(id)}`,
+  );
+}
+
+export interface PasscodeEnterResult {
+  activityId: string;
+  provider: LiveProvider;
+  hostUrl: string;
+  role: number;
+  nickname: string;
+}
+
+/**
+ * 公开：凭口令换主播参会地址。H5 / 以后 App 共用。
+ * 不依赖管理端登录；401 时不要踢去登录页。
+ */
+export function enterByPasscode(passcode: string, nickname?: string) {
+  return post<PasscodeEnterResult>(
+    "/outside/host/passcode/enter",
+    {
+      passcode,
+      nickname: nickname?.trim() || undefined,
+    },
+    { skipAuthRefresh: true },
+  );
+}
+
 export interface PushStreamInfo {
   streamAddress: string;
   streamCode: string;

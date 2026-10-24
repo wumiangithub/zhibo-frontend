@@ -47,7 +47,8 @@ function shouldSkipAuthRefresh(config?: InternalAxiosRequestConfig): boolean {
   if (cfg?.__isRetryRequest) return true;
   const url = `${cfg?.baseURL ?? ""}${cfg?.url ?? ""}`;
   return /\/auth\/(refresh|login|captcha|wechat\/callback)(\?|$)/.test(url)
-    || /\/auth\/login\/query(\?|$)/.test(url);
+    || /\/auth\/login\/query(\?|$)/.test(url)
+    || /\/outside\//.test(url);
 }
 
 async function tryRefreshAndReplay(config: InternalAxiosRequestConfig) {

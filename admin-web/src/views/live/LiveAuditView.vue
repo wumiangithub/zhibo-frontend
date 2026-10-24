@@ -81,11 +81,9 @@ async function onSubmit() {
   }
   submitting.value = true;
   try {
-    // 契约：通过不传 reason；驳回必传
-    const payload =
-      result.value === "passed"
-        ? { result: "passed" as const }
-        : { result: "rejected" as const, reason: text };
+    // 契约：驳回必传；通过选填，有填则落库并回显
+    const payload: { result: AuditResult; reason?: string } = { result: result.value };
+    if (text) payload.reason = text;
     const data = await submitActivityAudit(id.value, payload);
     // 就地更新当前风控/上架，避免整页重载闪一下
     if (detail.value) {
@@ -206,7 +204,7 @@ watch(id, loadAll);
             min-width="200"
           >
             <template #default="{ row }">
-              {{ row.result === "passed" ? "--" : row.reason || "--" }}
+              {{ row.reason || "--" }}
             </template>
           </ElTableColumn>
         </ElTable>

@@ -3,12 +3,16 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { getHostUrl } from "@/api/activity";
 import UiButton from "@/components/ui/UiButton.vue";
+import { loadPasscodeStudioSession } from "@/utils/liveLinks";
 import {
   isLiveRoomRole,
   type LiveRoomRole,
 } from "@/views/live/detail/role/roleTypes";
 
 const route = useRoute();
+
+/** 口令开播进房后的公开壳：读 sessionStorage，不再调需登录的 host 接口。 */
+const fromPasscode = computed(() => route.name === "live-studio-by-passcode");
 
 const activityId = computed(() => String(route.params.activityId ?? "").trim());
 const role = computed<LiveRoomRole | null>(() => {
@@ -36,7 +40,21 @@ const insecureParent = computed(
     window.location.hostname !== "127.0.0.1",
 );
 
-async function load() {
+function loadFromPasscodeSession() {
+  loading.value = true;
+  error.value = "";
+  pageUrl.value = "";
+  const session = loadPasscodeStudioSession();
+  if (!session?.hostUrl) {
+    error.value = "开播会话已失效，请重新输入口令进入";
+    loading.value = false;
+    return;
+  }
+  pageUrl.value = session.hostUrl;
+  loading.value = false;
+}
+
+async function loadFromHostApi() {
   if (!activityId.value) {
     error.value = "活动无效";
     pageUrl.value = "";
@@ -67,6 +85,14 @@ async function load() {
   }
 }
 
+async function load() {
+  if (fromPasscode.value) {
+    loadFromPasscodeSession();
+    return;
+  }
+  await loadFromHostApi();
+}
+
 /** 当前窗口跳转微吼参会页（顶层 HTTPS），绕过本站 HTTP 嵌 iframe 无摄像头。 */
 function openExternally() {
   const url = pageUrl.value.trim();
@@ -79,7 +105,8 @@ onMounted(() => {
 });
 
 watch(
-  () => [activityId.value, role.value] as const,
+  () =>
+    [fromPasscode.value, activityId.value, role.value] as const,
   () => {
     void load();
   },

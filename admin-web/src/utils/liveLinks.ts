@@ -9,8 +9,29 @@ export const HOST_INVITE_PATH_PREFIX = "/invite/host";
 /** 本站开播页（iframe 嵌微吼参会地址），须与路由 LiveStudioView 一致。 */
 export const LIVE_STUDIO_PATH_PREFIX = "/live/studio";
 
+/**
+ * 口令开播 H5 落地页（公开）。须与路由 PasscodeHostView 一致。
+ * 口令本身是凭证；链接只负责预填，App 以后也可只输口令进房。
+ */
+export const PASSCODE_HOST_PATH = "/host/passcode";
+
+/** 口令进房后的 iframe 开播壳（公开，读 sessionStorage）。 */
+export const PASSCODE_STUDIO_PATH = "/live/studio-by-passcode";
+
+/** 口令开播链接 query：口令。 */
+export const PASSCODE_HOST_CODE_QUERY = "code";
+
+/** 口令开播链接 query：讲师名称（可选，默认「讲师」）。 */
+export const PASSCODE_HOST_NAME_QUERY = "name";
+
+/** 口令进房成功后写入 sessionStorage，供 studio-by-passcode 读 hostUrl。 */
+export const PASSCODE_STUDIO_SESSION_KEY = "zhibo.passcodeStudio";
+
 /** 邀约页不透明参数名（内含 role + inviter，见 inviteToken）。 */
 export const HOST_INVITE_TOKEN_QUERY = "c";
+
+/** 口令开播默认讲师名（表单预填与 enter 缺省一致）。 */
+export const PASSCODE_DEFAULT_NICKNAME = "讲师";
 
 /**
  * 观众观看链接。
@@ -46,4 +67,51 @@ export function buildRoleInviteUrl(
 export function buildLiveStudioPath(activityId: string, role: number): string {
   const id = activityId.trim();
   return `${LIVE_STUDIO_PATH_PREFIX}/${id}?role=${role}`;
+}
+
+/**
+ * 口令开播链接（发给主播的本站 H5，不是微吼 hostUrl）。
+ * nickname 省略则不带 name query，页面默认「讲师」。
+ */
+export function buildPasscodeHostUrl(passcode: string, nickname?: string): string {
+  const code = passcode.trim();
+  const origin = window.location.origin.replace(/\/$/, "");
+  const params = new URLSearchParams({ [PASSCODE_HOST_CODE_QUERY]: code });
+  const name = (nickname ?? "").trim();
+  if (name && name !== PASSCODE_DEFAULT_NICKNAME) {
+    params.set(PASSCODE_HOST_NAME_QUERY, name);
+  }
+  return `${origin}${PASSCODE_HOST_PATH}?${params.toString()}`;
+}
+
+export interface PasscodeStudioSession {
+  activityId: string;
+  hostUrl: string;
+  nickname?: string;
+}
+
+export function savePasscodeStudioSession(session: PasscodeStudioSession): void {
+  sessionStorage.setItem(PASSCODE_STUDIO_SESSION_KEY, JSON.stringify(session));
+}
+
+export function loadPasscodeStudioSession(): PasscodeStudioSession | null {
+  const raw = sessionStorage.getItem(PASSCODE_STUDIO_SESSION_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as PasscodeStudioSession;
+    const activityId = String(parsed?.activityId ?? "").trim();
+    const hostUrl = String(parsed?.hostUrl ?? "").trim();
+    if (!activityId || !hostUrl) return null;
+    return {
+      activityId,
+      hostUrl,
+      nickname: parsed.nickname?.trim() || undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function clearPasscodeStudioSession(): void {
+  sessionStorage.removeItem(PASSCODE_STUDIO_SESSION_KEY);
 }

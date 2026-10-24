@@ -2,11 +2,12 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { Refresh } from "@element-plus/icons-vue";
-import { ElIcon, ElMessage } from "element-plus";
+import { ElIcon, ElMessage, ElMessageBox } from "element-plus";
 import {
-  getHostUrl,
+  getActivityPasscode,
   getPushStream,
   getStreamStatus,
+  resetActivityPasscode,
   startActivityLive,
   type ActivityId,
   type LiveProvider,
@@ -16,7 +17,11 @@ import UiButton from "@/components/ui/UiButton.vue";
 import InviteHostDialog from "@/components/live/InviteHostDialog.vue";
 import { useAuthStore } from "@/stores/auth";
 import { copyText } from "@/utils/copyText";
-import { buildAudienceWatchUrl, buildLiveStudioPath } from "@/utils/liveLinks";
+import {
+  buildAudienceWatchUrl,
+  buildLiveStudioPath,
+  buildPasscodeHostUrl,
+} from "@/utils/liveLinks";
 import { ActivityMemberRole } from "@/views/live/detail/role/roleTypes";
 import RoleSettingsPanel from "./role/RoleSettingsPanel.vue";
 
@@ -79,10 +84,11 @@ const pushError = ref("");
 const streamStatus = ref<number | null>(null);
 const streamStatusLoading = ref(false);
 const broadcastPasscode = ref("");
-const hostLink = ref("");
+const passcodeLoading = ref(false);
+const passcodeResetting = ref(false);
 let pushSeq = 0;
 let statusSeq = 0;
-let hostSeq = 0;
+let passcodeSeq = 0;
 
 /** 进入本 Tab 清掉详情顶栏残留错误，避免上次失败文案挂着 */
 onMounted(() => emit("error", ""));
@@ -92,19 +98,18 @@ function shownOrEmpty(value: string | undefined) {
   return text || "暂无";
 }
 
-function randomPasscode() {
-  const buf = new Uint32Array(1);
-  crypto.getRandomValues(buf);
-  return String(100000000 + (buf[0] % 900000000));
-}
-
 const liveNameText = computed(() => shownOrEmpty(props.liveTitle));
 const liveTimeText = computed(() => shownOrEmpty(props.startTime));
 const watchLinkText = computed(() =>
   shownOrEmpty(buildAudienceWatchUrl(props.activityId)),
 );
 const passcodeText = computed(() => shownOrEmpty(broadcastPasscode.value));
-const hostLinkText = computed(() => shownOrEmpty(hostLink.value));
+/** 本站口令 H5，不是微吼 hostUrl。 */
+const hostLinkText = computed(() => {
+  const code = broadcastPasscode.value.trim();
+  if (!code) return "暂无";
+  return buildPasscodeHostUrl(code);
+});
 
 const currentPush = computed(() => {
   if (pushProtocol.value !== "rtmp") return { server: "", streamKey: "" };
@@ -202,18 +207,21 @@ watch(
   { immediate: true },
 );
 
-async function loadHostLink() {
-  const seq = ++hostSeq;
-  hostLink.value = "";
+async function loadPasscode() {
+  const seq = ++passcodeSeq;
+  passcodeLoading.value = true;
+  broadcastPasscode.value = "";
   try {
-    const data = await getHostUrl(props.activityId);
-    if (seq !== hostSeq) return;
-    hostLink.value = (data.hostUrl ?? "").trim();
-    emit("error", hostLink.value ? "" : "获取开播链接失败");
+    const data = await getActivityPasscode(props.activityId);
+    if (seq !== passcodeSeq) return;
+    broadcastPasscode.value = (data.passcode ?? "").trim();
+    emit("error", broadcastPasscode.value ? "" : "获取开播口令失败");
   } catch (e) {
-    if (seq !== hostSeq) return;
-    hostLink.value = "";
-    emit("error", e instanceof Error ? e.message : "获取开播链接失败");
+    if (seq !== passcodeSeq) return;
+    broadcastPasscode.value = "";
+    emit("error", e instanceof Error ? e.message : "获取开播口令失败");
+  } finally {
+    if (seq === passcodeSeq) passcodeLoading.value = false;
   }
 }
 
@@ -222,12 +230,12 @@ watch(
     [otherMethod.value, props.activityId, timedHostUnsupported.value] as const,
   ([method, , unsupported]) => {
     if (unsupported || method !== "passcode") {
-      hostSeq += 1;
-      hostLink.value = "";
+      passcodeSeq += 1;
+      broadcastPasscode.value = "";
+      passcodeLoading.value = false;
       return;
     }
-    broadcastPasscode.value = randomPasscode();
-    void loadHostLink();
+    void loadPasscode();
   },
 );
 
@@ -264,8 +272,34 @@ function copyValue(value: string, emptyTip = "暂无") {
   void copyText(text, "已复制");
 }
 
-function resetPasscode() {
-  broadcastPasscode.value = randomPasscode();
+async function resetPasscode() {
+  if (passcodeResetting.value || passcodeLoading.value) return;
+  try {
+    await ElMessageBox.confirm(
+      "重置口令后，原口令失效，是否确认重置？",
+      "提示",
+      {
+        type: "info",
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+      },
+    );
+  } catch {
+    return;
+  }
+  passcodeResetting.value = true;
+  try {
+    const data = await resetActivityPasscode(props.activityId);
+    broadcastPasscode.value = (data.passcode ?? "").trim();
+    emit("error", broadcastPasscode.value ? "" : "重置开播口令失败");
+    if (broadcastPasscode.value) {
+      ElMessage.success("口令已重置");
+    }
+  } catch (e) {
+    emit("error", e instanceof Error ? e.message : "重置开播口令失败");
+  } finally {
+    passcodeResetting.value = false;
+  }
 }
 
 function copyPasscode() {
@@ -563,15 +597,17 @@ function openHost() {
                   <button
                     type="button"
                     class="passcode-reset"
+                    :disabled="passcodeLoading || passcodeResetting"
                     @click="resetPasscode"
                   >
                     <ElIcon
                       class="passcode-reset__icon"
+                      :class="{ 'is-spinning': passcodeResetting }"
                       :size="14"
                     >
                       <Refresh />
                     </ElIcon>
-                    重置口令
+                    {{ passcodeResetting ? "重置中…" : "重置口令" }}
                   </button>
                 </div>
                 <div class="passcode-row">

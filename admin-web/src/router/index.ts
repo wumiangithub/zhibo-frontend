@@ -1,7 +1,12 @@
 import { createRouter, createWebHistory } from "vue-router";
 import DefaultLayout from "@/layouts/DefaultLayout.vue";
 import { isLoggedIn } from "@/utils/authSession";
-import { HOST_INVITE_PATH_PREFIX, LIVE_STUDIO_PATH_PREFIX } from "@/utils/liveLinks";
+import {
+  HOST_INVITE_PATH_PREFIX,
+  LIVE_STUDIO_PATH_PREFIX,
+  PASSCODE_HOST_PATH,
+  PASSCODE_STUDIO_PATH,
+} from "@/utils/liveLinks";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -125,6 +130,24 @@ const router = createRouter({
       path: `${HOST_INVITE_PATH_PREFIX}/:activityId`,
       name: "host-invite",
       component: () => import("@/views/live/HostInviteView.vue"),
+    },
+    /**
+     * 口令开播 H5：链接预填口令/讲师名；公开页，凭口令进房（以后 App 同接口）。
+     */
+    {
+      path: PASSCODE_HOST_PATH,
+      name: "passcode-host",
+      component: () => import("@/views/live/PasscodeHostView.vue"),
+      meta: { public: true },
+    },
+    /**
+     * 口令进房后的 iframe 开播壳：读 sessionStorage 的 hostUrl，不鉴权。
+     */
+    {
+      path: PASSCODE_STUDIO_PATH,
+      name: "live-studio-by-passcode",
+      component: () => import("@/views/live/LiveStudioView.vue"),
+      meta: { public: true },
     },
     /** 开播页：iframe 嵌微吼角色参会地址，独立壳（需摄像头/麦克风）。 */
     {
