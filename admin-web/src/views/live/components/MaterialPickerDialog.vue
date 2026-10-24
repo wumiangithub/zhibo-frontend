@@ -33,6 +33,7 @@ import {
 } from "@/views/settings/materials/mock";
 import type { MaterialRegisterItem } from "@/views/settings/materials/materialUploadTypes";
 import { formatUploadSize } from "@/views/settings/materials/materialUploadFormat";
+import { resolveUploadedTime } from "@/utils/uploadedTime";
 
 const props = withDefaults(
   defineProps<{
@@ -529,10 +530,13 @@ watch(displayList, () => {
               </template>
             </ElTableColumn>
             <ElTableColumn
-              prop="uploadedTime"
               label="上传时间"
               width="160"
-            />
+            >
+              <template #default="{ row }">
+                {{ resolveUploadedTime(row as MaterialListItem) || "—" }}
+              </template>
+            </ElTableColumn>
             <template #empty>
               <div class="picker-empty">
                 暂无素材，可上传或前往素材中心添加

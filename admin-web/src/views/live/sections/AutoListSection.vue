@@ -2,9 +2,17 @@
 import { ElRadioButton, ElRadioGroup } from "element-plus";
 import { useMarkDirty } from "@/composables/useLeaveConfirm";
 import FormRow from "../components/FormRow.vue";
-import type { LiveFormState } from "../composables/useLiveForm";
 
-defineProps<{ form: LiveFormState }>();
+withDefaults(
+  defineProps<{
+    form: { autoList: boolean };
+    /** 悬停说明；直播 / 课程文案不同 */
+    info?: string;
+  }>(),
+  {
+    info: "若选是，合规风控部门审核开播信息通过后，直播会自动上架",
+  },
+);
 const markDirty = useMarkDirty();
 </script>
 
@@ -12,7 +20,7 @@ const markDirty = useMarkDirty();
   <FormRow
     label="是否自动上架:"
     required
-    info="若选是，合规风控部门审核开播信息通过后，直播会自动上架"
+    :info="info"
   >
     <ElRadioGroup
       v-model="form.autoList"

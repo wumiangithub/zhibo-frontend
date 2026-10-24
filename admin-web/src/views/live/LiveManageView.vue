@@ -27,6 +27,7 @@ import {
   setActivityShelf,
   SHELF_STATUS_LABEL,
   type ActivityListItem,
+  type ActivitySortKey,
   type RiskStatus,
   type ShelfStatus,
 } from "@/api/activity";
@@ -68,6 +69,9 @@ const filters = reactive({
 const query = reactive({
   page: 1,
   pageSize: 10,
+  /** 空 = 后端默认 createdTime desc；点列头后为 startTime */
+  sort: "" as "" | ActivitySortKey,
+  order: "desc" as "asc" | "desc",
 });
 
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageSize)));
@@ -126,6 +130,7 @@ function formatStartTime(raw?: string) {
 }
 
 async function fetchList() {
+  const keepRows = list.value.length > 0;
   loading.value = true;
   error.value = "";
   selectedIds.value = [];
@@ -139,13 +144,19 @@ async function fetchList() {
     if (filters.state !== "" && filters.state !== 0) params.state = filters.state;
     if (filters.startRange?.[0]) params.startFrom = filters.startRange[0];
     if (filters.startRange?.[1]) params.startTo = filters.startRange[1];
+    if (query.sort) {
+      params.sort = query.sort;
+      params.order = query.order;
+    }
     const data = await listActivities(params);
     list.value = data.list ?? [];
     total.value = data.total ?? 0;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "加载失败";
-    list.value = [];
-    total.value = 0;
+    if (!keepRows) {
+      list.value = [];
+      total.value = 0;
+    }
   } finally {
     loading.value = false;
   }
@@ -162,7 +173,24 @@ function resetFilter() {
   filters.state = "";
   filters.startRange = null;
   query.page = 1;
+  query.sort = "";
+  query.order = "desc";
   void fetchList();
+}
+
+function toggleSort(key: ActivitySortKey) {
+  if (query.sort === key) {
+    query.order = query.order === "asc" ? "desc" : "asc";
+  } else {
+    query.sort = key;
+    query.order = "desc";
+  }
+  query.page = 1;
+  void fetchList();
+}
+
+function sortActive(key: ActivitySortKey, dir: "asc" | "desc") {
+  return query.sort === key && query.order === dir;
 }
 
 function toggleRow(id: string) {
@@ -354,7 +382,10 @@ onMounted(fetchList);
       {{ error }}
     </p>
 
-    <div class="table-wrap">
+    <div
+      class="table-wrap"
+      :class="{ 'is-loading': loading && list.length > 0 }"
+    >
       <table class="live-table">
         <thead>
           <tr>
@@ -368,7 +399,25 @@ onMounted(fetchList);
             <th>直播名称</th>
             <th>直播类型</th>
             <th>上架状态</th>
-            <th>直播开始时间</th>
+            <th>
+              <button
+                type="button"
+                class="sort-btn"
+                @click="toggleSort('startTime')"
+              >
+                直播开始时间
+                <span class="sort-carets">
+                  <i
+                    class="sort-caret sort-caret--asc"
+                    :class="{ 'is-active': sortActive('startTime', 'asc') }"
+                  />
+                  <i
+                    class="sort-caret sort-caret--desc"
+                    :class="{ 'is-active': sortActive('startTime', 'desc') }"
+                  />
+                </span>
+              </button>
+            </th>
             <th>归属人</th>
             <th>直播状态</th>
             <th>关联商品</th>
@@ -377,20 +426,12 @@ onMounted(fetchList);
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading">
+          <tr v-if="list.length === 0">
             <td
               colspan="10"
               class="empty-cell"
             >
-              加载中…
-            </td>
-          </tr>
-          <tr v-else-if="list.length === 0">
-            <td
-              colspan="10"
-              class="empty-cell"
-            >
-              暂无直播
+              {{ loading ? "加载中…" : "暂无直播" }}
             </td>
           </tr>
           <tr
@@ -629,12 +670,67 @@ onMounted(fetchList);
   font-size: 13px;
 }
 .table-wrap {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
   border: 1px solid #f0f0f0;
   border-radius: 4px;
   background: #fff;
+}
+.table-wrap.is-loading {
+  pointer-events: none;
+}
+.table-wrap.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.45);
+}
+.sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.sort-carets {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 10px;
+  height: 14px;
+}
+.sort-caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+}
+.sort-caret--asc {
+  border-bottom: 5px solid #c0c4cc;
+}
+.sort-caret--desc {
+  border-top: 5px solid #c0c4cc;
+}
+.sort-caret.is-active.sort-caret--asc {
+  border-bottom-color: var(--color-primary);
+}
+.sort-caret.is-active.sort-caret--desc {
+  border-top-color: var(--color-primary);
+}
+.sort-btn:hover .sort-caret--asc:not(.is-active) {
+  border-bottom-color: #909399;
+}
+.sort-btn:hover .sort-caret--desc:not(.is-active) {
+  border-top-color: #909399;
 }
 .live-table {
   width: 100%;

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router";
-import { ElCheckbox, ElButton, ElMessage, ElIcon } from "element-plus";
-import { ArrowRight } from "@element-plus/icons-vue";
+import { ElCheckbox, ElButton, ElMessage } from "element-plus";
 import { createActivity, type CreateActivityPayload } from "@/api/activity";
 import { useLeaveConfirm } from "@/composables/useLeaveConfirm";
 import { useAuthStore } from "@/stores/auth";
@@ -93,11 +92,6 @@ async function onSave() {
 
 <template>
   <div class="live-create">
-    <div class="live-create__crumb">
-      新建直播
-      <ElIcon class="live-create__crumb-arrow"><ArrowRight /></ElIcon>
-    </div>
-
     <div class="live-create__form">
       <div class="card">
         <BasicInfoSection
@@ -140,18 +134,6 @@ async function onSave() {
 .live-create {
   position: relative;
   padding-bottom: 80px;
-}
-.live-create__crumb {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 14px;
-  color: #666;
-  margin-bottom: 12px;
-}
-.live-create__crumb-arrow {
-  font-size: 12px;
-  color: #999;
 }
 .live-create__form {
   display: flex;

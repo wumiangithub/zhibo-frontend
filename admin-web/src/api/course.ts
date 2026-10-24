@@ -24,6 +24,19 @@ export interface CoursePerson {
   avatar?: string;
 }
 
+/** 课程课件学员权限（D55 整数；对齐库 access_permission） */
+export const CourseMaterialAccess = {
+  /** 1 预览及下载 */
+  PREVIEW_DOWNLOAD: 1,
+  /** 2 仅预览 */
+  PREVIEW_ONLY: 2,
+  /** 3 仅下载 */
+  DOWNLOAD_ONLY: 3,
+} as const;
+
+export type CourseMaterialAccessPermission =
+  (typeof CourseMaterialAccess)[keyof typeof CourseMaterialAccess];
+
 export interface CourseMaterial {
   id: string;
   name: string;
@@ -31,6 +44,14 @@ export interface CourseMaterial {
   type: string;
   fileSize?: number;
   mimeType?: string;
+  /** 1 预览及下载 / 2 仅预览 / 3 仅下载 */
+  accessPermission?: CourseMaterialAccessPermission;
+}
+
+/** 创建课程课件项 */
+export interface CreateCourseMaterialItem {
+  id: string;
+  accessPermission: CourseMaterialAccessPermission;
 }
 
 export interface CourseListItem {
@@ -79,6 +100,9 @@ export interface CreateCoursePayload {
   autoList: boolean;
   /** 归属人员工 id（rs_mainkey_id） */
   ownerIds: number[];
+  /** 课件（有序）：素材 id + 学员权限 */
+  materials?: CreateCourseMaterialItem[];
+  /** @deprecated 兼容旧调用；优先传 materials */
   materialIds?: string[];
 }
 

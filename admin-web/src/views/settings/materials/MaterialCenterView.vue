@@ -53,6 +53,7 @@ import {
   type MaterialListItem,
 } from "@/api/materials";
 import type { MaterialRegisterItem } from "./materialUploadTypes";
+import { resolveUploadedTime } from "@/utils/uploadedTime";
 import { buildMaterialObjectKey, formatUploadSize, resolveMaterialAccessUrl } from "./materialUploadFormat";
 import { useMaterialCenter } from "@/composables/useMaterialCenter";
 
@@ -593,10 +594,13 @@ async function onEditName(row: MaterialListItem) {
               </template>
             </ElTableColumn>
             <ElTableColumn
-              prop="uploadedTime"
               label="上传时间"
               width="170"
-            />
+            >
+              <template #default="{ row }">
+                {{ resolveUploadedTime(row as MaterialListItem) || "—" }}
+              </template>
+            </ElTableColumn>
             <ElTableColumn
               label="上传人"
               width="100"

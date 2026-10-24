@@ -69,13 +69,19 @@ async function loadAudits() {
 
 async function onSubmit() {
   const text = reason.value.trim();
-  if (result.value === "rejected" && (!text || text.length > 200)) {
-    ElMessage.warning("驳回理由须为 1～100 字");
+  if (text.length > 200) {
+    ElMessage.warning("说明不能超过 200 字");
+    return;
+  }
+  if (result.value === "rejected" && !text) {
+    ElMessage.warning("驳回时请填写理由");
     return;
   }
   submitting.value = true;
   try {
-    const payload = result.value === "passed" ? { result: "passed" as const } : { result: "rejected" as const, reason: text };
+    // 契约：驳回必传；通过选填，有填则落库并回显
+    const payload: { result: AuditResult; reason?: string } = { result: result.value };
+    if (text) payload.reason = text;
     const data = await submitCourseAudit(id.value, payload);
     if (detail.value) {
       detail.value.riskStatus = data.riskStatus;
@@ -83,6 +89,7 @@ async function onSubmit() {
     }
     ElMessage.success("提交成功");
     reason.value = "";
+    // 保留当前「通过/驳回」选择，不强制切回通过
     await loadAudits();
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : "提交失败");
@@ -146,10 +153,7 @@ watch(id, loadAll);
             <ElRadio value="rejected">驳回</ElRadio>
           </ElRadioGroup>
         </div>
-        <div
-          v-if="result === 'rejected'"
-          class="form-row"
-        >
+        <div class="form-row">
           <span class="meta-label">理由</span>
           <ElInput
             v-model="reason"
@@ -157,7 +161,10 @@ watch(id, loadAll);
             :rows="3"
             maxlength="200"
             show-word-limit
-            placeholder="驳回时必填（1～200 字）"
+            :placeholder="
+              result === 'rejected' ? '驳回时必填（1～200 字）' : '选填，最多 200 字'
+            "
+            style="max-width: 480px"
           />
         </div>
         <ElButton

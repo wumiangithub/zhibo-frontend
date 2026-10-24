@@ -3,6 +3,9 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import {
   ElButton,
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
   ElImage,
   ElInput,
   ElMessage,
@@ -83,6 +86,7 @@ function riskClass(status?: RiskStatus) {
 }
 
 async function fetchList() {
+  const keepRows = list.value.length > 0;
   loading.value = true;
   error.value = "";
   selectedIds.value = [];
@@ -101,8 +105,10 @@ async function fetchList() {
     total.value = data.total ?? 0;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "加载失败";
-    list.value = [];
-    total.value = 0;
+    if (!keepRows) {
+      list.value = [];
+      total.value = 0;
+    }
   } finally {
     loading.value = false;
   }
@@ -135,9 +141,8 @@ function toggleSort(key: CourseSortKey) {
   void fetchList();
 }
 
-function sortMark(key: CourseSortKey) {
-  if (query.sort !== key) return "";
-  return query.order === "asc" ? "↑" : "↓";
+function sortActive(key: CourseSortKey, dir: "asc" | "desc") {
+  return query.sort === key && query.order === dir;
 }
 
 function toggleRow(id: string) {
@@ -169,7 +174,7 @@ function openAuditRecords(item: CourseListItem) {
 async function onShelf(item: CourseListItem, listed: boolean) {
   const action = listed ? "上架" : "下架";
   try {
-    await ElMessageBox.confirm(`确定要{action}「{item.title}」吗？`, action, {
+    await ElMessageBox.confirm(`确定要${action}「${item.title}」吗？`, action, {
       type: "warning",
       confirmButtonText: "确定",
       cancelButtonText: "取消",
@@ -205,6 +210,14 @@ async function onDelete(item: CourseListItem) {
   }
 }
 
+function onMoreCommand(cmd: string, item: CourseListItem) {
+  if (cmd === "share") onShare();
+  else if (cmd === "audit") void router.push(`/course/${item.id}/audit`);
+  else if (cmd === "on") void onShelf(item, true);
+  else if (cmd === "off") void onShelf(item, false);
+  else if (cmd === "delete") void onDelete(item);
+}
+
 function onPageChange(page: number) {
   query.page = page;
   void fetchList();
@@ -221,7 +234,6 @@ onMounted(fetchList);
 
 <template>
   <div class="course-manage">
-    <div class="crumb">课程 / 课程管理</div>
     <div class="filter-bar">
       <div class="filter-item">
         <span class="filter-label">课程名称</span>
@@ -309,7 +321,10 @@ onMounted(fetchList);
       {{ error }}
     </p>
 
-    <div class="table-wrap">
+    <div
+      class="table-wrap"
+      :class="{ 'is-loading': loading && list.length > 0 }"
+    >
       <table class="course-table">
         <thead>
           <tr>
@@ -331,7 +346,17 @@ onMounted(fetchList);
                 class="sort-btn"
                 @click="toggleSort('entitledUserCount')"
               >
-                权益用户数{{ sortMark("entitledUserCount") }}
+                权益用户数
+                <span class="sort-carets">
+                  <i
+                    class="sort-caret sort-caret--asc"
+                    :class="{ 'is-active': sortActive('entitledUserCount', 'asc') }"
+                  />
+                  <i
+                    class="sort-caret sort-caret--desc"
+                    :class="{ 'is-active': sortActive('entitledUserCount', 'desc') }"
+                  />
+                </span>
               </button>
             </th>
             <th>
@@ -340,7 +365,17 @@ onMounted(fetchList);
                 class="sort-btn"
                 @click="toggleSort('totalUserCount')"
               >
-                累计用户数{{ sortMark("totalUserCount") }}
+                累计用户数
+                <span class="sort-carets">
+                  <i
+                    class="sort-caret sort-caret--asc"
+                    :class="{ 'is-active': sortActive('totalUserCount', 'asc') }"
+                  />
+                  <i
+                    class="sort-caret sort-caret--desc"
+                    :class="{ 'is-active': sortActive('totalUserCount', 'desc') }"
+                  />
+                </span>
               </button>
             </th>
             <th>
@@ -349,7 +384,17 @@ onMounted(fetchList);
                 class="sort-btn"
                 @click="toggleSort('salesCount')"
               >
-                总销量{{ sortMark("salesCount") }}
+                总销量
+                <span class="sort-carets">
+                  <i
+                    class="sort-caret sort-caret--asc"
+                    :class="{ 'is-active': sortActive('salesCount', 'asc') }"
+                  />
+                  <i
+                    class="sort-caret sort-caret--desc"
+                    :class="{ 'is-active': sortActive('salesCount', 'desc') }"
+                  />
+                </span>
               </button>
             </th>
             <th>
@@ -358,7 +403,17 @@ onMounted(fetchList);
                 class="sort-btn"
                 @click="toggleSort('updatedTime')"
               >
-                最新修改时间{{ sortMark("updatedTime") }}
+                最新修改时间
+                <span class="sort-carets">
+                  <i
+                    class="sort-caret sort-caret--asc"
+                    :class="{ 'is-active': sortActive('updatedTime', 'asc') }"
+                  />
+                  <i
+                    class="sort-caret sort-caret--desc"
+                    :class="{ 'is-active': sortActive('updatedTime', 'desc') }"
+                  />
+                </span>
               </button>
             </th>
             <th>风控合规审核</th>
@@ -366,20 +421,12 @@ onMounted(fetchList);
           </tr>
         </thead>
         <tbody>
-          <tr v-if="loading">
+          <tr v-if="!list.length">
             <td
               colspan="12"
               class="empty-cell"
             >
-              加载中…
-            </td>
-          </tr>
-          <tr v-else-if="!list.length">
-            <td
-              colspan="12"
-              class="empty-cell"
-            >
-              暂无课程
+              {{ loading ? "加载中…" : "暂无课程" }}
             </td>
           </tr>
           <tr
@@ -472,49 +519,48 @@ onMounted(fetchList);
                 <button
                   type="button"
                   class="op-link"
-                  @click="onShare"
-                >
-                  分享
-                </button>
-                <RouterLink
-                  :to="`/course/${item.id}/audit`"
-                  class="op-link"
-                >
-                  去审核
-                </RouterLink>
-                <button
-                  v-if="item.shelfStatus === 'on'"
-                  type="button"
-                  class="op-link"
-                  :disabled="!item.canUnlist"
-                  @click="onShelf(item, false)"
-                >
-                  下架
-                </button>
-                <button
-                  v-else
-                  type="button"
-                  class="op-link"
-                  :disabled="!item.canList"
-                  @click="onShelf(item, true)"
-                >
-                  上架
-                </button>
-                <button
-                  type="button"
-                  class="op-link"
                   @click="openAuditRecords(item)"
                 >
                   审核记录
                 </button>
-                <button
-                  type="button"
-                  class="op-link"
-                  :disabled="!item.canDelete"
-                  @click="onDelete(item)"
+                <ElDropdown
+                  trigger="click"
+                  @command="(cmd: string) => onMoreCommand(cmd, item)"
                 >
-                  删除
-                </button>
+                  <button
+                    type="button"
+                    class="op-more"
+                  >
+                    ···
+                  </button>
+                  <template #dropdown>
+                    <ElDropdownMenu>
+                      <ElDropdownItem command="share">分享</ElDropdownItem>
+                      <ElDropdownItem command="audit">去审核</ElDropdownItem>
+                      <ElDropdownItem
+                        v-if="item.shelfStatus === 'pending' || item.shelfStatus === 'off'"
+                        command="on"
+                        :disabled="!item.canList"
+                      >
+                        上架
+                      </ElDropdownItem>
+                      <ElDropdownItem
+                        v-if="item.shelfStatus === 'on'"
+                        command="off"
+                        :disabled="!item.canUnlist"
+                      >
+                        下架
+                      </ElDropdownItem>
+                      <ElDropdownItem
+                        command="delete"
+                        divided
+                        :disabled="!item.canDelete"
+                      >
+                        删除
+                      </ElDropdownItem>
+                    </ElDropdownMenu>
+                  </template>
+                </ElDropdown>
               </div>
             </td>
           </tr>
@@ -556,22 +602,20 @@ onMounted(fetchList);
   min-height: 0;
   overflow: hidden;
 }
-.crumb {
-  flex: none;
-  font-size: 14px;
-  color: #666;
-}
 .filter-bar,
-.toolbar,
-.ops {
+.toolbar {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
 }
-.filter-bar,
-.toolbar {
-  flex: none;
+.ops {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 .filter-item {
   display: inline-flex;
@@ -592,12 +636,23 @@ onMounted(fetchList);
   border-radius: 4px;
 }
 .table-wrap {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
   background: #fff;
   border: 1px solid #f0f0f0;
   border-radius: 4px;
+}
+.table-wrap.is-loading {
+  pointer-events: none;
+}
+.table-wrap.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.45);
 }
 .course-table {
   width: 100%;
@@ -628,12 +683,48 @@ onMounted(fetchList);
   background: #fafafa;
 }
 .sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 0;
   color: inherit;
   font: inherit;
   background: transparent;
   border: 0;
   cursor: pointer;
+}
+.sort-carets {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 10px;
+  height: 14px;
+  justify-content: center;
+}
+.sort-caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+}
+.sort-caret--asc {
+  border-bottom: 5px solid #c0c4cc;
+}
+.sort-caret--desc {
+  border-top: 5px solid #c0c4cc;
+}
+.sort-caret.is-active.sort-caret--asc {
+  border-bottom-color: var(--color-primary);
+}
+.sort-caret.is-active.sort-caret--desc {
+  border-top-color: var(--color-primary);
+}
+.sort-btn:hover .sort-caret--asc:not(.is-active) {
+  border-bottom-color: #909399;
+}
+.sort-btn:hover .sort-caret--desc:not(.is-active) {
+  border-top-color: #909399;
 }
 .col-check {
   width: 40px;
@@ -744,9 +835,25 @@ onMounted(fetchList);
   border: 0;
   cursor: pointer;
 }
+.op-link:hover {
+  text-decoration: underline;
+}
 .op-link:disabled {
   color: #bfbfbf;
   cursor: not-allowed;
+  text-decoration: none;
+}
+.op-more {
+  border: 0;
+  background: transparent;
+  padding: 0 4px;
+  font-size: 14px;
+  color: #999;
+  cursor: pointer;
+  line-height: 1;
+}
+.op-more:hover {
+  color: var(--color-primary);
 }
 .pager {
   display: flex;

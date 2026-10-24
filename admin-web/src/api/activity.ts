@@ -99,6 +99,16 @@ export interface ActivityCourseware {
   name: string;
   type: string;
   url: string;
+  fileSize?: number;
+  mimeType?: string;
+  thumbUrl?: string;
+  /** 视频时长展示文案（来自素材 meta）；非视频省略 */
+  durationText?: string;
+  /**
+   * 课程课件学员权限：1 预览及下载 / 2 仅预览 / 3 仅下载。
+   * 直播课件可不传。
+   */
+  accessPermission?: number;
 }
 
 export type AccessValidityType = "long" | "days";
@@ -182,6 +192,8 @@ export interface ActivityListData {
   list: ActivityListItem[];
 }
 
+export type ActivitySortKey = "startTime";
+
 export interface ListQuery {
   page?: number;
   pageSize?: number;
@@ -194,6 +206,9 @@ export interface ListQuery {
   shelfStatus?: ShelfStatus;
   startFrom?: string;
   startTo?: string;
+  /** 仅 startTime；不传则后端按 createdTime 降序 */
+  sort?: ActivitySortKey;
+  order?: "asc" | "desc";
 }
 
 export interface CreateActivityPayload {
