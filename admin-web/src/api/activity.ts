@@ -322,7 +322,7 @@ export function getStreamStatus(id: ActivityId) {
 /** 第三方推流真正开播。不是结束直播，也不是网页主持人开播。 */
 export function startActivityLive(id: ActivityId) {
   return post<{ id: ActivityId; state: number }>(
-    `/activities/live/start/${encodeURIComponent(id)}`,
+    `/activities/start/${encodeURIComponent(id)}`,
   );
 }
 

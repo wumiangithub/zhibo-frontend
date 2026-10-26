@@ -44,6 +44,12 @@ const form = reactive({
   coursewareMaterialIds: [] as string[],
   coursewares: [] as ActivityCourseware[],
 });
+const detailPlaceholder = [
+  "1.支持从第三方编辑器粘贴内容",
+  "2.图片宽高自适应显示(推荐宽度分辨率750px)",
+  "3.图片支持jpg、png、gif格式，每张图片大小不超过5M",
+].join("\n");
+
 const nameError = ref("");
 const submitting = ref(false);
 const brokenAvatar = ref<Record<number, boolean>>({});
@@ -258,14 +264,9 @@ onMounted(() => {
                 class="detail__editor"
                 :height="'340px'"
                 :max-length="10000"
-                placeholder="请输入内容"
+                :placeholder="detailPlaceholder"
                 @update:model-value="onDetailHtml"
               />
-              <div class="detail-hints">
-                <p>1.支持从第三方编辑器粘贴内容</p>
-                <p>2.图片宽高自适应显示(推荐宽度分辨率750px)</p>
-                <p>3.图片支持jpg、png、gif格式，每张图片大小不超过5M</p>
-              </div>
             </div>
           </FormRow>
         </div>
@@ -445,14 +446,13 @@ onMounted(() => {
 .detail__editor {
   width: 100%;
 }
-.detail-hints {
-  margin-top: 8px;
-  font-size: 12px;
+/* wangEditor placeholder 默认不换行，多行说明需 pre-line */
+.detail__editor :deep(.w-e-text-placeholder) {
+  white-space: pre-line;
   line-height: 1.7;
-  color: #999;
-}
-.detail-hints p {
-  margin: 0;
+  top: 12px;
+  left: 12px;
+  width: calc(100% - 24px);
 }
 .owner-wrap {
   display: flex;
