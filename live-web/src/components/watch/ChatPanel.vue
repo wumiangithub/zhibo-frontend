@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import EmojiPanel from "@/components/EmojiPanel.vue";
 import { insertEmojiAtCursor } from "@/composables/useEmojiInsert";
 import { splitEmojiText } from "@/constants/emoji";
 import type { ChatController } from "@/composables/useChat";
+import { vhallChatRoleBadge } from "@/utils/vhallChatRole";
 
 const props = defineProps<{
   chat: ChatController;
@@ -11,11 +12,41 @@ const props = defineProps<{
 }>();
 const chat = props.chat;
 
-const emit = defineEmits<{ gift: []; like: [] }>();
+const emit = defineEmits<{ cart: []; like: [] }>();
 
 const inputEl = ref<HTMLInputElement | null>(null);
 const mobileInputEl = ref<HTMLInputElement | null>(null);
 const showEmoji = ref(false);
+/** 加载失败的头像 URL，回退灰圆 */
+const brokenAvatars = reactive<Record<string, true>>({});
+
+function avatarSrc(msg: ChatMessage): string {
+  const url = msg.avatar?.trim();
+  if (!url || brokenAvatars[url]) return "";
+  return url;
+}
+
+function onAvatarError(url: string | undefined) {
+  const key = url?.trim();
+  if (key) brokenAvatars[key] = true;
+}
+
+function roleBadge(msg: ChatMessage): string | undefined {
+  return vhallChatRoleBadge(msg.role_name);
+}
+
+function nameClass(msg: ChatMessage): string {
+  if (msg.role_name === 1) return "text-red-400";
+  if (msg.role_name === 3) return "text-amber-400";
+  if (msg.role_name === 4) return "text-violet-400";
+  return "text-gray-400";
+}
+
+function badgeClass(msg: ChatMessage): string {
+  if (msg.role_name === 3) return "bg-amber-500/20 text-amber-400";
+  if (msg.role_name === 4) return "bg-violet-500/20 text-violet-400";
+  return "bg-red-500/20 text-red-400";
+}
 /** 小屏输入框是否聚焦（失焦时短暂延迟，避免点发送/表情先塌布局） */
 const mobileInputFocused = ref(false);
 let mobileBlurTimer: ReturnType<typeof setTimeout> | null = null;
@@ -103,20 +134,29 @@ function sendMobileChat() {
         :key="msg.msgId || idx"
         class="mb-3 flex gap-2"
       >
-        <div class="h-8 w-8 flex-shrink-0 rounded-full bg-gray-700"></div>
+        <div class="h-8 w-8 flex-shrink-0 overflow-hidden rounded-full bg-gray-700">
+          <img
+            v-if="avatarSrc(msg)"
+            :src="avatarSrc(msg)"
+            alt=""
+            class="h-full w-full object-cover"
+            @error="onAvatarError(msg.avatar)"
+          >
+        </div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
             <span
               class="truncate text-xs"
-              :class="msg.is_host ? 'text-red-400' : 'text-gray-400'"
+              :class="nameClass(msg)"
             >
               {{ msg.sender_name }}
             </span>
             <span
-              v-if="msg.is_host"
-              class="flex-none rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] text-red-400"
+              v-if="roleBadge(msg)"
+              class="flex-none rounded px-1.5 py-0.5 text-[10px]"
+              :class="badgeClass(msg)"
             >
-              主持人
+              {{ roleBadge(msg) }}
             </span>
           </div>
           <div class="mt-1 inline-block max-w-full break-words rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-200">
@@ -181,7 +221,7 @@ function sendMobileChat() {
       </div>
     </div>
 
-    <!-- 小屏底栏：未聚焦=参与聊天+礼物/点赞；聚焦=表情+输入+发送（无头像；md 及以上隐藏） -->
+    <!-- 小屏底栏：未聚焦=参与聊天+点赞；聚焦=表情+输入+发送（无头像；md 及以上隐藏） -->
     <div class="flex flex-none items-center gap-2 border-t border-gray-800 bg-gray-900 px-3 py-2 md:hidden">
       <!-- 发送态：左侧表情 -->
       <div
@@ -242,16 +282,16 @@ function sendMobileChat() {
         </svg>
       </button>
 
-      <!-- 未聚焦：礼物 + 点赞 -->
+      <!-- 未聚焦：购物车 + 点赞 -->
       <template v-else>
         <button
           type="button"
-          class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-gray-300 active:bg-gray-700"
-          aria-label="礼物"
-          @click="emit('gift')"
+          class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-yellow-400 active:bg-gray-700"
+          aria-label="购物车"
+          @click="emit('cart')"
         >
-          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13L5.4 5M7 13l-2.3 2.3c-.4.4-.1 1.1.5 1.1H17M10 20a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
           </svg>
         </button>
         <button
@@ -267,7 +307,7 @@ function sendMobileChat() {
             v-if="likeCount && likeCount > 0"
             class="absolute -right-0.5 -top-0.5 min-w-[14px] rounded-full bg-red-500 px-1 text-center text-[10px] leading-[14px] text-white"
           >
-            {{ likeCount > 99 ? '99+' : likeCount }}
+            {{ likeCount > 99999 ? '99999+' : likeCount }}
           </span>
         </button>
       </template>

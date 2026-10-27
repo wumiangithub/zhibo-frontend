@@ -95,7 +95,6 @@ const {
   enterLiveFromPreview,
   switchToFallback,
   shareWatch,
-  showGiftPlaceholder,
 } = session;
 
 const displayTitle = computed(() => data.value?.title || "直播中控台");
@@ -309,7 +308,6 @@ onMounted(() => {
           :title="data.title"
           :is-audio-live="isAudioLive"
           :can-fallback="!!data.embedUrl"
-          @gift="showGiftPlaceholder"
           @retry="load"
           @fallback="switchToFallback"
         />

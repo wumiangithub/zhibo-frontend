@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { ElMessageBox } from "element-plus";
 import SideIcon from "@/components/SideIcon.vue";
@@ -11,17 +11,15 @@ const router = useRouter();
 const auth = useAuthStore();
 const { message, visible, toast } = useToast();
 
+/** 用户模块侧栏「用户管理」分组是否展开 */
+const userGroupOpen = ref(true);
+
 const topNav = [
   { key: "workbench", label: "工作台", to: "/" },
   { key: "course", label: "课程", to: "/course" },
   { key: "live", label: "直播", to: "/live" },
-  { key: "mall", label: "商城" },
-  { key: "scrm", label: "SCRM" },
-  { key: "trade", label: "交易" },
-  { key: "user", label: "用户" },
-  { key: "data", label: "数据" },
+  { key: "user", label: "用户", to: "/user/list" },
   { key: "settings", label: "设置", to: "/settings/materials" },
-  { key: "apps", label: "应用" },
 ] as const;
 
 const workbenchSideNav = [
@@ -63,6 +61,13 @@ const settingsSideNav = [
   { key: "roles", label: "角色管理", icon: "user", to: "/settings/roles" },
 ] as const;
 
+/** 顶栏用户模块侧栏（D79） */
+const userSideNav = [
+  { key: "list", label: "用户列表", to: "/user/list" },
+  { key: "learning-stats", label: "用户学习统计", to: "/user/learning-stats" },
+  { key: "tags", label: "标签管理", to: "/user/tags" },
+] as const;
+
 const isLiveModule = computed(() => {
   const name = route.name;
   return (
@@ -80,15 +85,31 @@ const isSettingsModule = computed(
   () => route.name === "settings-materials" || route.path.startsWith("/settings"),
 );
 
+const isUserModule = computed(() => route.path.startsWith("/user"));
+
 const activeTop = computed(() => {
   if (isLiveModule.value) return "live";
   if (isCourseModule.value) return "course";
   if (isSettingsModule.value) return "settings";
+  if (isUserModule.value) return "user";
   if (route.name === "dashboard" || route.path === "/") return "workbench";
   return "";
 });
 
 const activeSide = computed(() => {
+  if (isUserModule.value) {
+    if (route.name === "user-learning-stats") return "learning-stats";
+    if (
+      route.name === "user-tags" ||
+      route.name === "user-tags-create" ||
+      route.name === "user-tags-detail" ||
+      route.name === "user-tags-edit" ||
+      route.path.startsWith("/user/tags")
+    ) {
+      return "tags";
+    }
+    return "list";
+  }
   if (isSettingsModule.value) {
     if (route.path.startsWith("/settings/materials")) return "materials";
     if (route.name === "settings-employees") return "employees";
@@ -130,6 +151,7 @@ const viewKey = computed(() => {
 });
 
 const currentSideNav = computed(() => {
+  if (isUserModule.value) return userSideNav;
   if (isSettingsModule.value) return settingsSideNav;
   if (isCourseModule.value) return courseSideNav;
   if (isLiveModule.value) return liveSideNav;
@@ -292,42 +314,75 @@ async function onAccountClick() {
     <div class="flex min-h-0 flex-1">
       <aside
         class="side-aside flex w-[176px] flex-none flex-col border-r border-[#ebebeb] bg-[#fafbfc]"
-        :class="{ 'is-live-module': isLiveModule || isCourseModule }"
+        :class="{ 'is-live-module': isLiveModule || isCourseModule || isUserModule }"
       >
         <nav class="side-nav min-h-0 flex-1 space-y-0.5 px-2 py-3 text-[13px]">
-          <template
-            v-for="item in currentSideNav"
-            :key="item.key"
+          <button
+            v-if="isUserModule"
+            type="button"
+            class="side-group-toggle"
+            :aria-expanded="userGroupOpen"
+            @click="userGroupOpen = !userGroupOpen"
           >
-            <RouterLink
-              v-if="'to' in item && item.to"
-              :to="item.to"
-              class="side-nav-item"
-              :class="{ 'is-active': activeSide === item.key }"
+            <span class="side-group-label">
+              <SideIcon name="people" />
+              <span>用户管理</span>
+            </span>
+            <svg
+              class="side-group-chevron"
+              :class="{ 'is-collapsed': !userGroupOpen }"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
             >
-              <SideIcon
-                v-if="sideIconOf(item)"
-                :name="sideIconOf(item)!"
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M19 9l-7 7-7-7"
               />
-              <span>{{ item.label }}</span>
-            </RouterLink>
-            <button
-              v-else
-              type="button"
-              class="side-nav-item"
-              @click="onSideClick(item)"
+            </svg>
+          </button>
+          <template v-if="!isUserModule || userGroupOpen">
+            <template
+              v-for="item in currentSideNav"
+              :key="item.key"
             >
-              <SideIcon
-                v-if="sideIconOf(item)"
-                :name="sideIconOf(item)!"
-              />
-              <span>{{ item.label }}</span>
-            </button>
+              <RouterLink
+                v-if="'to' in item && item.to"
+                :to="item.to"
+                class="side-nav-item"
+                :class="{
+                  'is-active': activeSide === item.key,
+                  'is-nested': isUserModule,
+                }"
+              >
+                <SideIcon
+                  v-if="sideIconOf(item)"
+                  :name="sideIconOf(item)!"
+                />
+                <span>{{ item.label }}</span>
+              </RouterLink>
+              <button
+                v-else
+                type="button"
+                class="side-nav-item"
+                :class="{ 'is-nested': isUserModule }"
+                @click="onSideClick(item)"
+              >
+                <SideIcon
+                  v-if="sideIconOf(item)"
+                  :name="sideIconOf(item)!"
+                />
+                <span>{{ item.label }}</span>
+              </button>
+            </template>
           </template>
         </nav>
 
         <div
-          v-if="!isLiveModule && !isSettingsModule && !isCourseModule"
+          v-if="!isLiveModule && !isSettingsModule && !isCourseModule && !isUserModule"
           class="box-border px-2 pb-3"
         >
           <button
@@ -437,6 +492,47 @@ async function onAccountClick() {
   text-decoration: none;
 }
 
+.side-group-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  padding: 0.5rem 0.75rem;
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  outline: none;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.side-group-toggle:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-bg);
+}
+
+.side-group-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.side-group-chevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  transition: transform 0.15s;
+}
+
+.side-group-chevron.is-collapsed {
+  transform: rotate(-90deg);
+}
+
 .side-nav-item {
   display: flex;
   width: 100%;
@@ -468,6 +564,17 @@ async function onAccountClick() {
   color: var(--color-primary);
   font-weight: 600;
   text-decoration: none;
+}
+
+/* 二级菜单：背景块略缩；文字再往里一点 */
+.side-nav-item.is-nested {
+  width: calc(100% - 0.75rem);
+  margin-left: 0.75rem;
+  padding-left: 1.5rem;
+}
+
+.side-aside.is-live-module .side-nav-item.is-nested.is-active {
+  padding-left: calc(1.5rem - 3px);
 }
 
 /* 直播模块选中：左侧蓝条，贴近参考图 */

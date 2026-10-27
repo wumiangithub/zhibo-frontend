@@ -31,6 +31,14 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
   /** live_over / state 3/4/5：强制 0，忽略迟到 onlinePopulation（含主讲减 1 后仍可能非 0） */
   let liveEnded = false;
 
+  /**
+   * 对齐官方 demo Praise：连续点击只本地 +1，停手约 2s 后把增量一次 userLike({ num })。
+   * 每次点击立刻打 num:1 会被微吼限流/丢弃，刷新后总数偏少。
+   */
+  let pendingLikeIncrement = 0;
+  let postPraiseTimer: ReturnType<typeof window.setTimeout> | undefined;
+  const PRAISE_FLUSH_MS = 2000;
+
   async function loadRoomId() {
     const sdk = getSdk();
     // interact_token 同步可得且稳定，优先用它；getRoominfo 偶发挂起会卡死轮询，故只作超时兜底
@@ -81,17 +89,35 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
     });
   }
 
-  function handleLike() {
+  function flushPendingLikes() {
+    if (postPraiseTimer != null) {
+      window.clearTimeout(postPraiseTimer);
+      postPraiseTimer = undefined;
+    }
+    const num = pendingLikeIncrement;
+    pendingLikeIncrement = 0;
+    if (num <= 0) return;
     const sdk = getSdk();
     if (!sdk || !roomId || !sdk.interactTools?.praise?.userLike) return;
     try {
       // SDK 实现读 room_id，文档写 roomid，两个都传保险
-      sdk.interactTools.praise.userLike({ roomid: roomId, room_id: roomId, num: 1 });
-      // 乐观更新：本地点完立刻 +1，服务端 customPraiseTotal 推回真实总数时再覆盖校正
-      stats.likeCount += 1;
+      sdk.interactTools.praise.userLike({ roomid: roomId, room_id: roomId, num });
     } catch (e) {
       console.error("点赞失败", e);
     }
+  }
+
+  function handleLike() {
+    const sdk = getSdk();
+    if (!sdk || !roomId || !sdk.interactTools?.praise?.userLike) return;
+    // 乐观更新：本地点完立刻 +1；停手后再合并上报
+    pendingLikeIncrement += 1;
+    stats.likeCount += 1;
+    if (postPraiseTimer != null) window.clearTimeout(postPraiseTimer);
+    postPraiseTimer = window.setTimeout(() => {
+      postPraiseTimer = undefined;
+      flushPendingLikes();
+    }, PRAISE_FLUSH_MS);
   }
 
   function handleOnlinePopulation(data: unknown) {
@@ -124,9 +150,20 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
     if (typeof value === "number") stats.likeCount = Math.max(stats.likeCount, value);
   }
 
+  function onPageHide() {
+    flushPendingLikes();
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", onPageHide);
+  }
+
   onBeforeUnmount(() => {
     disposed = true;
     cancelRoomId();
+    window.removeEventListener("pagehide", onPageHide);
+    // 离开页面前把未上报增量送出，避免 2s 窗口内点赞丢失
+    flushPendingLikes();
   });
 
   return Object.assign(stats, {

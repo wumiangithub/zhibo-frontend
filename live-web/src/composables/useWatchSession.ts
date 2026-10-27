@@ -70,6 +70,17 @@ export function useWatchSession(opts: WatchSessionOptions) {
       name: opts.getNickname() || data.value?.nickname || "我",
     }),
     onIncoming: (msg) => barrage.spawnDanmaku(msg.msg),
+    getActivityId: () => resolveId(opts.activityId),
+    getViewerId: () => {
+      try {
+        const raw = localStorage.getItem("viewerId");
+        if (!raw) return null;
+        const n = Number(raw);
+        return Number.isInteger(n) && n > 0 ? n : null;
+      } catch {
+        return null;
+      }
+    },
   });
   const stats = useRoomStats(getSdk);
   const notice = useAnnouncement(getSdk);
@@ -335,10 +346,6 @@ export function useWatchSession(opts: WatchSessionOptions) {
     }
   }
 
-  function showGiftPlaceholder() {
-    toast("礼物功能即将上线");
-  }
-
   function dispose() {
     // SPA 卸载：刷 leave 队列并 leave 自己；整页刷新另有 pagehide keepalive
     attendance.flushPending();
@@ -371,7 +378,6 @@ export function useWatchSession(opts: WatchSessionOptions) {
     enterLiveFromPreview,
     switchToFallback,
     shareWatch,
-    showGiftPlaceholder,
     dispose,
   };
 }

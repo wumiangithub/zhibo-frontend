@@ -1,5 +1,7 @@
 import { nextTick, reactive } from "vue";
+import { deleteComment, reportComment } from "@/api/comments";
 import { normalizeEmojiText } from "@/constants/emoji";
+import { parseVhallChatRole } from "@/utils/vhallChatRole";
 
 const VERIFY_KEY = "zhibo.chatVerified";
 const MAX_LEN = 140;
@@ -11,11 +13,17 @@ export interface ChatOptions {
   getSender: () => { id: string; name: string };
   /** 消息落地后回调，用于把聊天同步成弹幕 */
   onIncoming?: (msg: ChatMessage) => void;
+  /** 本站活动 UUID；有则把聊天上报本站库（D77） */
+  getActivityId?: () => string;
+  /** 可选 viewer.id（已登录观众） */
+  getViewerId?: () => number | null;
 }
 
 /**
- * 历史消息：{ content, nickname, user_id, id, user_role, role_name, create_timestamp }
- * 实时 chatMsg：{ context: 发送者, data: { type, text_content } }
+ * 历史：SDK 扁平项 或 open-api get-list 嵌套项（见微吼文档）。
+ * 实时 chatMsg：{ context, data: { type, text_content, nick_name, avatar } }
+ *
+ * 昵称 / 头像 / 角色优先顶层与 context（get-list 必需字段），再兜底 data。
  */
 function normalizeChatItem(raw: Record<string, any>): ChatMessage | null {
   const ctx = raw.context || {};
@@ -23,19 +31,82 @@ function normalizeChatItem(raw: Record<string, any>): ChatMessage | null {
   if (payload.type && payload.type !== "text" && payload.type !== "image") return null;
   if (raw.event && raw.event !== "msg") return null;
 
-  const text = raw.content || payload.text_content || "";
-  const name = raw.nickname || raw.nick_name || ctx.nickname || ctx.nick_name || "";
+  const text =
+    raw.content ||
+    payload.text_content ||
+    payload.barrage_txt ||
+    payload.barrageTxt ||
+    "";
+  const name =
+    raw.nickname ||
+    raw.nick_name ||
+    ctx.nickname ||
+    ctx.nick_name ||
+    payload.nickname ||
+    payload.nick_name ||
+    "";
   if (!text || !name) return null;
 
-  const role = raw.role_name ?? ctx.role_name;
+  const avatarRaw =
+    raw.avatar || ctx.avatar || payload.avatar || "";
+  const avatar = typeof avatarRaw === "string" ? avatarRaw.trim() : "";
+
+  let role = parseVhallChatRole(raw.role_name ?? ctx.role_name);
+  // 旧扁平历史偶发 user_role=host，无数字 role_name
+  if (role == null && (raw.user_role || ctx.user_role) === "host") {
+    role = 1;
+  }
+
   return {
-    sender_id: String(raw.user_id || ctx.third_account_id || ctx.user_id || ""),
-    sender_name: name,
-    msg: text,
-    msgId: raw.id != null ? String(raw.id) : payload.msg_id != null ? String(payload.msg_id) : undefined,
-    is_host: (raw.user_role || ctx.user_role) === "host" || String(role) === "1",
+    sender_id: String(
+      raw.user_id ||
+        raw.sender_id ||
+        raw.third_user_id ||
+        ctx.third_account_id ||
+        ctx.user_id ||
+        "",
+    ),
+    sender_name: String(name).trim(),
+    msg: String(text),
+    msgId:
+      raw.id != null
+        ? String(raw.id)
+        : raw.msg_id != null
+          ? String(raw.msg_id)
+          : payload.msg_id != null
+            ? String(payload.msg_id)
+            : undefined,
+    avatar: avatar || undefined,
+    role_name: role,
+    is_host: role === 1,
     timestamp: raw.create_timestamp ? Number(raw.create_timestamp) * 1000 : Date.now(),
   };
+}
+
+function formatCommentTime(ts: number): string {
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function persistComment(options: ChatOptions, msg: ChatMessage) {
+  const activityId = options.getActivityId?.()?.trim() ?? "";
+  if (!activityId || !msg.msg?.trim()) return;
+  const guestId = msg.sender_id?.trim() || options.getSender().id || "";
+  const viewerId = options.getViewerId?.() ?? null;
+  if (!guestId && viewerId == null) return;
+  void reportComment(activityId, {
+    content: msg.msg.slice(0, 500),
+    guestId: guestId || undefined,
+    viewerId: viewerId ?? undefined,
+    nickname: msg.sender_name || undefined,
+    roleName: msg.role_name ?? undefined,
+    providerMsgId:
+      msg.msgId && !msg.msgId.startsWith("local_") ? msg.msgId.slice(0, 64) : undefined,
+    commentTime: formatCommentTime(msg.timestamp || Date.now()),
+  }).catch((e) => {
+    console.warn("评论上报本站失败", e);
+  });
 }
 
 export function useChat(options: ChatOptions) {
@@ -123,6 +194,7 @@ export function useChat(options: ChatOptions) {
         sender_name: sender.name,
         msg,
         msgId: `local_${Date.now()}`,
+        role_name: 2,
         is_host: false,
         timestamp: Date.now(),
       });
@@ -146,6 +218,7 @@ export function useChat(options: ChatOptions) {
     );
     if (placeholderIdx !== -1) {
       chat.chatMessages.splice(placeholderIdx, 1, msg);
+      persistComment(options, msg);
       return;
     }
     // 他人消息或无占位命中时的常规去重：近 5 秒内相同发送者 + 内容视为同一条
@@ -160,6 +233,7 @@ export function useChat(options: ChatOptions) {
     if (isDuplicate) return;
     chat.chatMessages.push(msg);
     trimList();
+    persistComment(options, msg);
   }
 
   function handleChatMessage(data: VhallChatMsgMessage) {
@@ -180,6 +254,12 @@ export function useChat(options: ChatOptions) {
     const { msgId } = data as { msgId?: string };
     if (msgId) {
       chat.chatMessages = chat.chatMessages.filter((m) => m.msgId !== msgId);
+      const activityId = options.getActivityId?.()?.trim() ?? "";
+      if (activityId && !msgId.startsWith("local_")) {
+        void deleteComment(activityId, { providerMsgId: msgId.slice(0, 64) }).catch((e) => {
+          console.warn("评论软删上报失败", e);
+        });
+      }
     }
   }
 

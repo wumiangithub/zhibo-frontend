@@ -13,6 +13,8 @@ import {
   ElOption,
   ElPagination,
   ElSelect,
+  ElTable,
+  ElTableColumn,
   ElTooltip,
 } from "element-plus";
 import {
@@ -56,12 +58,6 @@ const query = reactive({
 });
 
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageSize)));
-const selectPage = computed({
-  get: () => list.value.length > 0 && selectedIds.value.length === list.value.length,
-  set: (checked: boolean) => {
-    selectedIds.value = checked ? list.value.map((item) => item.id) : [];
-  },
-});
 
 function ownersText(item: CourseListItem) {
   const names = (item.owners ?? []).map((owner) => owner.userName).filter(Boolean);
@@ -130,25 +126,28 @@ function resetFilter() {
   void fetchList();
 }
 
-function toggleSort(key: CourseSortKey) {
-  if (query.sort === key) {
-    query.order = query.order === "asc" ? "desc" : "asc";
-  } else {
+const SORT_PROPS: Record<string, CourseSortKey> = {
+  entitledUserCount: "entitledUserCount",
+  totalUserCount: "totalUserCount",
+  salesCount: "salesCount",
+  updatedTime: "updatedTime",
+};
+
+function onSortChange(payload: { prop: string; order: string | null }) {
+  const key = SORT_PROPS[payload.prop];
+  if (key && payload.order) {
     query.sort = key;
+    query.order = payload.order === "ascending" ? "asc" : "desc";
+  } else {
+    query.sort = "updatedTime";
     query.order = "desc";
   }
   query.page = 1;
   void fetchList();
 }
 
-function sortActive(key: CourseSortKey, dir: "asc" | "desc") {
-  return query.sort === key && query.order === dir;
-}
-
-function toggleRow(id: string) {
-  const index = selectedIds.value.indexOf(id);
-  if (index >= 0) selectedIds.value.splice(index, 1);
-  else selectedIds.value.push(id);
+function onSelectionChange(rows: CourseListItem[]) {
+  selectedIds.value = rows.map((r) => r.id);
 }
 
 function onExport() {
@@ -321,251 +320,204 @@ onMounted(fetchList);
       {{ error }}
     </p>
 
-    <div
-      class="table-wrap"
-      :class="{ 'is-loading': loading && list.length > 0 }"
-    >
-      <table class="course-table">
-        <thead>
-          <tr>
-            <th class="col-check">
-              <input
-                v-model="selectPage"
-                type="checkbox"
-                class="row-check"
-              >
-            </th>
-            <th>课程名称</th>
-            <th>上架状态</th>
-            <th>上架时间</th>
-            <th>归属人</th>
-            <th>内容数</th>
-            <th>
-              <button
-                type="button"
-                class="sort-btn"
-                @click="toggleSort('entitledUserCount')"
-              >
-                权益用户数
-                <span class="sort-carets">
-                  <i
-                    class="sort-caret sort-caret--asc"
-                    :class="{ 'is-active': sortActive('entitledUserCount', 'asc') }"
-                  />
-                  <i
-                    class="sort-caret sort-caret--desc"
-                    :class="{ 'is-active': sortActive('entitledUserCount', 'desc') }"
-                  />
-                </span>
-              </button>
-            </th>
-            <th>
-              <button
-                type="button"
-                class="sort-btn"
-                @click="toggleSort('totalUserCount')"
-              >
-                累计用户数
-                <span class="sort-carets">
-                  <i
-                    class="sort-caret sort-caret--asc"
-                    :class="{ 'is-active': sortActive('totalUserCount', 'asc') }"
-                  />
-                  <i
-                    class="sort-caret sort-caret--desc"
-                    :class="{ 'is-active': sortActive('totalUserCount', 'desc') }"
-                  />
-                </span>
-              </button>
-            </th>
-            <th>
-              <button
-                type="button"
-                class="sort-btn"
-                @click="toggleSort('salesCount')"
-              >
-                总销量
-                <span class="sort-carets">
-                  <i
-                    class="sort-caret sort-caret--asc"
-                    :class="{ 'is-active': sortActive('salesCount', 'asc') }"
-                  />
-                  <i
-                    class="sort-caret sort-caret--desc"
-                    :class="{ 'is-active': sortActive('salesCount', 'desc') }"
-                  />
-                </span>
-              </button>
-            </th>
-            <th>
-              <button
-                type="button"
-                class="sort-btn"
-                @click="toggleSort('updatedTime')"
-              >
-                最新修改时间
-                <span class="sort-carets">
-                  <i
-                    class="sort-caret sort-caret--asc"
-                    :class="{ 'is-active': sortActive('updatedTime', 'asc') }"
-                  />
-                  <i
-                    class="sort-caret sort-caret--desc"
-                    :class="{ 'is-active': sortActive('updatedTime', 'desc') }"
-                  />
-                </span>
-              </button>
-            </th>
-            <th>风控合规审核</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="!list.length">
-            <td
-              colspan="12"
-              class="empty-cell"
-            >
-              {{ loading ? "加载中…" : "暂无课程" }}
-            </td>
-          </tr>
-          <tr
-            v-for="item in list"
-            v-else
-            :key="item.id"
-          >
-            <td>
-              <input
-                type="checkbox"
-                class="row-check"
-                :checked="selectedIds.includes(item.id)"
-                @change="toggleRow(item.id)"
-              >
-            </td>
-            <td>
-              <div class="name-cell">
-                <div class="cover">
-                  <ElImage
-                    v-if="item.coverUrl"
-                    :src="item.coverUrl"
-                    :alt="item.title"
-                    :preview-src-list="[item.coverUrl]"
-                    fit="cover"
-                    preview-teleported
-                  />
-                  <span
-                    v-else
-                    class="cover-ph"
-                  >无封面</span>
-                </div>
-                <div class="name-meta">
-                  <ElTooltip
-                    :content="item.title"
-                    placement="top"
-                  >
-                    <p class="title">{{ item.title }}</p>
-                  </ElTooltip>
-                  <p class="sell-tag">未设置</p>
-                </div>
-              </div>
-            </td>
-            <td>
-              <span class="status-dot">
-                <i
-                  class="dot"
-                  :class="shelfDotClass(item.shelfStatus)"
+    <div class="table-wrap">
+      <ElTable
+        v-loading="loading"
+        :data="list"
+        row-key="id"
+        height="100%"
+        empty-text="暂无课程"
+        :default-sort="{ prop: 'updatedTime', order: 'descending' }"
+        @selection-change="onSelectionChange"
+        @sort-change="onSortChange"
+      >
+        <ElTableColumn
+          type="selection"
+          width="48"
+        />
+        <ElTableColumn
+          label="课程名称"
+          min-width="260"
+        >
+          <template #default="{ row }">
+            <div class="name-cell">
+              <div class="cover">
+                <ElImage
+                  v-if="row.coverUrl"
+                  :src="row.coverUrl"
+                  :alt="row.title"
+                  :preview-src-list="[row.coverUrl]"
+                  fit="cover"
+                  preview-teleported
                 />
-                {{ SHELF_STATUS_LABEL[item.shelfStatus] }}
-              </span>
-            </td>
-            <td>{{ timeText(item.listedTime) }}</td>
-            <td>
-              <ElTooltip
-                v-if="ownersText(item) !== '--'"
-                :content="ownersText(item)"
-                placement="top"
-              >
-                <span class="ellipsis">{{ ownersText(item) }}</span>
-              </ElTooltip>
-              <span v-else>--</span>
-            </td>
-            <td>{{ item.contentCount }}</td>
-            <td>{{ item.entitledUserCount }}</td>
-            <td>{{ item.totalUserCount }}</td>
-            <td>{{ item.salesCount }}</td>
-            <td>{{ timeText(item.updatedTime) }}</td>
-            <td>
-              <span
-                class="risk-tag"
-                :class="riskClass(item.riskStatus)"
-              >
-                {{ RISK_STATUS_LABEL[item.riskStatus] }}
-              </span>
-            </td>
-            <td>
-              <div class="ops">
-                <RouterLink
-                  :to="`/course/${item.id}`"
-                  class="op-link"
+                <span
+                  v-else
+                  class="cover-ph"
+                >无封面</span>
+              </div>
+              <div class="name-meta">
+                <ElTooltip
+                  :content="row.title"
+                  placement="top"
                 >
-                  管理
-                </RouterLink>
-                <RouterLink
-                  :to="`/course/${item.id}/data`"
-                  class="op-link"
-                >
-                  数据
-                </RouterLink>
+                  <p class="title">{{ row.title }}</p>
+                </ElTooltip>
+                <p class="sell-tag">未设置</p>
+              </div>
+            </div>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          label="上架状态"
+          width="110"
+        >
+          <template #default="{ row }">
+            <span class="status-dot">
+              <i
+                class="dot"
+                :class="shelfDotClass(row.shelfStatus)"
+              />
+              {{ SHELF_STATUS_LABEL[row.shelfStatus] }}
+            </span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          label="上架时间"
+          min-width="170"
+        >
+          <template #default="{ row }">
+            {{ timeText(row.listedTime) }}
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          label="归属人"
+          min-width="120"
+        >
+          <template #default="{ row }">
+            <ElTooltip
+              v-if="ownersText(row) !== '--'"
+              :content="ownersText(row)"
+              placement="top"
+            >
+              <span class="ellipsis">{{ ownersText(row) }}</span>
+            </ElTooltip>
+            <span v-else>--</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          prop="contentCount"
+          label="内容数"
+          width="90"
+        />
+        <ElTableColumn
+          prop="entitledUserCount"
+          label="权益用户数"
+          width="120"
+          sortable="custom"
+        />
+        <ElTableColumn
+          prop="totalUserCount"
+          label="累计用户数"
+          width="120"
+          sortable="custom"
+        />
+        <ElTableColumn
+          prop="salesCount"
+          label="总销量"
+          width="100"
+          sortable="custom"
+        />
+        <ElTableColumn
+          prop="updatedTime"
+          label="最新修改时间"
+          min-width="170"
+          sortable="custom"
+        >
+          <template #default="{ row }">
+            {{ timeText(row.updatedTime) }}
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          label="风控合规审核"
+          width="120"
+        >
+          <template #default="{ row }">
+            <span
+              class="risk-tag"
+              :class="riskClass(row.riskStatus)"
+            >
+              {{ RISK_STATUS_LABEL[row.riskStatus] }}
+            </span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          label="操作"
+          width="172"
+          fixed="right"
+        >
+          <template #default="{ row }">
+            <div class="ops">
+              <RouterLink
+                :to="`/course/${row.id}`"
+                class="op-link"
+              >
+                管理
+              </RouterLink>
+              <RouterLink
+                :to="`/course/${row.id}/data`"
+                class="op-link"
+              >
+                数据
+              </RouterLink>
+              <button
+                type="button"
+                class="op-link"
+                @click="openAuditRecords(row)"
+              >
+                审核记录
+              </button>
+              <ElDropdown
+                trigger="click"
+                @command="(cmd: string) => onMoreCommand(cmd, row)"
+              >
                 <button
                   type="button"
-                  class="op-link"
-                  @click="openAuditRecords(item)"
+                  class="op-more"
                 >
-                  审核记录
+                  ···
                 </button>
-                <ElDropdown
-                  trigger="click"
-                  @command="(cmd: string) => onMoreCommand(cmd, item)"
-                >
-                  <button
-                    type="button"
-                    class="op-more"
-                  >
-                    ···
-                  </button>
-                  <template #dropdown>
-                    <ElDropdownMenu>
-                      <ElDropdownItem command="share">分享</ElDropdownItem>
-                      <ElDropdownItem command="audit">去审核</ElDropdownItem>
-                      <ElDropdownItem
-                        v-if="item.shelfStatus === 'pending' || item.shelfStatus === 'off'"
-                        command="on"
-                        :disabled="!item.canList"
-                      >
-                        上架
-                      </ElDropdownItem>
-                      <ElDropdownItem
-                        v-if="item.shelfStatus === 'on'"
-                        command="off"
-                        :disabled="!item.canUnlist"
-                      >
-                        下架
-                      </ElDropdownItem>
-                      <ElDropdownItem
-                        command="delete"
-                        divided
-                        :disabled="!item.canDelete"
-                      >
-                        删除
-                      </ElDropdownItem>
-                    </ElDropdownMenu>
-                  </template>
-                </ElDropdown>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                <template #dropdown>
+                  <ElDropdownMenu>
+                    <ElDropdownItem command="share">分享</ElDropdownItem>
+                    <ElDropdownItem command="audit">去审核</ElDropdownItem>
+                    <ElDropdownItem
+                      v-if="row.shelfStatus === 'pending' || row.shelfStatus === 'off'"
+                      command="on"
+                      :disabled="!row.canList"
+                    >
+                      上架
+                    </ElDropdownItem>
+                    <ElDropdownItem
+                      v-if="row.shelfStatus === 'on'"
+                      command="off"
+                      :disabled="!row.canUnlist"
+                    >
+                      下架
+                    </ElDropdownItem>
+                    <ElDropdownItem
+                      command="delete"
+                      divided
+                      :disabled="!row.canDelete"
+                    >
+                      删除
+                    </ElDropdownItem>
+                  </ElDropdownMenu>
+                </template>
+              </ElDropdown>
+            </div>
+          </template>
+        </ElTableColumn>
+      </ElTable>
     </div>
 
     <div class="pager">
@@ -636,106 +588,12 @@ onMounted(fetchList);
   border-radius: 4px;
 }
 .table-wrap {
-  position: relative;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   background: #fff;
-  border: 1px solid #f0f0f0;
+  border: 1px solid #ebebeb;
   border-radius: 4px;
-}
-.table-wrap.is-loading {
-  pointer-events: none;
-}
-.table-wrap.is-loading::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  background: rgba(255, 255, 255, 0.45);
-}
-.course-table {
-  width: 100%;
-  min-width: 1280px;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 13px;
-  text-align: left;
-}
-.course-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 12px;
-  font-weight: 400;
-  color: #999;
-  white-space: nowrap;
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
-}
-.course-table td {
-  padding: 12px;
-  color: #666;
-  vertical-align: middle;
-  border-bottom: 1px solid #f5f5f5;
-}
-.course-table tr:hover td {
-  background: #fafafa;
-}
-.sort-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-}
-.sort-carets {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  width: 10px;
-  height: 14px;
-  justify-content: center;
-}
-.sort-caret {
-  width: 0;
-  height: 0;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-}
-.sort-caret--asc {
-  border-bottom: 5px solid #c0c4cc;
-}
-.sort-caret--desc {
-  border-top: 5px solid #c0c4cc;
-}
-.sort-caret.is-active.sort-caret--asc {
-  border-bottom-color: var(--color-primary);
-}
-.sort-caret.is-active.sort-caret--desc {
-  border-top-color: var(--color-primary);
-}
-.sort-btn:hover .sort-caret--asc:not(.is-active) {
-  border-bottom-color: #909399;
-}
-.sort-btn:hover .sort-caret--desc:not(.is-active) {
-  border-top-color: #909399;
-}
-.col-check {
-  width: 40px;
-}
-.row-check {
-  accent-color: var(--color-primary);
-}
-.empty-cell {
-  padding: 64px 12px !important;
-  color: #bfbfbf;
-  text-align: center;
 }
 .name-cell {
   display: flex;

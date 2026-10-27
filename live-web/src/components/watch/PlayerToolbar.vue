@@ -8,11 +8,9 @@ const props = defineProps<{
   player: PlayerController;
   barrage: BarrageController;
   stats: RoomStatsController;
-  /** 观看页小屏：礼物/点赞改走聊天底栏 */
+  /** 观看页小屏：点赞改走聊天底栏 */
   hideMobileBarActions?: boolean;
 }>();
-
-const emit = defineEmits<{ gift: [] }>();
 
 /** 与观看页 Uno `md` 一致：<768 小屏（无 hover 滑条，清晰度点开） */
 const isNarrow = ref(false);
@@ -333,22 +331,11 @@ onBeforeUnmount(() => {
         </svg>
       </button>
 
+      <!-- 观看页小屏：点赞走聊天底栏；v-if+isNarrow，避免 scoped .bar-btn 压过 max-md:hidden -->
       <button
+        v-if="!hideMobileBarActions || !isNarrow"
         type="button"
         class="bar-btn"
-        :class="{ 'max-md:hidden': hideMobileBarActions }"
-        title="礼物"
-        @click="emit('gift')"
-      >
-        <svg class="bar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-        </svg>
-      </button>
-
-      <button
-        type="button"
-        class="bar-btn"
-        :class="{ 'max-md:hidden': hideMobileBarActions }"
         title="点赞"
         @click="stats.handleLike"
       >

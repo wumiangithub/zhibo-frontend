@@ -1,3 +1,4 @@
+import { encodeAudienceInviteToken } from "./audienceInviteToken";
 import { encodeInviteToken } from "./inviteToken";
 
 /** 观众观看页根地址。换域名或端口只改这里。 */
@@ -36,10 +37,16 @@ export const PASSCODE_DEFAULT_NICKNAME = "讲师";
 /**
  * 观众观看链接。
  * 列表分享、详情复制、开播设置都走本函数，避免各处手写地址。
+ * 可选带员工邀请参数 `c`（D77 归因；不记观众邀请）。
  */
-export function buildAudienceWatchUrl(activityId: string): string {
+export function buildAudienceWatchUrl(activityId: string, employeeInviterId?: number): string {
   const id = activityId.trim();
-  return `${AUDIENCE_WATCH_ORIGIN}/watch/${id}`;
+  const base = `${AUDIENCE_WATCH_ORIGIN}/watch/${id}`;
+  if (!employeeInviterId || employeeInviterId <= 0) return base;
+  const params = new URLSearchParams({
+    c: encodeAudienceInviteToken(employeeInviterId),
+  });
+  return `${base}?${params.toString()}`;
 }
 
 /**

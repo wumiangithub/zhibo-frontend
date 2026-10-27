@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { attributeAudience } from "@/api/audienceAttribute";
 import {
   getStoredNickname,
   storeNickname,
@@ -11,11 +12,66 @@ import EndedScreen from "@/components/watch/EndedScreen.vue";
 import PlayerStage from "@/components/watch/PlayerStage.vue";
 import ChatPanel from "@/components/watch/ChatPanel.vue";
 import BarragePanel from "@/components/watch/BarragePanel.vue";
+import ProductSheet, {
+  type CartProductDisplay,
+} from "@/components/watch/ProductSheet.vue";
+import { listWatchProducts } from "@/api/watchProducts";
+import { listViewerProductsForBoundSpus } from "@/api/orderCenter";
 import { useWatchSession } from "@/composables/useWatchSession";
+import { decodeAudienceInviteToken } from "@/utils/audienceInviteToken";
+import { pingViewerPresence } from "@/api/presence";
+import { isViewerLoggedIn } from "@/utils/viewerAuth";
 
 const route = useRoute();
 const router = useRouter();
 const id = String(route.params.id);
+
+const INVITE_STORAGE_PREFIX = "zhibo.audienceInvite.";
+
+function captureInviteFromQuery() {
+  const raw = String(route.query.c ?? "").trim();
+  const decoded = decodeAudienceInviteToken(raw);
+  if (!decoded) return;
+  try {
+    sessionStorage.setItem(
+      `${INVITE_STORAGE_PREFIX}${id}`,
+      JSON.stringify(decoded),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+function tryAttributeInvite() {
+  let viewerId: number | null = null;
+  try {
+    const raw = localStorage.getItem("viewerId");
+    if (raw) {
+      const n = Number(raw);
+      if (Number.isInteger(n) && n > 0) viewerId = n;
+    }
+  } catch {
+    /* ignore */
+  }
+  if (viewerId == null) return;
+  let payload: { kind: "employee"; inviterId: number } | null = null;
+  try {
+    const raw = sessionStorage.getItem(`${INVITE_STORAGE_PREFIX}${id}`);
+    if (!raw) return;
+    payload = JSON.parse(raw) as { kind: "employee"; inviterId: number };
+  } catch {
+    return;
+  }
+  if (!payload?.inviterId || payload.kind !== "employee") {
+    return;
+  }
+  void attributeAudience(id, {
+    viewerId,
+    inviterId: payload.inviterId,
+  }).catch((e) => {
+    console.warn("邀请归因失败", e);
+  });
+}
 
 const showNicknameForm = ref(!getStoredNickname());
 const nicknameSaving = ref(false);
@@ -53,12 +109,73 @@ const {
   enterLiveFromPreview,
   switchToFallback,
   shareWatch,
-  showGiftPlaceholder,
 } = session;
 
 const displayNickname = computed(
   () => data.value?.nickname || getStoredNickname() || "观众",
 );
+
+const cartOpen = ref(false);
+const cartLoading = ref(false);
+const cartError = ref("");
+const cartProducts = ref<CartProductDisplay[]>([]);
+let cartFetchSeq = 0;
+
+async function openCart() {
+  cartOpen.value = true;
+  const seq = ++cartFetchSeq;
+  cartLoading.value = true;
+  cartError.value = "";
+  cartProducts.value = [];
+
+  if (!isViewerLoggedIn()) {
+    cartLoading.value = false;
+    cartError.value = "请先登录后再查看商品";
+    return;
+  }
+
+  try {
+    const meta = await listWatchProducts(id);
+    if (seq !== cartFetchSeq) return;
+
+    const bound = meta.list ?? [];
+    if (bound.length === 0) {
+      cartProducts.value = [];
+      return;
+    }
+
+    const boundIds = bound.map((b) => String(b.spuId)).filter(Boolean);
+    const fromOc = await listViewerProductsForBoundSpus(boundIds);
+    if (seq !== cartFetchSeq) return;
+
+    const bySpu = new Map(fromOc.map((p) => [p.spuId, p]));
+    cartProducts.value = bound.map((b) => {
+      const oc = bySpu.get(String(b.spuId));
+      if (oc) {
+        return {
+          spuId: oc.spuId,
+          productName: oc.productName || b.productName || "未命名商品",
+          coverImg: oc.coverImg,
+          priceText: oc.priceText,
+        };
+      }
+      return {
+        spuId: String(b.spuId),
+        productName: b.productName || "未命名商品",
+      };
+    });
+  } catch (e) {
+    if (seq !== cartFetchSeq) return;
+    cartProducts.value = [];
+    cartError.value = e instanceof Error ? e.message : "加载商品失败";
+  } finally {
+    if (seq === cartFetchSeq) cartLoading.value = false;
+  }
+}
+
+function closeCart() {
+  cartOpen.value = false;
+}
 
 async function saveNickname(name: string) {
   if (!name) return;
@@ -91,6 +208,9 @@ function syncTabForViewport() {
 }
 
 onMounted(() => {
+  captureInviteFromQuery();
+  tryAttributeInvite();
+  pingViewerPresence("live");
   syncTabForViewport();
   window.addEventListener("resize", syncTabForViewport);
   if (!showNicknameForm.value) void load();
@@ -112,45 +232,6 @@ onBeforeUnmount(() => {
       />
 
       <template v-else>
-        <!-- 小屏顶栏：头像 + 昵称 | 分享 + 首页 -->
-        <div class="flex flex-none items-center justify-between gap-3 border-b border-gray-800 px-3 py-2 md:hidden">
-          <button
-            type="button"
-            class="flex min-w-0 items-center gap-2 bg-transparent text-left"
-            @click="changeNickname"
-          >
-            <span class="h-8 w-8 flex-none rounded-full bg-gray-700" />
-            <span class="truncate text-sm text-gray-100">{{ displayNickname }}</span>
-          </button>
-          <div class="flex flex-none items-center gap-1">
-            <button
-              type="button"
-              class="flex h-9 w-9 flex-none items-center justify-center rounded-md bg-transparent text-white hover:bg-gray-800 hover:text-red-500"
-              title="分享"
-              @click="shareWatch"
-            >
-              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-                />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="flex h-9 w-9 flex-none items-center justify-center rounded-md bg-transparent text-gray-300 hover:bg-gray-800 hover:text-white"
-              title="首页"
-              @click="goHome"
-            >
-              <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h3a1 1 0 001-1V10" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
         <!-- PC 顶栏 -->
         <div class="hidden flex-none items-center justify-between gap-4 border-b border-gray-800 px-4 py-2 md:flex">
           <div class="flex min-w-0 items-center gap-2">
@@ -280,7 +361,6 @@ onBeforeUnmount(() => {
               :can-fallback="!!data.embedUrl"
               mobile-aspect-video
               hide-mobile-bar-actions
-              @gift="showGiftPlaceholder"
               @retry="load"
               @fallback="switchToFallback"
             />
@@ -314,7 +394,7 @@ onBeforeUnmount(() => {
                 v-if="activeTab === 'chat'"
                 :chat="chat"
                 :like-count="stats.likeCount"
-                @gift="showGiftPlaceholder"
+                @cart="openCart"
                 @like="stats.handleLike"
               />
               <BarragePanel
@@ -350,12 +430,12 @@ onBeforeUnmount(() => {
                   </button>
                   <button
                     type="button"
-                    class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-gray-300"
-                    title="礼物"
-                    @click="showGiftPlaceholder"
+                    class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-yellow-400"
+                    title="购物车"
+                    @click="openCart"
                   >
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13L5.4 5M7 13l-2.3 2.3c-.4.4-.1 1.1.5 1.1H17M10 20a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
                     </svg>
                   </button>
                   <button
@@ -371,7 +451,7 @@ onBeforeUnmount(() => {
                       v-if="stats.likeCount > 0"
                       class="absolute -right-0.5 -top-0.5 min-w-[14px] rounded-full bg-red-500 px-1 text-center text-[10px] leading-[14px] text-white"
                     >
-                      {{ stats.likeCount > 99 ? '99+' : stats.likeCount }}
+                      {{ stats.likeCount > 99999 ? '99999+' : stats.likeCount }}
                     </span>
                   </button>
                 </div>
@@ -381,5 +461,13 @@ onBeforeUnmount(() => {
         </div>
       </template>
     </div>
+
+    <ProductSheet
+      :open="cartOpen"
+      :loading="cartLoading"
+      :error="cartError"
+      :products="cartProducts"
+      @close="closeCart"
+    />
   </div>
 </template>

@@ -20,7 +20,8 @@ import BasicSettingsTab from "./detail/BasicSettingsTab.vue";
 import BroadcastSettingsTab from "./detail/BroadcastSettingsTab.vue";
 import LiveDataTab from "./detail/LiveDataTab.vue";
 import CommerceSettingsTab from "./detail/CommerceSettingsTab.vue";
-import PlaceholderModuleTab from "./detail/PlaceholderModuleTab.vue";
+import UserOpsTab from "./detail/UserOpsTab.vue";
+import { useAuthStore } from "@/stores/auth";
 
 type TabKey = "basic" | "broadcast" | "commerce" | "userOps" | "data";
 
@@ -38,6 +39,10 @@ const readyRefreshing = ref(false);
 const basicTabRef = ref<InstanceType<typeof BasicSettingsTab> | null>(null);
 const commerceTabRef = ref<InstanceType<typeof CommerceSettingsTab> | null>(null);
 const shareVisible = ref(false);
+const auth = useAuthStore();
+const audienceWatchUrl = computed(() =>
+  buildAudienceWatchUrl(id.value, auth.user?.id),
+);
 
 type DirtyTab = {
   isDirty: () => boolean;
@@ -301,9 +306,9 @@ watch(id, fetchDetail);
             :detail="detail"
             @refreshed="fetchDetail"
           />
-          <PlaceholderModuleTab
+          <UserOpsTab
             v-else-if="activeTab === 'userOps'"
-            title="用户运营"
+            :activity-id="id"
           />
           <LiveDataTab
             v-else
@@ -316,7 +321,7 @@ watch(id, fetchDetail);
     <ShareDialog
       v-model="shareVisible"
       :title="detail?.title ?? ''"
-      :watch-url="buildAudienceWatchUrl(id)"
+      :watch-url="audienceWatchUrl"
     />
   </div>
 </template>

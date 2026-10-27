@@ -16,11 +16,11 @@ const props = defineProps<{
   canFallback?: boolean;
   /** 观看页小屏：播放器 16:9 顶置；中控台勿开 */
   mobileAspectVideo?: boolean;
-  /** 观看页小屏：礼物/点赞改走聊天底栏；中控台勿开 */
+  /** 观看页小屏：点赞改走聊天底栏；中控台勿开 */
   hideMobileBarActions?: boolean;
 }>();
 
-const emit = defineEmits<{ gift: []; retry: []; fallback: [] }>();
+const emit = defineEmits<{ retry: []; fallback: [] }>();
 
 /** 纯音频场（type=1）或清晰度选「音频」(code=a) 都走同一套 EQ 遮罩 */
 const showAudioVisual = computed(
@@ -136,7 +136,6 @@ onBeforeUnmount(() => syncStageEl(null));
       :barrage="barrage"
       :stats="stats"
       :hide-mobile-bar-actions="hideMobileBarActions"
-      @gift="emit('gift')"
     />
   </div>
 </template>

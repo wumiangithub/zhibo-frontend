@@ -13,6 +13,8 @@ import {
   ElOption,
   ElPagination,
   ElSelect,
+  ElTable,
+  ElTableColumn,
   ElTooltip,
 } from "element-plus";
 import {
@@ -24,6 +26,7 @@ import {
 } from "@/api/liveReport";
 import ImagePreview from "@/components/ImagePreview.vue";
 import type { ImagePreviewItem } from "@/components/ImagePreview.vue";
+import { copyText } from "@/utils/copyText";
 import ReportAuditDrawer from "./ReportAuditDrawer.vue";
 
 const router = useRouter();
@@ -58,17 +61,14 @@ const query = reactive({
 
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageSize)));
 
-const selectPage = computed({
-  get: () => list.value.length > 0 && selectedIds.value.length === list.value.length,
-  set: (v: boolean) => {
-    selectedIds.value = v ? list.value.map((i) => i.id) : [];
-  },
-});
-
 function openCoverPreview(url?: string | null, title?: string) {
   if (!url) return;
   coverPreviewItems.value = [{ url, name: title || "封面" }];
   coverPreviewVisible.value = true;
+}
+
+function copyReportId(id: string) {
+  void copyText(id, "报备ID已复制");
 }
 
 function fmtTimes(r: LiveReport) {
@@ -121,10 +121,8 @@ function resetFilter() {
   void fetchList();
 }
 
-function toggleRow(id: string) {
-  const i = selectedIds.value.indexOf(id);
-  if (i >= 0) selectedIds.value.splice(i, 1);
-  else selectedIds.value.push(id);
+function onSelectionChange(rows: LiveReport[]) {
+  selectedIds.value = rows.map((r) => r.id);
 }
 
 function goCreate() {
@@ -269,155 +267,163 @@ onMounted(fetchList);
     </p>
 
     <div class="table-wrap">
-      <table class="live-table">
-        <thead>
-          <tr>
-            <th class="col-check">
-              <input
-                v-model="selectPage"
-                type="checkbox"
-                class="row-check"
-              >
-            </th>
-            <th>报备ID</th>
-            <th>报备直播名称</th>
-            <th>主播</th>
-            <th>计划时间</th>
-            <th>审核状态</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading">
-            <td
-              colspan="7"
-              class="empty-cell"
+      <ElTable
+        v-loading="loading"
+        :data="list"
+        row-key="id"
+        height="100%"
+        empty-text="暂无报备"
+        @selection-change="onSelectionChange"
+      >
+        <ElTableColumn
+          type="selection"
+          width="48"
+        />
+        <ElTableColumn
+          label="报备ID"
+          min-width="200"
+          class-name="col-id"
+        >
+          <template #default="{ row }">
+            <ElTooltip
+              :content="row.id"
+              placement="top"
             >
-              加载中…
-            </td>
-          </tr>
-          <tr v-else-if="list.length === 0">
-            <td
-              colspan="7"
-              class="empty-cell"
-            >
-              暂无报备
-            </td>
-          </tr>
-          <tr
-            v-for="item in list"
-            v-else
-            :key="item.id"
-          >
-            <td>
-              <input
-                type="checkbox"
-                class="row-check"
-                :checked="selectedIds.includes(item.id)"
-                @change="toggleRow(item.id)"
+              <button
+                type="button"
+                class="id-copy"
+                :title="row.id"
+                @click="copyReportId(row.id)"
               >
-            </td>
-            <td>
-              <ElTooltip
-                :content="item.id"
-                placement="top"
-              >
-                <span class="ellipsis id-ellipsis">{{ item.id }}</span>
-              </ElTooltip>
-            </td>
-            <td>
-              <div class="name-cell">
-                <div class="cover">
-                  <img
-                    v-if="item.coverUrl"
-                    :src="item.coverUrl"
-                    :alt="item.title"
-                    @click.stop="openCoverPreview(item.coverUrl, item.title)"
-                  >
-                  <span
-                    v-else
-                    class="cover-ph"
-                  >无封面</span>
-                </div>
-                <div class="name-meta">
-                  <p class="title">{{ item.title }}</p>
-                </div>
-              </div>
-            </td>
-            <td>{{ item.host?.userName || "--" }}</td>
-            <td>
-              <ElTooltip
-                v-if="fmtTimes(item) !== '--'"
-                :content="fmtTimes(item)"
-                placement="top"
-              >
-                <span class="ellipsis time-ellipsis">{{ fmtTimes(item) }}</span>
-              </ElTooltip>
-              <span v-else>--</span>
-            </td>
-            <td>
-              <span
-                class="risk-tag"
-                :class="statusClass(item.status)"
-              >
-                {{ REPORT_STATUS_LABEL[item.status] }}
-              </span>
-            </td>
-            <td>
-              <div class="ops">
-                <RouterLink
-                  :to="`/live-reports/${item.id}`"
-                  class="op-link"
+                {{ row.id }}
+              </button>
+            </ElTooltip>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          label="报备直播名称"
+          min-width="260"
+        >
+          <template #default="{ row }">
+            <div class="name-cell">
+              <div class="cover">
+                <img
+                  v-if="row.coverUrl"
+                  :src="row.coverUrl"
+                  :alt="row.title"
+                  @click.stop="openCoverPreview(row.coverUrl, row.title)"
                 >
-                  查看
-                </RouterLink>
+                <span
+                  v-else
+                  class="cover-ph"
+                >无封面</span>
+              </div>
+              <div class="name-meta">
+                <ElTooltip
+                  :content="row.title"
+                  placement="top"
+                >
+                  <p class="title">{{ row.title }}</p>
+                </ElTooltip>
+              </div>
+            </div>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          label="主播"
+          width="120"
+        >
+          <template #default="{ row }">
+            {{ row.host?.userName || "--" }}
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          label="计划时间"
+          min-width="340"
+        >
+          <template #default="{ row }">
+            <ElTooltip
+              v-if="fmtTimes(row) !== '--'"
+              :content="fmtTimes(row)"
+              placement="top"
+            >
+              <span class="ellipsis time-ellipsis">{{ fmtTimes(row) }}</span>
+            </ElTooltip>
+            <span v-else>--</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          label="审核状态"
+          width="110"
+        >
+          <template #default="{ row }">
+            <span
+              class="risk-tag"
+              :class="statusClass(row.status)"
+            >
+              {{ REPORT_STATUS_LABEL[row.status] }}
+            </span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          label="操作"
+          width="180"
+          fixed="right"
+        >
+          <template #default="{ row }">
+            <div class="ops">
+              <RouterLink
+                :to="`/live-reports/${row.id}`"
+                class="op-link"
+              >
+                查看
+              </RouterLink>
+              <button
+                type="button"
+                class="op-link"
+                :disabled="!canEdit(row)"
+                @click="router.push(`/live-reports/edit/${row.id}`)"
+              >
+                编辑
+              </button>
+              <button
+                type="button"
+                class="op-link"
+                @click="openAuditRecords(row)"
+              >
+                审核记录
+              </button>
+              <ElDropdown
+                trigger="click"
+                @command="(cmd: string) => onMoreCommand(cmd, row)"
+              >
                 <button
                   type="button"
-                  class="op-link"
-                  :disabled="!canEdit(item)"
-                  @click="router.push(`/live-reports/edit/${item.id}`)"
+                  class="op-more"
                 >
-                  编辑
+                  ···
                 </button>
-                <button
-                  type="button"
-                  class="op-link"
-                  @click="openAuditRecords(item)"
-                >
-                  审核记录
-                </button>
-                <ElDropdown
-                  trigger="click"
-                  @command="(cmd: string) => onMoreCommand(cmd, item)"
-                >
-                  <button
-                    type="button"
-                    class="op-more"
-                  >
-                    ···
-                  </button>
-                  <template #dropdown>
-                    <ElDropdownMenu>
-                      <ElDropdownItem
-                        command="audit"
-                        :disabled="!canAudit(item)"
-                      >
-                        去审核
-                      </ElDropdownItem>
-                      <ElDropdownItem
-                        command="delete"
-                        divided
-                      >
-                        删除
-                      </ElDropdownItem>
-                    </ElDropdownMenu>
-                  </template>
-                </ElDropdown>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                <template #dropdown>
+                  <ElDropdownMenu>
+                    <ElDropdownItem
+                      command="audit"
+                      :disabled="!canAudit(row)"
+                    >
+                      去审核
+                    </ElDropdownItem>
+                    <ElDropdownItem
+                      command="delete"
+                      divided
+                    >
+                      删除
+                    </ElDropdownItem>
+                  </ElDropdownMenu>
+                </template>
+              </ElDropdown>
+            </div>
+          </template>
+        </ElTableColumn>
+      </ElTable>
     </div>
 
     <div class="pager">
@@ -494,50 +500,10 @@ onMounted(fetchList);
 .table-wrap {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  border: 1px solid #f0f0f0;
+  overflow: hidden;
+  border: 1px solid #ebebeb;
   border-radius: 4px;
   background: #fff;
-}
-.live-table {
-  width: 100%;
-  min-width: 1100px;
-  border-collapse: separate;
-  border-spacing: 0;
-  text-align: left;
-  font-size: 13px;
-}
-.live-table th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding: 12px;
-  font-weight: 400;
-  color: #999;
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
-  white-space: nowrap;
-}
-.live-table td {
-  padding: 12px;
-  color: #666;
-  border-bottom: 1px solid #f5f5f5;
-  vertical-align: middle;
-}
-.live-table tr:hover td {
-  background: #fafafa;
-}
-.col-check {
-  width: 40px;
-}
-.row-check {
-  accent-color: var(--color-primary);
-  vertical-align: middle;
-}
-.empty-cell {
-  padding: 64px 12px !important;
-  text-align: center;
-  color: #bfbfbf;
 }
 .name-cell {
   display: flex;
@@ -570,15 +536,21 @@ onMounted(fetchList);
 }
 .name-meta {
   min-width: 0;
+  flex: 1;
+  overflow: hidden;
 }
+.name-meta :deep(.el-tooltip__trigger),
 .title {
   margin: 0;
   font-weight: 500;
   color: #1a1a1a;
+  line-height: 1.4;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 220px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  word-break: break-word;
 }
 .ellipsis {
   display: inline-block;
@@ -588,13 +560,37 @@ onMounted(fetchList);
   white-space: nowrap;
   vertical-align: bottom;
 }
-.id-ellipsis {
-  max-width: 200px;
+.time-ellipsis {
+  max-width: 320px;
+}
+:deep(.col-id .cell) {
+  overflow: hidden;
+}
+:deep(.col-id .cell .el-tooltip__trigger),
+:deep(.col-id .cell > span) {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+}
+.id-copy {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+  border: 0;
+  background: transparent;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
+  color: var(--color-primary);
+  text-align: left;
+  cursor: pointer;
 }
-.time-ellipsis {
-  max-width: 260px;
+.id-copy:hover {
+  text-decoration: underline;
 }
 .risk-tag {
   display: inline-block;
@@ -621,7 +617,7 @@ onMounted(fetchList);
 }
 .ops {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
   white-space: nowrap;

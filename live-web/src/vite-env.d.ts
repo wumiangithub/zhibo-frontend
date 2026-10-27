@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_ATTENDANCE_LEAVE_THROTTLE_MS?: string;
   readonly VITE_ATTENDANCE_LEAVE_LAST_VIEWER?: string;
   readonly VITE_ATTENDANCE_LEAVE_ASSISTANT?: string;
+  /** 订单中心根地址（无尾斜杠）；开发代理目标 / 构建直连 */
+  readonly VITE_ORDER_CENTER_BASE_URL?: string;
 }
 
 interface ImportMeta {
@@ -28,6 +30,14 @@ interface ChatMessage {
   sender_name: string;
   msg: string;
   msgId?: string;
+  /** 发送者头像 URL；空则 UI 用占位 */
+  avatar?: string;
+  /**
+   * 微吼聊天角色 role_name：1 主持人 / 2 观众 / 3 助理 / 4 嘉宾。
+   * 与 get-role-url 的 type 枚举不同。
+   */
+  role_name?: 1 | 2 | 3 | 4;
+  /** @deprecated 用 role_name === 1；保留给旧模板兼容 */
   is_host?: boolean;
   timestamp: number;
 }

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import EmojiPanel from "@/components/EmojiPanel.vue";
 import { insertEmojiAtCursor } from "@/composables/useEmojiInsert";
 import { splitEmojiText } from "@/constants/emoji";
 import type { ChatController } from "@/composables/useChat";
 import { useToast } from "@/composables/useToast";
+import { vhallChatRoleBadge } from "@/utils/vhallChatRole";
 
 type DiscussTab = "all" | "user" | "mine" | "host" | "follower";
 
@@ -28,6 +29,35 @@ const canScrollRight = ref(false);
 const followerOpen = ref(false);
 const followerKeyword = ref("");
 const selectedFollower = ref<{ id: string; name: string } | null>(null);
+const brokenAvatars = reactive<Record<string, true>>({});
+
+function avatarSrc(msg: ChatMessage): string {
+  const url = msg.avatar?.trim();
+  if (!url || brokenAvatars[url]) return "";
+  return url;
+}
+
+function onAvatarError(url: string | undefined) {
+  const key = url?.trim();
+  if (key) brokenAvatars[key] = true;
+}
+
+function roleBadge(msg: ChatMessage): string | undefined {
+  return vhallChatRoleBadge(msg.role_name);
+}
+
+function nameToneClass(msg: ChatMessage): string {
+  if (msg.role_name === 1) return "is-host";
+  if (msg.role_name === 3) return "is-assistant";
+  if (msg.role_name === 4) return "is-guest";
+  return "";
+}
+
+function badgeToneClass(msg: ChatMessage): string {
+  if (msg.role_name === 3) return "is-assistant";
+  if (msg.role_name === 4) return "is-guest";
+  return "is-host";
+}
 
 /** 跟进人下拉 Mock，筛选消息能力后续再接 */
 const MOCK_FOLLOWERS = [
@@ -314,17 +344,26 @@ onBeforeUnmount(() => {
           :key="msg.msgId || idx"
           class="msg"
         >
-          <span class="avatar">{{ (msg.sender_name || "?").charAt(0) }}</span>
+          <span class="avatar">
+            <img
+              v-if="avatarSrc(msg)"
+              :src="avatarSrc(msg)"
+              alt=""
+              @error="onAvatarError(msg.avatar)"
+            >
+            <template v-else>{{ (msg.sender_name || "?").charAt(0) }}</template>
+          </span>
           <div class="msg-body">
             <div class="msg-meta">
               <span
                 class="name"
-                :class="{ 'is-host': msg.is_host }"
+                :class="nameToneClass(msg)"
               >{{ msg.sender_name }}</span>
               <span
-                v-if="msg.is_host"
+                v-if="roleBadge(msg)"
                 class="badge"
-              >主持人</span>
+                :class="badgeToneClass(msg)"
+              >{{ roleBadge(msg) }}</span>
             </div>
             <p class="msg-text">
               <template
@@ -808,11 +847,18 @@ onBeforeUnmount(() => {
   justify-content: center;
   width: 32px;
   height: 32px;
+  overflow: hidden;
   border-radius: 50%;
   background: #e6f4ff;
   color: #1677ff;
   font-size: 13px;
   font-weight: 600;
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .msg-body {
@@ -838,13 +884,34 @@ onBeforeUnmount(() => {
   color: #cf1322;
 }
 
+.name.is-assistant {
+  color: #d48806;
+}
+
+.name.is-guest {
+  color: #722ed1;
+}
+
 .badge {
   flex: none;
   padding: 0 6px;
   border-radius: 4px;
+  font-size: 10px;
+}
+
+.badge.is-host {
   background: #fff1f0;
   color: #cf1322;
-  font-size: 10px;
+}
+
+.badge.is-assistant {
+  background: #fff7e6;
+  color: #d48806;
+}
+
+.badge.is-guest {
+  background: #f9f0ff;
+  color: #722ed1;
 }
 
 .msg-text {

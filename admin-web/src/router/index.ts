@@ -123,6 +123,37 @@ const router = createRouter({
           name: "settings-roles",
           component: () => import("@/views/settings/roles/RoleManageView.vue"),
         },
+        {
+          path: "user/list",
+          name: "user-list",
+          component: () => import("@/views/user/UserListView.vue"),
+        },
+        {
+          path: "user/learning-stats",
+          name: "user-learning-stats",
+          component: () => import("@/views/user/UserPlaceholderView.vue"),
+          props: { title: "用户学习统计" },
+        },
+        {
+          path: "user/tags",
+          name: "user-tags",
+          component: () => import("@/views/user/TagListView.vue"),
+        },
+        {
+          path: "user/tags/create",
+          name: "user-tags-create",
+          component: () => import("@/views/user/TagFormView.vue"),
+        },
+        {
+          path: "user/tags/detail/:id",
+          name: "user-tags-detail",
+          component: () => import("@/views/user/TagFormView.vue"),
+        },
+        {
+          path: "user/tags/edit/:id",
+          name: "user-tags-edit",
+          component: () => import("@/views/user/TagFormView.vue"),
+        },
       ],
     },
     /** 主播邀请页：邀请链接落地，独立壳。 */
