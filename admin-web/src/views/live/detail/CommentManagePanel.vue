@@ -1,120 +1,109 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import {
-  ElButton,
-  ElInput,
-  ElMessage,
-  ElPagination,
-  ElTable,
-  ElTableColumn,
-} from "element-plus";
-import { listAudienceComments, type AudienceCommentItem } from "@/api/audience";
-import type { ActivityId } from "@/api/activity";
+import { onMounted, ref, watch } from "vue";
+import { ElMessage } from "element-plus";
+import { fetchActivityChatFilterPageUrl, type ActivityId } from "@/api/activity";
+import { useAuthStore } from "@/stores/auth";
 
 const props = defineProps<{ activityId: ActivityId }>();
+const auth = useAuthStore();
 
 const loading = ref(false);
-const rows = ref<AudienceCommentItem[]>([]);
-const total = ref(0);
-const page = ref(1);
-const pageSize = ref(20);
-const nickname = ref("");
+const pageUrl = ref("");
+const errorMsg = ref("");
+let loadSeq = 0;
 
-async function fetchList() {
+async function loadPageUrl() {
+  const seq = ++loadSeq;
   loading.value = true;
+  errorMsg.value = "";
+  pageUrl.value = "";
   try {
-    const res = await listAudienceComments(props.activityId, {
-      page: page.value,
-      pageSize: pageSize.value,
-      nickname: nickname.value.trim() || undefined,
+    const res = await fetchActivityChatFilterPageUrl(props.activityId, {
+      name: auth.displayName,
     });
-    rows.value = res.list ?? [];
-    total.value = res.total ?? 0;
+    if (seq !== loadSeq) return;
+    pageUrl.value = res.pageUrl?.trim() ?? "";
+    if (!pageUrl.value) {
+      errorMsg.value = "暂无审核页";
+    }
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : "加载失败");
+    if (seq !== loadSeq) return;
+    errorMsg.value = e instanceof Error ? e.message : "加载失败";
+    ElMessage.error(errorMsg.value);
   } finally {
-    loading.value = false;
+    if (seq === loadSeq) loading.value = false;
   }
 }
 
-function onSearch() {
-  page.value = 1;
-  void fetchList();
-}
-
-function onReset() {
-  nickname.value = "";
-  page.value = 1;
-  void fetchList();
-}
-
 onMounted(() => {
-  void fetchList();
+  void loadPageUrl();
 });
+
+watch(
+  () => props.activityId,
+  () => {
+    void loadPageUrl();
+  },
+);
 </script>
 
 <template>
   <div class="comment-manage">
-    <div class="filters">
-      <ElInput
-        v-model="nickname"
-        clearable
-        placeholder="昵称"
-        style="width: 200px"
-        @keyup.enter="onSearch"
+    <div class="iframe-wrap">
+      <div
+        v-if="loading && !pageUrl"
+        class="state"
+      >
+        加载中…
+      </div>
+      <iframe
+        v-else-if="pageUrl"
+        :src="pageUrl"
+        class="iframe"
+        title="评论审核"
+        allow="fullscreen"
       />
-      <ElButton type="primary" @click="onSearch">查询</ElButton>
-      <ElButton @click="onReset">重置</ElButton>
-    </div>
-
-    <ElTable v-loading="loading" :data="rows" row-key="id">
-      <ElTableColumn prop="commentTime" label="时间" width="180" />
-      <ElTableColumn label="用户" min-width="140">
-        <template #default="{ row }">
-          {{ row.nickname || (row.viewerId != null ? `用户${row.viewerId}` : row.guestId || "—") }}
-        </template>
-      </ElTableColumn>
-      <ElTableColumn prop="content" label="内容" min-width="240" />
-      <ElTableColumn label="状态" width="90">
-        <template #default="{ row }">
-          {{ row.deleted ? "已删除" : "正常" }}
-        </template>
-      </ElTableColumn>
-    </ElTable>
-
-    <div class="pager">
-      <ElPagination
-        v-model:current-page="page"
-        v-model:page-size="pageSize"
-        :total="total"
-        :page-sizes="[10, 20, 50]"
-        layout="total, sizes, prev, pager, next, jumper"
-        @current-change="fetchList"
-        @size-change="
-          () => {
-            page = 1;
-            fetchList();
-          }
-        "
-      />
+      <div
+        v-else
+        class="state"
+      >
+        {{ errorMsg || "暂无审核页" }}
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .comment-manage {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
-.filters {
+.iframe-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #ebebeb;
+  border-radius: 4px;
+  background: #fff;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+}
+.iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+.state {
+  display: flex;
+  flex: 1;
   align-items: center;
-}
-.pager {
-  display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+  color: #999;
+  font-size: 13px;
 }
 </style>

@@ -347,6 +347,21 @@ export interface OnlineTrendData {
   points: TrendPoint[];
 }
 
+/** 用户运营 · 评论管理：微吼聊天审核页 URL（D34） */
+export function fetchActivityChatFilterPageUrl(
+  id: ActivityId,
+  query?: { email?: string; name?: string },
+) {
+  const params: Record<string, string> = {};
+  const email = query?.email?.trim();
+  const name = query?.name?.trim();
+  if (email) params.email = email;
+  if (name) params.name = name;
+  return get<{ pageUrl: string }>(`/activities/chat-filter/${encodeURIComponent(id)}`, {
+    params: Object.keys(params).length ? params : undefined,
+  });
+}
+
 export function getStats(id: ActivityId) {
   return get<StatsOverview>(`/activities/stats/${id}`);
 }

@@ -166,7 +166,10 @@ watch(id, fetchDetail);
 </script>
 
 <template>
-  <div class="live-detail">
+  <div
+    class="live-detail"
+    :class="{ 'is-fill': activeTab === 'userOps' }"
+  >
     <AppBreadcrumb :items="crumbs" />
 
     <p
@@ -329,6 +332,39 @@ watch(id, fetchDetail);
 <style scoped>
 .live-detail {
   min-height: 100%;
+}
+/* 用户运营：整页撑满视口，滚动留给表格内部 */
+.live-detail.is-fill {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 92px);
+  min-height: 0;
+  overflow: hidden;
+}
+.live-detail.is-fill > :deep(.app-breadcrumb) {
+  flex: none;
+}
+.live-detail.is-fill .summary {
+  flex: none;
+}
+.live-detail.is-fill .body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.live-detail.is-fill .panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.live-detail.is-fill .panel > * {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.live-detail.is-fill .status-err {
+  flex: none;
 }
 .status-text {
   font-size: 13px;

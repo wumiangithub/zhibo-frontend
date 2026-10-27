@@ -3,6 +3,14 @@ import type { ActivityId } from "./activity";
 import axios from "axios";
 import { getAccessToken } from "@/utils/authSession";
 
+export type AudienceKeywordType = "nickname" | "id" | "phone";
+
+/** any 满足其一 / all 同时满足 / none 不包含 */
+export type AudienceTagMatch = "any" | "all" | "none";
+
+/** gte 大于等于 / lte 小于等于 */
+export type AudienceDurationOp = "gte" | "lte";
+
 export interface AudienceListItem {
   id: number;
   viewerId: number;
@@ -17,6 +25,7 @@ export interface AudienceListItem {
   importerId?: number;
   importerName?: string;
   importTime?: string;
+  tagIds: number[];
   tagLabels: string[];
   stayDurationSec: number;
   totalWatchDurationSec: number;
@@ -64,13 +73,26 @@ export function listAudiences(
   params: {
     page?: number;
     pageSize?: number;
-    nickname?: string;
+    keywordType?: AudienceKeywordType;
+    keyword?: string;
+    tagIds?: number[];
+    tagMatch?: AudienceTagMatch;
     entitlementStatus?: number;
+    totalWatchDurationOp?: AudienceDurationOp;
+    totalWatchDurationSec?: number;
+    liveWatchDurationOp?: AudienceDurationOp;
+    liveWatchDurationSec?: number;
     sort?: string;
     order?: string;
   } = {},
 ) {
-  return get<AudienceListResult>(`/activities/audiences/list/${activityId}`, { params });
+  const { tagIds, ...rest } = params;
+  return get<AudienceListResult>(`/activities/audiences/list/${activityId}`, {
+    params: {
+      ...rest,
+      tagIds: tagIds?.length ? tagIds.join(",") : undefined,
+    },
+  });
 }
 
 export function createAudience(activityId: ActivityId, phone: string) {
