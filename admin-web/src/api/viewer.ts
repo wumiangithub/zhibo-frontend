@@ -65,6 +65,102 @@ export function listViewers(params: {
   });
 }
 
+/** 学习时长比较：gt 大于 / lte 小于等于 */
+export type LearnDurationOp = "gt" | "lte";
+
+export interface LearningSummaryItem {
+  id: number;
+  nickname: string;
+  avatarUrl?: string;
+  tagIds: number[];
+  tagLabels: string[];
+  totalLearnDurationSec: number;
+  totalLearnDays: number;
+  viewedCourseCount: number;
+  completedCourseCount: number;
+}
+
+export interface LearningSummaryResult {
+  page: number;
+  pageSize: number;
+  total: number;
+  list: LearningSummaryItem[];
+}
+
+export interface LearningCourseItem {
+  id: number;
+  viewerId: number;
+  nickname: string;
+  avatarUrl?: string;
+  tagIds: number[];
+  tagLabels: string[];
+  courseId?: string;
+  courseName?: string;
+  totalLearnDurationSec: number;
+  progressPercent: number;
+  firstLearnTime?: string;
+  completedTime?: string;
+  courseType?: string;
+  courseDurationSec: number;
+}
+
+export interface LearningCourseResult {
+  page: number;
+  pageSize: number;
+  total: number;
+  list: LearningCourseItem[];
+}
+
+export function listLearningSummary(params: {
+  page?: number;
+  pageSize?: number;
+  keywordType?: ViewerKeywordType;
+  keyword?: string;
+  tagIds?: number[];
+  tagMatch?: ViewerTagMatch;
+  learnDurationOp?: LearnDurationOp;
+  learnDurationSec?: number;
+  sort?: string;
+  order?: string;
+} = {}) {
+  const { tagIds, ...rest } = params;
+  return get<LearningSummaryResult>("/viewers/learning-stats/summary", {
+    params: {
+      ...rest,
+      tagIds: tagIds?.length ? tagIds.join(",") : undefined,
+    },
+  });
+}
+
+export function listLearningCourses(params: {
+  page?: number;
+  pageSize?: number;
+  keywordType?: ViewerKeywordType;
+  keyword?: string;
+  tagIds?: number[];
+  tagMatch?: ViewerTagMatch;
+} = {}) {
+  const { tagIds, ...rest } = params;
+  return get<LearningCourseResult>("/viewers/learning-stats/courses", {
+    params: {
+      ...rest,
+      tagIds: tagIds?.length ? tagIds.join(",") : undefined,
+    },
+  });
+}
+
+/** HH:mm:ss → 秒；非法回 null */
+export function parseHhMmSsToSec(raw: string | undefined | null): number | null {
+  if (!raw || !raw.trim()) return null;
+  const m = raw.trim().match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  const s = Number(m[3]);
+  if ([h, min, s].some((n) => Number.isNaN(n)) || min > 59 || s > 59) return null;
+  return h * 3600 + min * 60 + s;
+}
+
 export function updateViewerStatus(id: number, status: 0 | 1) {
   return put<{ id: number; status: number }>(`/viewers/update-status/${id}`, { status });
 }

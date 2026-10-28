@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import {
   ElCheckbox,
   ElInput,
@@ -50,6 +50,61 @@ function applyDetail(d: ActivityDetail) {
     d.accessValidityDays && d.accessValidityDays > 0 ? d.accessValidityDays : 7;
 }
 
+/** 价格按数字语义比，避免 "10" vs "10.00" 误判 */
+function samePrice(a: string, b: string): boolean {
+  const ta = a.trim();
+  const tb = b.trim();
+  if (ta === "" && tb === "") return true;
+  if (ta === "" || tb === "") return false;
+  const na = Number(ta);
+  const nb = Number(tb);
+  if (Number.isNaN(na) || Number.isNaN(nb)) return ta === tb;
+  return na === nb;
+}
+
+/** 当前值相对详情基线是否有差异（改完又改回不算脏） */
+const hasEdits = computed(() => {
+  const d = props.detail;
+  const baselineType = (d.sellType as SellType) || "free";
+  const baselineAccess = d.accessValidityType === "days" ? "days" : "long";
+  const baselineDays =
+    d.accessValidityDays && d.accessValidityDays > 0 ? d.accessValidityDays : 7;
+  const baselinePrice = d.price != null ? String(d.price) : "";
+  const baselineLine = d.linePrice != null ? String(d.linePrice) : "";
+  const baselinePwd = d.password ?? "";
+
+  if (form.sellAlone !== (d.sellAlone ?? true)) return true;
+  if (form.sellType !== baselineType) return true;
+  if (form.sellType === "paid") {
+    if (!samePrice(form.price, baselinePrice)) return true;
+    if (!samePrice(form.linePrice, baselineLine)) return true;
+  }
+  if (form.sellType === "encrypted") {
+    if (form.password.trim() !== baselinePwd.trim()) return true;
+  }
+  if (form.sellType !== "free") {
+    if (form.accessValidityType !== baselineAccess) return true;
+    if (
+      form.accessValidityType === "days"
+      && Number(form.accessValidityDays) !== baselineDays
+    ) {
+      return true;
+    }
+  }
+  return false;
+});
+
+const canSave = computed(() => hasEdits.value);
+
+watch(
+  hasEdits,
+  (v) => {
+    if (v) leave.markDirty();
+    else leave.markClean();
+  },
+  { flush: "sync" },
+);
+
 function validateSales(): string | null {
   if (!form.sellAlone) return null;
   if (form.sellType === "paid") {
@@ -75,6 +130,10 @@ function validateSales(): string | null {
 }
 
 async function onSave() {
+  if (!hasEdits.value) {
+    ElMessage.info("没有修改");
+    return;
+  }
   const err = validateSales();
   if (err) {
     ElMessage.warning(err);
@@ -124,7 +183,7 @@ watch(
 );
 
 defineExpose({
-  isDirty: () => leave.dirty.value,
+  isDirty: () => hasEdits.value,
   confirmLeave: leave.confirmLeave,
 });
 </script>
@@ -289,8 +348,8 @@ defineExpose({
 
     <div class="save-bar">
       <UiButton
-        variant="primary"
-        :disabled="submitting"
+        :variant="canSave ? 'primary' : 'default'"
+        :disabled="!canSave || submitting"
         @click="onSave"
       >
         {{ submitting ? "保存中…" : "保存" }}

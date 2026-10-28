@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
     VITE_ORDER_CENTER_BASE_URL,
   } = viteEnv
   const orderCenterTarget =
-    VITE_ORDER_CENTER_BASE_URL || "http://fadada-notify.scqkxx.com"
+    VITE_ORDER_CENTER_BASE_URL || "http://oms-api.scqkxx.com"
   return {
     plugins: [
       vue(),

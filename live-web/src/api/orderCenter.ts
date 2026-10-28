@@ -33,7 +33,7 @@ interface OrderCenterListBody {
 function orderCenterBase(): string {
   if (import.meta.env.DEV) return "";
   const raw = import.meta.env.VITE_ORDER_CENTER_BASE_URL?.trim();
-  return (raw || "http://fadada-notify.scqkxx.com").replace(/\/$/, "");
+  return (raw || "http://oms-api.scqkxx.com").replace(/\/$/, "");
 }
 
 function isOrderCenterSuccess(code: unknown): boolean {

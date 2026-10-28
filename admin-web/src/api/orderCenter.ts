@@ -91,7 +91,7 @@ interface OrderCenterListBody {
 function orderCenterBase(): string {
   if (import.meta.env.DEV) return "";
   const raw = import.meta.env.VITE_ORDER_CENTER_BASE_URL?.trim();
-  return (raw || "http://fadada-notify.scqkxx.com").replace(/\/$/, "");
+  return (raw || "http://oms-api.scqkxx.com").replace(/\/$/, "");
 }
 
 /** 把 JSON 里的大整数 id 先收成字符串，避免超过 2^53-1 丢精度 */

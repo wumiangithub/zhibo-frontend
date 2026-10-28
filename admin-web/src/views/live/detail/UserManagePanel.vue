@@ -11,20 +11,29 @@ import {
   ElMessageBox,
   ElOption,
   ElPagination,
+  ElRadio,
+  ElRadioGroup,
   ElSelect,
+  ElTabPane,
   ElTable,
   ElTableColumn,
-  ElUpload,
+  ElTabs,
+  ElTooltip,
 } from "element-plus";
-import type { TableInstance, UploadRequestOptions } from "element-plus";
-import { Close } from "@element-plus/icons-vue";
+import type { TableInstance } from "element-plus";
+import { Close, InfoFilled } from "@element-plus/icons-vue";
 import {
   createAudience,
+  downloadAudienceImportFailures,
+  downloadAudienceImportTemplate,
+  exportAudiences,
   formatDurationSec,
   importAudiences,
+  listAudienceImports,
   listAudiences,
   updateAudienceEntitlement,
   type AudienceDurationOp,
+  type AudienceImportHistoryItem,
   type AudienceKeywordType,
   type AudienceListItem,
   type AudienceTagMatch,
@@ -213,8 +222,14 @@ function onSortChange(payload: { prop: string; order: string | null }) {
 }
 
 const addVisible = ref(false);
+const addTab = ref<"single" | "bulk" | "tag">("single");
+const addMethod = ref<"phone" | "viewerId">("phone");
 const addPhone = ref("");
+const addPhoneCode = ref("+86");
+const addViewerId = ref("");
 const addSaving = ref(false);
+
+const PHONE_CODE_OPTIONS = [{ label: "+86 中国", value: "+86" }] as const;
 
 /** 全屏：根节点加 class，不用 ElDialog / 双挂载 */
 const isFullscreen = ref(false);
@@ -232,7 +247,7 @@ function exitFullscreen() {
 
 function toggleFullscreen(e?: MouseEvent) {
   isFullscreen.value = !isFullscreen.value;
-  // 点击后去掉 ElButton :focus 蓝晕，与旁侧「导入」一致
+  // 点击后去掉 ElButton :focus 蓝晕，与旁侧「导出」一致
   (e?.currentTarget as HTMLElement | null)?.blur();
 }
 
@@ -252,22 +267,59 @@ watch(isFullscreen, (on) => {
   void relayoutTable();
 });
 
+function resetAddForm() {
+  addTab.value = "single";
+  addMethod.value = "phone";
+  addPhone.value = "";
+  addPhoneCode.value = "+86";
+  addViewerId.value = "";
+}
+
 function openAdd() {
+  resetAddForm();
   addVisible.value = true;
 }
 
+function onAddMethodChange() {
+  addPhone.value = "";
+  addViewerId.value = "";
+}
+
 async function submitAdd() {
-  const phone = addPhone.value.trim();
-  if (!phone) {
-    ElMessage.warning("请输入手机号");
-    return;
+  if (addTab.value !== "single") return;
+
+  let body: { phone: string } | { viewerId: number };
+  if (addMethod.value === "phone") {
+    const phone = addPhone.value.trim().replace(/\D/g, "");
+    if (!phone) {
+      ElMessage.warning("请输入学员手机号");
+      return;
+    }
+    body = { phone };
+  } else {
+    const raw = addViewerId.value.trim();
+    if (!raw) {
+      ElMessage.warning("请输入学员用户ID");
+      return;
+    }
+    if (!/^\d+$/.test(raw) || Number(raw) <= 0) {
+      ElMessage.warning("用户ID须为正整数");
+      return;
+    }
+    body = { viewerId: Number(raw) };
   }
+
   addSaving.value = true;
   try {
-    await createAudience(props.activityId, phone);
-    ElMessage.success("添加成功");
-    addVisible.value = false;
-    addPhone.value = "";
+    const result = await createAudience(props.activityId, body);
+    if (result.created) {
+      ElMessage.success("添加成功");
+      // 不关弹窗，便于连续添加；清空当前输入
+      addPhone.value = "";
+      addViewerId.value = "";
+    } else {
+      ElMessage.warning("该用户已存在");
+    }
     await fetchList();
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : "添加失败");
@@ -276,18 +328,120 @@ async function submitAdd() {
   }
 }
 
-async function customImport(options: UploadRequestOptions) {
+const exporting = ref(false);
+const csvInput = ref<HTMLInputElement | null>(null);
+const importHistory = ref<AudienceImportHistoryItem[]>([]);
+const importHistoryLoading = ref(false);
+const bulkImporting = ref(false);
+
+const UPLOAD_NOTICE =
+  "文本当前仅支持CSV格式文件，请使用Office2010或以上版本，否则可能会出现乱码。必须严格按照模板内容填写数据，否则可能会出现导入异常。";
+
+watch([addVisible, addTab], ([visible, tab]) => {
+  if (visible && tab === "bulk") {
+    void fetchImportHistory();
+  }
+});
+
+async function fetchImportHistory() {
+  importHistoryLoading.value = true;
   try {
-    const result = await importAudiences(props.activityId, options.file as File);
+    const res = await listAudienceImports(props.activityId);
+    importHistory.value = res.list ?? [];
+  } catch (e) {
+    importHistory.value = [];
+    ElMessage.error(e instanceof Error ? e.message : "加载导入记录失败");
+  } finally {
+    importHistoryLoading.value = false;
+  }
+}
+
+function currentFilterQuery() {
+  const totalParsed = parseDurationFilter(
+    "累计观看时长",
+    filters.totalWatchMin,
+    filters.totalWatchSec,
+  );
+  if (!totalParsed.ok) {
+    return { ok: false as const, message: totalParsed.message };
+  }
+  const liveParsed = parseDurationFilter("直播观看时长", filters.liveWatchMin, filters.liveWatchSec);
+  if (!liveParsed.ok) {
+    return { ok: false as const, message: liveParsed.message };
+  }
+  return {
+    ok: true as const,
+    params: {
+      keywordType: filters.keywordType,
+      keyword: filters.keyword.trim() || undefined,
+      tagMatch: filters.tagMatch,
+      tagIds: filters.tagIds.length ? [...filters.tagIds] : undefined,
+      totalWatchDurationOp: totalParsed.sec !== undefined ? filters.totalWatchOp : undefined,
+      totalWatchDurationSec: totalParsed.sec,
+      liveWatchDurationOp: liveParsed.sec !== undefined ? filters.liveWatchOp : undefined,
+      liveWatchDurationSec: liveParsed.sec,
+      sort: sort.value,
+      order: order.value,
+    },
+  };
+}
+
+async function onExport() {
+  const parsed = currentFilterQuery();
+  if (!parsed.ok) {
+    ElMessage.warning(parsed.message);
+    return;
+  }
+  exporting.value = true;
+  try {
+    await exportAudiences(props.activityId, parsed.params);
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "导出失败");
+  } finally {
+    exporting.value = false;
+  }
+}
+
+function pickCsv() {
+  csvInput.value?.click();
+}
+
+async function onCsvPicked(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  if (!/\.(csv|txt)$/i.test(file.name)) {
+    ElMessage.warning("请选择 CSV 文件");
+    return;
+  }
+  bulkImporting.value = true;
+  try {
+    const result = await importAudiences(props.activityId, file);
     ElMessage.success(
       `导入完成：新增 ${result.created}，更新 ${result.updated}，跳过 ${result.skipped}，失败 ${result.failed}`,
     );
-    options.onSuccess?.(result as any);
-    await fetchList();
+    await Promise.all([fetchList(), fetchImportHistory()]);
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : "导入失败");
+  } finally {
+    bulkImporting.value = false;
+  }
+}
+
+async function onDownloadTemplate() {
+  try {
+    await downloadAudienceImportTemplate();
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "导入失败";
-    ElMessage.error(msg);
-    options.onError?.(e as any);
+    ElMessage.error(e instanceof Error ? e.message : "下载模板失败");
+  }
+}
+
+async function onDownloadFailures(row: AudienceImportHistoryItem) {
+  try {
+    await downloadAudienceImportFailures(row.id);
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "下载失败明细失败");
   }
 }
 
@@ -496,13 +650,12 @@ onUnmounted(() => {
       >
         + 添加用户
       </UiButton>
-      <ElUpload
-        :show-file-list="false"
-        accept=".csv,.txt"
-        :http-request="customImport"
+      <ElButton
+        :loading="exporting"
+        @click="onExport"
       >
-        <ElButton>导入</ElButton>
-      </ElUpload>
+        导出
+      </ElButton>
       <ElButton @click="toggleFullscreen($event)">
         {{ isFullscreen ? "退出全屏" : "全屏" }}
       </ElButton>
@@ -562,16 +715,20 @@ onUnmounted(() => {
           min-width="140"
         >
           <template #default="{ row }">
-            <div
+            <ElTooltip
               v-if="row.tagLabels?.length"
-              class="tag-line"
+              :content="row.tagLabels.join('、')"
+              placement="top"
+              :show-after="200"
             >
-              <span
-                v-for="(label, idx) in row.tagLabels"
-                :key="`${row.id}-${row.tagIds?.[idx] ?? idx}`"
-                class="tag-pill"
-              >{{ label }}</span>
-            </div>
+              <div class="tag-line">
+                <span
+                  v-for="(label, idx) in row.tagLabels"
+                  :key="`${row.id}-${row.tagIds?.[idx] ?? idx}`"
+                  class="tag-pill"
+                >{{ label }}</span>
+              </div>
+            </ElTooltip>
             <span v-else>—</span>
           </template>
         </ElTableColumn>
@@ -654,29 +811,184 @@ onUnmounted(() => {
     <ElDialog
       v-model="addVisible"
       title="添加用户"
-      width="420px"
+      :width="addTab === 'bulk' ? '760px' : '560px'"
       append-to-body
       destroy-on-close
+      class="add-audience-dialog"
     >
-      <ElForm
-        label-width="80px"
-        @submit.prevent="submitAdd"
+      <ElTabs
+        v-model="addTab"
+        class="add-tabs"
       >
-        <ElFormItem label="手机号">
-          <ElInput
-            v-model="addPhone"
-            placeholder="观众已绑定的手机号"
-          />
-        </ElFormItem>
-      </ElForm>
-      <template #footer>
-        <ElButton @click="addVisible = false">取消</ElButton>
-        <ElButton
-          type="primary"
-          :loading="addSaving"
-          @click="submitAdd"
+        <ElTabPane
+          label="单个添加"
+          name="single"
         >
-          确定
+          <ElForm
+            label-width="96px"
+            @submit.prevent="submitAdd"
+          >
+            <ElFormItem
+              label="添加方式"
+              required
+            >
+              <ElRadioGroup
+                v-model="addMethod"
+                @change="onAddMethodChange"
+              >
+                <ElRadio value="phone">手机号</ElRadio>
+                <ElRadio value="viewerId">用户ID</ElRadio>
+              </ElRadioGroup>
+            </ElFormItem>
+            <ElFormItem
+              label="学员"
+              required
+            >
+              <ElInput
+                v-if="addMethod === 'phone'"
+                v-model="addPhone"
+                placeholder="请输入学员手机号"
+                maxlength="20"
+              >
+                <template #prepend>
+                  <ElSelect
+                    v-model="addPhoneCode"
+                    style="width: 110px"
+                  >
+                    <ElOption
+                      v-for="opt in PHONE_CODE_OPTIONS"
+                      :key="opt.value"
+                      :label="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.label }}
+                    </ElOption>
+                  </ElSelect>
+                </template>
+              </ElInput>
+              <ElInput
+                v-else
+                v-model="addViewerId"
+                placeholder="请输入学员用户ID"
+                maxlength="20"
+              />
+            </ElFormItem>
+          </ElForm>
+        </ElTabPane>
+        <ElTabPane
+          label="批量导入"
+          name="bulk"
+        >
+          <div class="bulk-toolbar">
+            <input
+              ref="csvInput"
+              type="file"
+              accept=".csv,.txt"
+              class="csv-input"
+              @change="onCsvPicked"
+            >
+            <ElButton
+              type="primary"
+              :loading="bulkImporting"
+              @click="pickCsv"
+            >
+              + 批量导入
+            </ElButton>
+            <button
+              type="button"
+              class="link-btn"
+              @click="onDownloadTemplate"
+            >
+              下载模板
+            </button>
+            <span class="upload-notice">
+              上传须知
+              <ElTooltip
+                placement="top"
+                :show-after="200"
+              >
+                <template #content>
+                  <div class="upload-notice-tip">{{ UPLOAD_NOTICE }}</div>
+                </template>
+                <ElIcon class="info-icon">
+                  <InfoFilled />
+                </ElIcon>
+              </ElTooltip>
+            </span>
+          </div>
+          <ElTable
+            v-loading="importHistoryLoading"
+            :data="importHistory"
+            row-key="id"
+            max-height="360"
+          >
+            <ElTableColumn
+              prop="importTime"
+              label="导入时间"
+              min-width="170"
+            />
+            <ElTableColumn
+              label="导入人"
+              min-width="120"
+            >
+              <template #default="{ row }">{{ row.importerName || "—" }}</template>
+            </ElTableColumn>
+            <ElTableColumn
+              label="成功数"
+              width="90"
+            >
+              <template #default="{ row }">
+                <span class="success-count">{{ row.successCount }}</span>
+              </template>
+            </ElTableColumn>
+            <ElTableColumn
+              label="失败数"
+              width="90"
+            >
+              <template #default="{ row }">
+                <span :class="{ 'fail-count': row.failCount > 0 }">{{ row.failCount }}</span>
+              </template>
+            </ElTableColumn>
+            <ElTableColumn
+              label="操作"
+              width="130"
+              fixed="right"
+            >
+              <template #default="{ row }">
+                <button
+                  type="button"
+                  class="link-btn"
+                  @click="onDownloadFailures(row)"
+                >
+                  下载失败明细
+                </button>
+              </template>
+            </ElTableColumn>
+          </ElTable>
+        </ElTabPane>
+        <ElTabPane
+          label="标签导入"
+          name="tag"
+        >
+          <p class="add-tab-placeholder">标签导入即将支持</p>
+        </ElTabPane>
+      </ElTabs>
+      <template #footer>
+        <template v-if="addTab === 'single'">
+          <ElButton @click="addVisible = false">取消</ElButton>
+          <ElButton
+            type="primary"
+            :loading="addSaving"
+            @click="submitAdd"
+          >
+            确定
+          </ElButton>
+        </template>
+        <ElButton
+          v-else
+          @click="addVisible = false"
+        >
+          关闭
         </ElButton>
       </template>
     </ElDialog>
@@ -801,11 +1113,14 @@ onUnmounted(() => {
 }
 .tag-line {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
+  max-width: 100%;
+  overflow: hidden;
 }
 .tag-pill {
+  flex: none;
   padding: 0 8px;
   line-height: 22px;
   border-radius: 11px;
@@ -844,5 +1159,48 @@ onUnmounted(() => {
   display: flex;
   flex: none;
   justify-content: flex-end;
+}
+.add-tab-placeholder {
+  margin: 24px 0 8px;
+  color: var(--el-text-color-secondary, #909399);
+  font-size: 13px;
+  text-align: center;
+}
+.add-tabs :deep(.el-tabs__header) {
+  margin-bottom: 20px;
+}
+.bulk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-bottom: 16px;
+}
+.csv-input {
+  display: none;
+}
+.upload-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--el-text-color-regular, #606266);
+}
+.info-icon {
+  font-size: 14px;
+  color: #c0c4cc;
+  cursor: help;
+}
+.success-count {
+  color: #22c55e;
+}
+.fail-count {
+  color: #f56c6c;
+}
+.upload-notice-tip {
+  max-width: 320px;
+  line-height: 1.6;
+  font-size: 12px;
 }
 </style>

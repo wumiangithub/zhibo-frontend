@@ -116,6 +116,90 @@ function validateBasic(): string | null {
   return null;
 }
 
+function sameIdList(a: Array<string | number>, b: Array<string | number>): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((id, i) => String(id) === String(b[i]));
+}
+
+function sameProducts(
+  a: Array<{ spuId: string; productName: string }>,
+  b: Array<{ spuId: string; productName: string }>,
+): boolean {
+  if (a.length !== b.length) return false;
+  return a.every(
+    (p, i) =>
+      String(p.spuId) === String(b[i].spuId)
+      && p.productName.trim() === b[i].productName.trim(),
+  );
+}
+
+/** 相对详情快照：其它字段是否未改、关联商品是否未改 */
+function diffAgainstDetail(): { otherSame: boolean; productsSame: boolean } {
+  const d = props.detail;
+  const title = form.name.trim();
+  const startTime = `${form.startDate} ${form.startTime}:00`;
+  const intro = form.intro.trim();
+  const endTime =
+    form.endDate && form.endTime ? `${form.endDate} ${form.endTime}:00` : "";
+  const detailEnd =
+    d.endTime && !d.endTime.startsWith("0000") ? d.endTime : "";
+  const cover = form.detailCover || "";
+  const html = form.detailHtml?.trim() || "";
+  const hostIds = form.hostIds.slice(0, 1);
+  const ownerIds = [...form.ownerIds];
+  const courseIds = [...form.coursewareMaterialIds];
+  const products = form.products.map((p) => ({
+    spuId: String(p.spuId),
+    productName: p.productName.trim(),
+  }));
+
+  const otherSame =
+    title === (d.title ?? "").trim()
+    && startTime === (d.startTime || "")
+    && intro === (d.introduction ?? "").trim()
+    && endTime === detailEnd
+    && cover === (d.coverUrl ?? "")
+    && html === (d.detailHtml ?? "").trim()
+    && form.autoList === (d.autoList ?? false)
+    && sameIdList(hostIds, (d.hosts ?? []).map((h) => h.id).slice(0, 1))
+    && sameIdList(ownerIds, (d.owners ?? []).map((o) => o.id))
+    && sameIdList(courseIds, (d.coursewares ?? []).map((c) => c.id))
+    && !(
+      d.type === 4
+      && form.recordSource === "video"
+      && form.materialId.trim()
+      && form.materialId.trim() !== (d.recordMaterialId ?? "")
+    );
+
+  const productsSame = sameProducts(
+    products,
+    (d.products ?? []).map((p) => ({
+      spuId: String(p.spuId),
+      productName: p.productName,
+    })),
+  );
+  return { otherSame, productsSame };
+}
+
+/** 当前值相对详情基线是否有差异（改完又改回不算脏） */
+const hasEdits = computed(() => {
+  const { otherSame, productsSame } = diffAgainstDetail();
+  return !(otherSame && productsSame);
+});
+
+/** 未改动 / 审核锁时保存不高亮、不可点 */
+const canSave = computed(() => hasEdits.value && !auditLocked.value);
+
+// 同步 leave.dirty，供 beforeunload / confirmLeave 与值对比一致
+watch(
+  hasEdits,
+  (v) => {
+    if (v) leave.markDirty();
+    else leave.markClean();
+  },
+  { flush: "sync" },
+);
+
 async function onSave() {
   if (auditLocked.value) {
     ElMessage.warning("审核中不可编辑");
@@ -126,37 +210,50 @@ async function onSave() {
     ElMessage.warning(err);
     return;
   }
+  if (!hasEdits.value) {
+    ElMessage.info("没有修改");
+    return;
+  }
+  const { otherSame, productsSame } = diffAgainstDetail();
+  // 仅改关联商品：只传 products，后端不回 pending、不追加发起申请
+  const productsOnly = otherSame && !productsSame;
   submitting.value = true;
   try {
-    const payload: UpdateActivityPayload = {
-      title: form.name.trim(),
-      startTime: `${form.startDate} ${form.startTime}:00`,
-      introduction: form.intro.trim() || undefined,
-      coverUrl: form.detailCover || undefined,
-      detailHtml: form.detailHtml?.trim() || undefined,
-      autoList: form.autoList,
-      hostIds: form.hostIds.slice(0, 1).map((id) => Number(id)),
-      ownerIds: [...form.ownerIds],
-      products: form.products.map((p) => ({
-        spuId: String(p.spuId),
-        productName: p.productName.trim(),
-      })),
-      coursewareMaterialIds: [...form.coursewareMaterialIds],
-    };
-    if (form.endDate && form.endTime) {
-      payload.endTime = `${form.endDate} ${form.endTime}:00`;
-    }
-    // 录播替换素材：与详情原 recordMaterialId 不同才传
-    if (
-      props.detail.type === 4
-      && form.recordSource === "video"
-      && form.materialId.trim()
-      && form.materialId.trim() !== (props.detail.recordMaterialId ?? "")
-    ) {
-      payload.recordMaterialId = form.materialId.trim();
+    const products = form.products.map((p) => ({
+      spuId: String(p.spuId),
+      productName: p.productName.trim(),
+    }));
+    let payload: UpdateActivityPayload;
+    if (productsOnly) {
+      payload = { products };
+    } else {
+      payload = {
+        title: form.name.trim(),
+        startTime: `${form.startDate} ${form.startTime}:00`,
+        introduction: form.intro.trim() || undefined,
+        coverUrl: form.detailCover || undefined,
+        detailHtml: form.detailHtml?.trim() || undefined,
+        autoList: form.autoList,
+        hostIds: form.hostIds.slice(0, 1).map((id) => Number(id)),
+        ownerIds: form.ownerIds.map((id) => Number(id)),
+        products,
+        coursewareMaterialIds: [...form.coursewareMaterialIds],
+      };
+      if (form.endDate && form.endTime) {
+        payload.endTime = `${form.endDate} ${form.endTime}:00`;
+      }
+      // 录播替换素材：与详情原 recordMaterialId 不同才传
+      if (
+        props.detail.type === 4
+        && form.recordSource === "video"
+        && form.materialId.trim()
+        && form.materialId.trim() !== (props.detail.recordMaterialId ?? "")
+      ) {
+        payload.recordMaterialId = form.materialId.trim();
+      }
     }
     await updateActivity(props.activityId, payload);
-    ElMessage.success("保存成功，重新进入审核");
+    ElMessage.success(productsOnly ? "保存成功" : "保存成功，重新进入审核");
     leave.markClean();
     emit("refreshed");
   } catch (e) {
@@ -167,7 +264,7 @@ async function onSave() {
 }
 
 defineExpose({
-  isDirty: () => leave.dirty.value,
+  isDirty: () => hasEdits.value,
   confirmLeave: leave.confirmLeave,
 });
 </script>
@@ -199,8 +296,8 @@ defineExpose({
 
     <div class="save-bar">
       <UiButton
-        variant="primary"
-        :disabled="submitting || auditLocked"
+        :variant="canSave ? 'primary' : 'default'"
+        :disabled="!canSave || submitting"
         @click="onSave"
       >
         {{ submitting ? "保存中…" : "保存" }}
@@ -214,7 +311,8 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding-bottom: 24px;
+  /* 给固定底栏留空，避免最后一项被挡住 */
+  padding-bottom: 88px;
 }
 .lock-tip {
   margin: 0 0 8px;
@@ -227,9 +325,19 @@ defineExpose({
   opacity: 0.72;
 }
 
+/* 与新建页 live-create__footer 同款：贴视口底，避开左侧 176px 导航 */
 .save-bar {
+  position: fixed;
+  left: 176px;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
   display: flex;
+  align-items: center;
   justify-content: center;
-  padding: 20px 0 8px;
+  height: 64px;
+  padding: 0 32px;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
 }
 </style>

@@ -60,6 +60,7 @@ export interface AudienceCommentListResult {
 }
 
 export interface AudienceImportResult {
+  importId?: number;
   total: number;
   created: number;
   updated: number;
@@ -68,37 +69,58 @@ export interface AudienceImportResult {
   errors: { row: number; phone: string; reason: string }[];
 }
 
-export function listAudiences(
-  activityId: ActivityId,
-  params: {
-    page?: number;
-    pageSize?: number;
-    keywordType?: AudienceKeywordType;
-    keyword?: string;
-    tagIds?: number[];
-    tagMatch?: AudienceTagMatch;
-    entitlementStatus?: number;
-    totalWatchDurationOp?: AudienceDurationOp;
-    totalWatchDurationSec?: number;
-    liveWatchDurationOp?: AudienceDurationOp;
-    liveWatchDurationSec?: number;
-    sort?: string;
-    order?: string;
-  } = {},
-) {
+export interface AudienceImportHistoryItem {
+  id: number;
+  importTime: string;
+  importerId: number;
+  importerName?: string;
+  successCount: number;
+  failCount: number;
+}
+
+export interface AudienceImportHistoryList {
+  list: AudienceImportHistoryItem[];
+}
+
+export type AudienceListQuery = {
+  page?: number;
+  pageSize?: number;
+  keywordType?: AudienceKeywordType;
+  keyword?: string;
+  tagIds?: number[];
+  tagMatch?: AudienceTagMatch;
+  entitlementStatus?: number;
+  totalWatchDurationOp?: AudienceDurationOp;
+  totalWatchDurationSec?: number;
+  liveWatchDurationOp?: AudienceDurationOp;
+  liveWatchDurationSec?: number;
+  sort?: string;
+  order?: string;
+};
+
+function audienceFilterParams(params: AudienceListQuery = {}) {
   const { tagIds, ...rest } = params;
+  return {
+    ...rest,
+    tagIds: tagIds?.length ? tagIds.join(",") : undefined,
+  };
+}
+
+export function listAudiences(activityId: ActivityId, params: AudienceListQuery = {}) {
   return get<AudienceListResult>(`/activities/audiences/list/${activityId}`, {
-    params: {
-      ...rest,
-      tagIds: tagIds?.length ? tagIds.join(",") : undefined,
-    },
+    params: audienceFilterParams(params),
   });
 }
 
-export function createAudience(activityId: ActivityId, phone: string) {
-  return post<{ id: number; viewerId: number }>(`/activities/audiences/create/${activityId}`, {
-    phone,
-  });
+/** phone 与 viewerId 二选一；created=false 表示本场已有该观众 */
+export function createAudience(
+  activityId: ActivityId,
+  body: { phone: string } | { viewerId: number },
+) {
+  return post<{ id: number; viewerId: number; created: boolean }>(
+    `/activities/audiences/create/${activityId}`,
+    body,
+  );
 }
 
 export function updateAudienceEntitlement(rowId: number, entitlementStatus: 0 | 1) {
@@ -138,18 +160,72 @@ export async function importAudiences(activityId: ActivityId, file: File) {
   return body.data;
 }
 
-export async function downloadAudienceImportTemplate() {
+export function listAudienceImports(activityId: ActivityId) {
+  return get<AudienceImportHistoryList>(`/activities/audiences/imports/list/${activityId}`);
+}
+
+async function downloadAuthorizedBlob(
+  url: string,
+  filename: string,
+  params?: Record<string, unknown>,
+) {
   const token = getAccessToken();
-  const resp = await axios.get("/api/v1/activities/audiences/import-template", {
-    responseType: "blob",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  const url = URL.createObjectURL(resp.data);
+  try {
+    const resp = await axios.get(url, {
+      responseType: "blob",
+      params,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      timeout: 60000,
+    });
+    await saveBlob(resp.data as Blob, filename);
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.data instanceof Blob) {
+      throw new Error(await blobErrorMessage(e.response.data));
+    }
+    throw e;
+  }
+}
+
+async function saveBlob(blob: Blob, filename: string) {
+  if (blob.type && blob.type.includes("application/json")) {
+    throw new Error(await blobErrorMessage(blob));
+  }
+  const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
-  a.download = "audience-import.csv";
+  a.href = objectUrl;
+  a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(objectUrl);
+}
+
+async function blobErrorMessage(blob: Blob): Promise<string> {
+  const text = await blob.text();
+  try {
+    const body = JSON.parse(text) as { msg?: string };
+    if (body?.msg) return body.msg;
+  } catch {
+    // not json
+  }
+  return "下载失败";
+}
+
+export async function downloadAudienceImportTemplate() {
+  await downloadAuthorizedBlob("/api/v1/activities/audiences/import-template", "audience-import.csv");
+}
+
+export async function downloadAudienceImportFailures(importId: number) {
+  await downloadAuthorizedBlob(
+    `/api/v1/activities/audiences/imports/failures/${importId}`,
+    "audience-import-failures.csv",
+  );
+}
+
+export async function exportAudiences(activityId: ActivityId, params: AudienceListQuery = {}) {
+  await downloadAuthorizedBlob(
+    `/api/v1/activities/audiences/export/${activityId}`,
+    "audience-export.csv",
+    audienceFilterParams(params),
+  );
 }
 
 export function formatDurationSec(sec: number): string {

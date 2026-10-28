@@ -68,9 +68,10 @@ onMounted(() => {
           clearable
           collapse-tags
           collapse-tags-tooltip
+          :max-collapse-tags="2"
           :loading="loading"
           placeholder="+ 选择商品"
-          style="width: 360px"
+          style="width: 420px"
           @update:model-value="onProductChange"
         >
           <ElOption

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import {
   ElMessage,
   ElMessageBox,
@@ -136,7 +136,41 @@ async function onDownload(row: ActivityRecordItem) {
   }
 }
 
+/** 当前值相对详情基线是否有差异（改完又改回不算脏） */
+const hasEdits = computed(() => {
+  const d = props.detail;
+  const baselineType = d.playbackValidityType === "days" ? "days" : "forever";
+  const baselineDays =
+    d.playbackValidityDays && d.playbackValidityDays > 0 ? d.playbackValidityDays : 7;
+  if (form.playbackEnabled !== (d.playbackEnabled ?? true)) return true;
+  if (form.playbackValidityType !== baselineType) return true;
+  if (
+    form.playbackValidityType === "days"
+    && Number(form.playbackValidityDays) !== baselineDays
+  ) {
+    return true;
+  }
+  if (form.playbackSpeedAllow !== (d.playbackSpeedAllow ?? true)) return true;
+  if (form.playbackFastForwardAllow !== (d.playbackFastForwardAllow ?? true)) return true;
+  return false;
+});
+
+const canSave = computed(() => hasEdits.value);
+
+watch(
+  hasEdits,
+  (v) => {
+    if (v) leave.markDirty();
+    else leave.markClean();
+  },
+  { flush: "sync" },
+);
+
 async function onSave() {
+  if (!hasEdits.value) {
+    ElMessage.info("没有修改");
+    return;
+  }
   if (form.playbackEnabled && form.playbackValidityType === "days") {
     const n = Number(form.playbackValidityDays);
     if (!Number.isInteger(n) || n < 1) {
@@ -178,7 +212,7 @@ onMounted(() => {
 });
 
 defineExpose({
-  isDirty: () => leave.dirty.value,
+  isDirty: () => hasEdits.value,
   confirmLeave: leave.confirmLeave,
 });
 </script>
@@ -311,8 +345,8 @@ defineExpose({
 
     <div class="save-bar">
       <UiButton
-        variant="primary"
-        :disabled="submitting"
+        :variant="canSave ? 'primary' : 'default'"
+        :disabled="!canSave || submitting"
         @click="onSave"
       >
         {{ submitting ? "保存中…" : "保存" }}

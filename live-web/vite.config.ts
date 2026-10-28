@@ -6,7 +6,7 @@ import { fileURLToPath, URL } from "node:url";
 export default defineConfig(({ mode }) => {
   const viteEnv = loadEnv(mode, process.cwd());
   const orderCenterTarget =
-    viteEnv.VITE_ORDER_CENTER_BASE_URL || "http://fadada-notify.scqkxx.com";
+    viteEnv.VITE_ORDER_CENTER_BASE_URL || "http://oms-api.scqkxx.com";
 
   return {
     plugins: [vue(), UnoCSS()],

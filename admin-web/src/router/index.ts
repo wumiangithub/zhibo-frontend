@@ -131,8 +131,7 @@ const router = createRouter({
         {
           path: "user/learning-stats",
           name: "user-learning-stats",
-          component: () => import("@/views/user/UserPlaceholderView.vue"),
-          props: { title: "用户学习统计" },
+          component: () => import("@/views/user/LearningStatsView.vue"),
         },
         {
           path: "user/tags",
