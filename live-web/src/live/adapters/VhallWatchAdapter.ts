@@ -46,6 +46,7 @@ export class VhallWatchAdapter implements WatchAdapter {
       app_key: data.sdk.appKey,
       signedat: data.sdk.signedAt,
       webinar_id: data.sdk.webinarId,
+      // 签名里含 email。有观众 id 时已是 {id}@qkzb.com；换账号必须重新拉签名再 new，不能只改这一字段
       email: data.sdk.email,
       username: data.sdk.username,
       sign: data.sdk.sign,

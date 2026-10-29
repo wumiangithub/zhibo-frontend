@@ -13,8 +13,6 @@ import {
 } from "element-plus";
 import {
   createLiveReport,
-  getLiveReport,
-  updateLiveReport,
   type PlanTime,
   type ReportAttachment,
   type SaveReportPayload,
@@ -62,17 +60,6 @@ const dateShortcuts = [{ text: "今天", value: () => new Date() }];
 
 function emptyPlanTime(): PlanTimeRow {
   return { startDate: "", startTime: "", endDate: "", endTime: "" };
-}
-
-function fromApiPlanTime(x: PlanTime): PlanTimeRow {
-  const [sd, st] = (x.startTime || "").split(" ");
-  const [ed, et] = (x.endTime || "").split(" ");
-  return {
-    startDate: sd || "",
-    startTime: st ? st.slice(0, 5) : "",
-    endDate: ed || "",
-    endTime: et ? et.slice(0, 5) : "",
-  };
 }
 
 function joinDateTime(date: string, time: string) {
@@ -123,10 +110,9 @@ const editing = computed(() => !!route.params.id);
 /** 编辑态为报备 id；新建态为空（主键由后端生成）。 */
 const id = ref(String(route.params.id || ""));
 const status = ref("");
-const bound = ref(0);
 /**
  * 同一批材料共用此前缀，落在 `live-report/attachment/` 下，不再按报备建子目录。
- * 新建：进入页时生成；编辑：用报备 id。
+ * 新建进入页时生成。创建后不可再编辑。
  */
 const attachmentBatchPrefix = ref(editing.value ? id.value : randomUuid());
 /** 同批序号只增不补洞（删中间项也不回填）。 */
@@ -299,23 +285,6 @@ function safeName(n: string) {
   return n.replace(/[^\w.\-一-龥]/g, "_");
 }
 
-function escapeRegExp(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** 从已有 objectKey 解析同批最大序号，供编辑页续号。 */
-function maxAttachmentSeqFromKeys(keys: string[], prefix: string): number {
-  const re = new RegExp(
-    `^${escapeRegExp(TosObjectKeyPrefix.LIVE_REPORT_ATTACHMENT)}${escapeRegExp(prefix)}_(\\d+)_`,
-  );
-  let max = 0;
-  for (const key of keys) {
-    const m = key.match(re);
-    if (m) max = Math.max(max, Number(m[1]));
-  }
-  return max;
-}
-
 /**
  * `{前缀}_{NN}_{真实文件名}`，目录统一 `live-report/attachment/`。
  * 取号即 +1，上传失败也不回退，避免重名。
@@ -401,14 +370,14 @@ async function onFiles(e: Event) {
     input.value = "";
     return;
   }
-  if (form.attachments.length + files.length > 20) {
-    ElMessage.warning("最多上传 20 份材料");
+  if (form.attachments.length >= 1 || files.length > 1) {
+    ElMessage.warning("只能上传单个文件");
     input.value = "";
     return;
   }
   for (const f of files) {
-    if (!/\.(doc|docx|pdf)$/i.test(f.name) || f.size > MAX_ATTACHMENT_SIZE) {
-      ElMessage.warning(`${f.name} 格式或大小不符合要求（单份不超过 10MB）`);
+    if (!/\.(doc|docx|pdf|txt)$/i.test(f.name) || f.size > MAX_ATTACHMENT_SIZE) {
+      ElMessage.warning("只能上传doc、docx、pdf、txt文件，且大小不超过10MB");
       input.value = "";
       return;
     }
@@ -513,6 +482,11 @@ function validate() {
 }
 
 async function save() {
+  if (editing.value) {
+    ElMessage.warning("报备不可编辑");
+    void router.replace(`/live-reports/${id.value}`);
+    return;
+  }
   const msg = validate();
   if (msg) {
     ElMessage.warning(msg);
@@ -521,25 +495,21 @@ async function save() {
   saving.value = true;
   try {
     const planTimes = toApiPlanTimes(form.planTimes);
-    if (passedAppendOnly.value) {
-      await updateLiveReport(id.value, { planTimes });
-    } else {
-      const payload: SaveReportPayload = {
-        title: form.title,
-        content: form.content,
-        planTimes,
-        coverUrl: form.coverUrl,
-        coverObjectKey: form.coverObjectKey,
-        coverFileSize: form.coverFileSize,
-        coverMimeType: form.coverMimeType,
-        coverMaterialId: form.coverMaterialId,
-        hostId: Number(form.hostId),
-        attachments: form.attachments,
-      };
-      if (editing.value) await updateLiveReport(id.value, payload);
-      else await createLiveReport(payload);
-    }
-    ElMessage.success("保存成功");
+    const payload: SaveReportPayload = {
+      title: form.title,
+      content: form.content,
+      planTimes,
+      coverUrl: form.coverUrl,
+      coverObjectKey: form.coverObjectKey,
+      coverFileSize: form.coverFileSize,
+      coverMimeType: form.coverMimeType,
+      coverMaterialId: form.coverMaterialId,
+      hostId: Number(form.hostId),
+      attachments: form.attachments,
+    };
+    const created = await createLiveReport(payload);
+    const n = created.list?.length ?? (created.id ? 1 : 0);
+    ElMessage.success(n > 1 ? `已提交 ${n} 条直播报备` : "保存成功");
     void router.push("/live-reports");
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : "保存失败");
@@ -549,42 +519,13 @@ async function save() {
 }
 
 async function init() {
+  if (editing.value) {
+    ElMessage.warning("报备不可编辑");
+    void router.replace(`/live-reports/${id.value}`);
+    return;
+  }
   loading.value = true;
   try {
-    if (editing.value) {
-      const d = await getLiveReport(id.value);
-      status.value = d.status;
-      bound.value = d.boundLiveCount;
-      attachmentBatchPrefix.value = d.id;
-      Object.assign(form, {
-        title: d.title,
-        content: d.content,
-        planTimes: d.planTimes.map(fromApiPlanTime),
-        coverUrl: d.coverUrl,
-        coverObjectKey: d.coverObjectKey,
-        coverFileSize: d.coverFileSize,
-        coverMimeType: d.coverMimeType,
-        coverMaterialId: d.coverMaterialId || "",
-        hostId: d.host.id,
-        attachments: d.attachments.map((x) => ({ ...x })),
-      });
-      nextAttachmentSeq.value =
-        maxAttachmentSeqFromKeys(
-          form.attachments.map((x) => x.objectKey),
-          attachmentBatchPrefix.value,
-        ) + 1;
-      selectedCoverId.value = d.coverMaterialId || "";
-      knownHost.value = {
-        id: d.host.id,
-        userName: d.host.userName,
-        avatar: d.host.avatar,
-      };
-      originalCount.value = d.status === "passed" ? d.planTimes.length : 0;
-      if (d.status === "pending" || d.boundLiveCount > 0) {
-        ElMessage.warning("当前报备不可编辑");
-        void router.replace(`/live-reports/${id.value}`);
-      }
-    }
     await loadEmployees();
   } finally {
     loading.value = false;
@@ -779,17 +720,21 @@ onMounted(init);
         <div class="field">
           <label><i>*</i> 直播报备材料</label>
           <div class="materials">
-            <label class="pick" :class="{ 'is-disabled': uploading }">
-              + 添加材料
-              <input
-                type="file"
-                multiple
-                accept=".doc,.docx,.pdf"
-                :disabled="uploading"
-                @change="onFiles"
-              />
-            </label>
-            <small>支持 doc、docx、pdf，单份不超过 10MB，最多 20 份</small>
+            <div class="material-head">
+              <label
+                class="pick"
+                :class="{ 'is-disabled': uploading || form.attachments.length >= 1 }"
+              >
+                + 添加材料
+                <input
+                  type="file"
+                  accept=".doc,.docx,.pdf,.txt"
+                  :disabled="uploading || form.attachments.length >= 1"
+                  @change="onFiles"
+                />
+              </label>
+              <small>只能上传doc、docx、pdf、txt文件，只能上传单个文件，且大小不超过10MB</small>
+            </div>
             <div v-for="(f, i) in form.attachments" :key="f.objectKey" class="file">
               <img :src="getMaterialFileIcon(f.name)" class="file-icon" alt="" />
               <b>{{ f.name }}</b>
@@ -888,6 +833,16 @@ onMounted(init);
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
+}
+.material-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.material-head small {
+  display: inline;
+  color: #c0c4cc;
 }
 .time-row {
   display: flex;

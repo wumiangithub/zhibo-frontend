@@ -7,6 +7,7 @@ import EndedScreen from "@/components/watch/EndedScreen.vue";
 import { fetchChatFilterPageUrl } from "@/api/chatFilter";
 import { ApiError } from "@/api/http";
 import { useWatchSession } from "@/composables/useWatchSession";
+import { presenceUserIdFromMessage } from "@/utils/presenceEmail";
 import { useToast } from "@/composables/useToast";
 import AttendeePanel from "./AttendeePanel.vue";
 import ChatFilterPanel from "./ChatFilterPanel.vue";
@@ -46,14 +47,12 @@ function presenceTime(raw: string | undefined): string | undefined {
 
 const session = useWatchSession({
   activityId: () => id.value,
-  role: "assistant",
   getNickname: () => ASSISTANT_NICK,
-  getMatchNicknames: () => [ASSISTANT_NICK],
   onPresenceOnline: (msg) => {
     // 结束态不再吃 Join（与 D30 / attendees 全员 offline 对齐；回调晚于 session 赋值）
     const state = session.data.value?.state;
     if (state === 3 || state === 4 || state === 5) return;
-    const uid = msg.sender_id?.trim();
+    const uid = presenceUserIdFromMessage(msg);
     if (uid && msg.data?.type === "Join") {
       panelRef.value?.patchOnline(uid, true, {
         enterTime: presenceTime(msg.date_time),
@@ -63,7 +62,7 @@ const session = useWatchSession({
     }
   },
   onPresenceOffline: (msg) => {
-    const uid = msg.sender_id?.trim();
+    const uid = presenceUserIdFromMessage(msg);
     if (uid && msg.data?.type === "Leave") {
       panelRef.value?.patchOnline(uid, false, {
         leaveTime: presenceTime(msg.date_time),

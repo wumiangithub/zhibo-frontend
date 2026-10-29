@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
 import { Refresh } from "@element-plus/icons-vue";
 import { ElIcon, ElMessage, ElMessageBox } from "element-plus";
 import {
@@ -51,7 +50,6 @@ const emit = defineEmits<{ error: [msg: string]; refreshed: [] }>();
 
 const { toast } = useToast();
 const auth = useAuthStore();
-const router = useRouter();
 const inviteHostVisible = ref(false);
 
 function openInviteHost() {
@@ -319,7 +317,11 @@ function copyAllPasscodeInfo() {
 
 function openHost() {
   if (!props.canBroadcast || timedHostUnsupported.value) return;
-  void router.push(buildLiveStudioPath(props.activityId, ActivityMemberRole.HOST));
+  window.open(
+    buildLiveStudioPath(props.activityId, ActivityMemberRole.HOST),
+    "_blank",
+    "noopener",
+  );
 }
 </script>
 

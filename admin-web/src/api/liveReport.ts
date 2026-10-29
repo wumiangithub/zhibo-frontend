@@ -91,7 +91,10 @@ export function getLiveReport(id: string) {
 }
 
 export function createLiveReport(p: SaveReportPayload) {
-  return post<{ id: string; status: ReportStatus }>("/live-reports/create", p);
+  return post<{ list?: { id: string; status: ReportStatus }[]; id?: string; status?: ReportStatus }>(
+    "/live-reports/create",
+    p,
+  );
 }
 
 export function updateLiveReport(id: string, p: Partial<SaveReportPayload>) {

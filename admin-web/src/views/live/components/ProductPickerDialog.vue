@@ -10,6 +10,7 @@ import {
   ElTableColumn,
 } from "element-plus";
 import {
+  canBindOrderCenterProduct,
   isOrderCenterOnShelf,
   listSalerProductsPage,
   orderCenterShelfLabel,
@@ -58,12 +59,21 @@ const syncingSelection = ref(false);
 
 const hint = computed(
   () =>
-    `从钱坤云商品库多选绑定，最多 ${props.max} 个；已选 ${picked.value.length}`,
+    `从钱坤云商品库多选绑定，最多 ${props.max} 个；已选 ${picked.value.length}。无 SKU 的商品仅展示，不可勾选`,
 );
 
 function dash(v: string | number | undefined | null): string {
   if (v == null || v === "") return "--";
   return String(v);
+}
+
+/** skuList 缺失或 []：禁勾，只展示 */
+function rowSelectable(row: OrderCenterProduct): boolean {
+  return canBindOrderCenterProduct(row);
+}
+
+function rowClassName({ row }: { row: OrderCenterProduct }): string {
+  return canBindOrderCenterProduct(row) ? "" : "is-unbindable";
 }
 
 /** 服务端分页；商品名走对方 body.productName 模糊搜 */
@@ -79,6 +89,13 @@ async function fetchPage() {
     list.value = res.list;
     total.value = res.total;
     page.value = res.page;
+    // 本页无 sku 的商品若已在已选里，剔除（只展示不可绑）
+    const blocked = new Set(
+      list.value.filter((r) => !canBindOrderCenterProduct(r)).map((r) => r.spuId),
+    );
+    if (blocked.size) {
+      picked.value = picked.value.filter((p) => !blocked.has(p.spuId));
+    }
     await nextTick();
     syncTableSelection();
   } catch (e) {
@@ -97,7 +114,9 @@ function syncTableSelection() {
   table.clearSelection();
   const idSet = new Set(picked.value.map((p) => p.spuId));
   for (const row of list.value) {
-    if (idSet.has(row.spuId)) table.toggleRowSelection(row, true);
+    if (idSet.has(row.spuId) && canBindOrderCenterProduct(row)) {
+      table.toggleRowSelection(row, true);
+    }
   }
   syncingSelection.value = false;
 }
@@ -108,6 +127,7 @@ function onSelectionChange(rows: OrderCenterProduct[]) {
   const kept = picked.value.filter((p) => !pageIds.has(p.spuId));
   const merged = [...kept];
   for (const row of rows) {
+    if (!canBindOrderCenterProduct(row)) continue;
     if (!merged.some((p) => p.spuId === row.spuId)) merged.push(row);
   }
   if (merged.length > props.max) {
@@ -144,7 +164,10 @@ function onPageSizeChange(s: number) {
 }
 
 function onConfirm() {
-  emit("confirm", [...picked.value]);
+  emit(
+    "confirm",
+    picked.value.filter((p) => canBindOrderCenterProduct(p)),
+  );
   visible.value = false;
 }
 
@@ -162,7 +185,9 @@ watch(
     }));
     void fetchPage().then(() => {
       const map = new Map(list.value.map((p) => [p.spuId, p]));
-      picked.value = picked.value.map((p) => map.get(p.spuId) ?? p);
+      picked.value = picked.value
+        .map((p) => map.get(p.spuId) ?? p)
+        .filter((p) => canBindOrderCenterProduct(p));
     });
   },
 );
@@ -203,12 +228,14 @@ watch(
       row-key="spuId"
       max-height="420"
       empty-text="暂无商品"
+      :row-class-name="rowClassName"
       @selection-change="onSelectionChange"
     >
       <ElTableColumn
         type="selection"
         width="48"
         :reserve-selection="true"
+        :selectable="rowSelectable"
       />
       <ElTableColumn
         label="商品ID"
@@ -251,6 +278,19 @@ watch(
         </template>
       </ElTableColumn>
       <ElTableColumn
+        label="有效sku"
+        width="88"
+        align="center"
+      >
+        <template #default="{ row }">
+          <span
+            class="sku-count"
+            :class="{ 'is-none': !canBindOrderCenterProduct(row) }"
+            :title="canBindOrderCenterProduct(row) ? undefined : '无 SKU，不可绑定'"
+          >{{ row.validSkuCount ?? 0 }}</span>
+        </template>
+      </ElTableColumn>
+      <ElTableColumn
         label="归属部门"
         min-width="110"
         show-overflow-tooltip
@@ -270,13 +310,6 @@ watch(
         show-overflow-tooltip
       >
         <template #default="{ row }">{{ dash(row.teacherNames) }}</template>
-      </ElTableColumn>
-      <ElTableColumn
-        label="有效sku"
-        width="88"
-        align="center"
-      >
-        <template #default="{ row }">{{ row.validSkuCount ?? 0 }}</template>
       </ElTableColumn>
       <ElTableColumn
         label="有效活动"
@@ -358,5 +391,28 @@ watch(
 }
 .shelf.is-on .dot {
   background: #52c41a;
+}
+.sku-count.is-none {
+  color: #c0c4cc;
+}
+:deep(.el-table__body tr.is-unbindable > td.el-table__cell) {
+  background: #f5f7fa;
+  color: #a8abb2;
+  cursor: not-allowed;
+}
+:deep(.el-table__body tr.is-unbindable:hover > td.el-table__cell) {
+  background: #f0f2f5;
+}
+:deep(.is-unbindable .el-checkbox),
+:deep(.is-unbindable .el-checkbox__input),
+:deep(.is-unbindable .el-checkbox__inner) {
+  cursor: not-allowed;
+}
+:deep(.is-unbindable .el-checkbox) {
+  pointer-events: none;
+}
+:deep(.is-unbindable .el-checkbox__input.is-disabled .el-checkbox__inner) {
+  background-color: #f5f7fa;
+  border-color: #e4e7ed;
 }
 </style>

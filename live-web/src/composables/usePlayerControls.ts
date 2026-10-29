@@ -4,6 +4,12 @@ export interface PlayerControlsOptions {
   getSdk: () => VhallSdkInstance | null;
   /** 非自动播放类的真实错误交给页面显示 */
   onError: (msg: string) => void;
+  /** 用户真正起播（含点「点击播放」）。回放上报 start 挂这里。 */
+  onUserPlay?: () => void;
+  /** 暂停。回放心跳挂这里。 */
+  onUserPause?: () => void;
+  /** 播完。回放心跳后结束本行。 */
+  onMediaEnded?: () => void;
 }
 
 export interface QualityOption {
@@ -105,18 +111,27 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     }
     applyPausedUi(false);
     userPaused = false;
+    options.onUserPlay?.();
   }
 
   function onMediaPause() {
     if (player.waitingForMedia) return;
     applyPausedUi(true);
-    if (playRequested) userPaused = true;
+    if (playRequested) {
+      userPaused = true;
+      options.onUserPause?.();
+    }
+  }
+
+  function onMediaEnded() {
+    options.onMediaEnded?.();
   }
 
   function unbindMediaEvents() {
     if (!boundMedia) return;
     boundMedia.removeEventListener("play", onMediaPlay);
     boundMedia.removeEventListener("pause", onMediaPause);
+    boundMedia.removeEventListener("ended", onMediaEnded);
     boundMedia = null;
   }
 
@@ -126,6 +141,7 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     boundMedia = media;
     media.addEventListener("play", onMediaPlay);
     media.addEventListener("pause", onMediaPause);
+    media.addEventListener("ended", onMediaEnded);
     if (!player.waitingForMedia) applyPausedUi(media.paused);
   }
 

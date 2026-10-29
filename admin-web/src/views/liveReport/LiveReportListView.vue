@@ -129,10 +129,6 @@ function goCreate() {
   void router.push("/live-reports/new");
 }
 
-function canEdit(r: LiveReport) {
-  return r.status === "rejected" || (r.status === "passed" && r.boundLiveCount === 0);
-}
-
 /** 待审核 / 已通过 / 已驳回均可进入去审核（契约 §4） */
 function canAudit(r: LiveReport) {
   return r.status === "pending" || r.status === "passed" || r.status === "rejected";
@@ -378,14 +374,6 @@ onMounted(fetchList);
               >
                 查看
               </RouterLink>
-              <button
-                type="button"
-                class="op-link"
-                :disabled="!canEdit(row)"
-                @click="router.push(`/live-reports/edit/${row.id}`)"
-              >
-                编辑
-              </button>
               <button
                 type="button"
                 class="op-link"

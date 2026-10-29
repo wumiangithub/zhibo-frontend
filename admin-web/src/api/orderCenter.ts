@@ -41,6 +41,12 @@ export interface OrderCenterProduct {
   productWind?: number;
   /** 上架 SKU 数 */
   validSkuCount?: number;
+  /**
+   * 订单中心是否返回了非空 `skuList`。
+   * `false`：字段缺失或 `[]`，直播选品只展示、不可绑定。
+   * 未经过列表/详情映射的本站快照不带此字段。
+   */
+  hasSkuList?: boolean;
   /** 带有效活动价的 SKU 数 */
   validActivityCount?: number;
   /** 商品简称（详情 productShortname；列表无此字段） */
@@ -170,6 +176,8 @@ function mapProduct(row: unknown): OrderCenterProduct | null {
     typeof o.productName === "string" ? o.productName.trim() : String(o.productName ?? "").trim();
   if (!spuId || !productName) return null;
   const { validSku, validActivity } = countSkus(o.skuList);
+  // 无 skuList 或 []：选品弹窗只展示、不可绑定（见 canBindOrderCenterProduct）
+  const hasSkuList = Array.isArray(o.skuList) && o.skuList.length > 0;
   const teachers = mapIdNameList(o.teachers);
   // 兼容旧 teacherNames: string[]；新接口优先 teachers
   let teacherNames = joinNames(teachers);
@@ -195,6 +203,7 @@ function mapProduct(row: unknown): OrderCenterProduct | null {
     status: normalizeProductStatus(o.status),
     productWind: typeof o.productWind === "number" ? o.productWind : undefined,
     validSkuCount: validSku,
+    hasSkuList,
     validActivityCount: validActivity,
     productAlias:
       asOptionalString(o.productAlias) ??
@@ -238,6 +247,17 @@ export function orderCenterShelfLabel(status: number | string | undefined): stri
 /** 是否上架：仅 status === 3 */
 export function isOrderCenterOnShelf(status: number | string | undefined): boolean {
   return normalizeProductStatus(status) === ORDER_CENTER_PRODUCT_STATUS.ON_SHELF;
+}
+
+/**
+ * 直播选品是否允许绑定。
+ * `hasSkuList === false`（skuList 缺失或 []）不可绑；未映射的本站快照不带该字段，保留已关联。
+ */
+export function canBindOrderCenterProduct(
+  p: Pick<OrderCenterProduct, "hasSkuList">,
+): boolean {
+  if (p.hasSkuList === undefined) return true;
+  return p.hasSkuList === true;
 }
 
 async function salerAccessToken(): Promise<string> {

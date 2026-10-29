@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { ElMessage, ElOption, ElSelect } from "element-plus";
-import { listSalerProducts, type OrderCenterProduct } from "@/api/orderCenter";
+import {
+  canBindOrderCenterProduct,
+  listSalerProducts,
+  type OrderCenterProduct,
+} from "@/api/orderCenter";
 import { useMarkDirty } from "@/composables/useLeaveConfirm";
 import FormRow from "../components/FormRow.vue";
 import type { LiveFormState } from "../composables/useLiveForm";
@@ -29,8 +33,17 @@ async function loadProducts() {
 }
 
 function onProductChange(spuIds: string[]) {
-  const nextIds = spuIds.slice(0, 20);
   const prevIds = form.products.map((p) => p.spuId);
+  const prevSet = new Set(prevIds);
+  const blockedNew = spuIds.filter((id) => {
+    if (prevSet.has(id)) return false;
+    const hit = options.value.find((p) => p.spuId === id);
+    return !!hit && !canBindOrderCenterProduct(hit);
+  });
+  if (blockedNew.length) {
+    ElMessage.warning("无 SKU 的商品不可绑定");
+  }
+  const nextIds = spuIds.filter((id) => !blockedNew.includes(id)).slice(0, 20);
   // 选项异步加载 / 重渲染时 ElSelect 可能无差异回发
   if (
     nextIds.length === prevIds.length &&
@@ -57,7 +70,7 @@ onMounted(() => {
 <template>
   <FormRow
     label="关联商品:"
-    info="商品名称按保存时快照写入本站；最多 20 个"
+    info="商品名称按保存时快照写入本站；最多 20 个。无 SKU 的商品不可选"
   >
     <div>
       <div class="flex items-center gap-3">
@@ -79,7 +92,16 @@ onMounted(() => {
             :key="p.spuId"
             :label="p.productName"
             :value="p.spuId"
-          />
+            :disabled="!canBindOrderCenterProduct(p)"
+          >
+            <span :class="{ 'is-unbindable': !canBindOrderCenterProduct(p) }">
+              {{ p.productName }}
+              <span
+                v-if="!canBindOrderCenterProduct(p)"
+                class="sku-hint"
+              >无SKU</span>
+            </span>
+          </ElOption>
         </ElSelect>
         <a
           class="link"
@@ -106,6 +128,15 @@ onMounted(() => {
   margin: 8px 0 0;
   font-size: 12px;
   color: #cf1322;
+}
+.is-unbindable {
+  color: #a8abb2;
+  cursor: not-allowed;
+}
+.sku-hint {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #c0c4cc;
 }
 :deep(.form-row) {
   margin-bottom: 18px;

@@ -27,7 +27,6 @@ export interface AudienceListItem {
   importTime?: string;
   tagIds: number[];
   tagLabels: string[];
-  stayDurationSec: number;
   totalWatchDurationSec: number;
   liveWatchDurationSec: number;
   replayWatchDurationSec: number;

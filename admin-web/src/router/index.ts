@@ -37,10 +37,10 @@ const router = createRouter({
           component: () => import("@/views/liveReport/LiveReportListView.vue"),
         },
         {
-          /** D62：动作在前、单业务 id 在末尾 */
+          /** 创建后不可再编辑；旧书签打开详情 */
           path: "live-reports/edit/:id",
           name: "live-report-edit",
-          component: () => import("@/views/liveReport/LiveReportFormView.vue"),
+          redirect: (to) => ({ name: "live-report-detail", params: { id: to.params.id } }),
         },
         {
           /** D62：动作在前、单业务 id 在末尾 */

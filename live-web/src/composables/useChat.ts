@@ -17,6 +17,11 @@ export interface ChatOptions {
   getActivityId?: () => string;
   /** 可选 viewer.id（已登录观众） */
   getViewerId?: () => number | null;
+  /**
+   * 无 viewerId 且未假验证时想发言：观看页跳小程序登录。
+   * 不传则仍弹假验证框（中控台沿用 T11.2）。
+   */
+  onUnauthenticatedChat?: () => void;
 }
 
 /**
@@ -137,7 +142,23 @@ export function useChat(options: ChatOptions) {
   }
 
   function isVerified(): boolean {
+    // 小程序 web-view 已带 viewerId：身份已定，跳过 T11.2 假验证弹窗
+    if (options.getViewerId?.() != null) return true;
+    // 观看页强制登录：不认假验证 localStorage，避免游客靠旧标记绕过
+    if (options.onUnauthenticatedChat) return false;
     return localStorage.getItem(VERIFY_KEY) === "1";
+  }
+
+  /** 未通过身份时：观看页走登录回调，中控台仍弹假验证 */
+  function gateUnauthenticated(): boolean {
+    if (isVerified()) return true;
+    if (options.onUnauthenticatedChat) {
+      chat.showVerifyDialog = false;
+      options.onUnauthenticatedChat();
+      return false;
+    }
+    chat.showVerifyDialog = true;
+    return false;
   }
 
   /** 把 template ref / 组件实例收成可 focus 的 DOM 节点 */
@@ -156,15 +177,14 @@ export function useChat(options: ChatOptions) {
     return null;
   }
 
-  /** 输入框聚焦即视为想发言：未验证先抢回焦点再弹验证框 */
+  /** 输入框聚焦即视为想发言：有 viewerId 直接聚焦；否则登录跳转或假验证 */
   function requestChatFocus(el: unknown) {
     const input = resolveFocusEl(el);
     if (chat.isChatMuted) return;
-    if (isVerified()) {
+    if (gateUnauthenticated()) {
       input?.focus();
     } else {
       input?.blur();
-      chat.showVerifyDialog = true;
     }
   }
 
@@ -186,6 +206,7 @@ export function useChat(options: ChatOptions) {
     const msg = chat.chatInput.trim();
     const sdk = getSdk();
     if (!msg || !sdk || chat.isChatMuted || msg.length > MAX_LEN) return;
+    if (!gateUnauthenticated()) return;
     try {
       sdk.chat.sendChat(msg);
       const sender = getSender();

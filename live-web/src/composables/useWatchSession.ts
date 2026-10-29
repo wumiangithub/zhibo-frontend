@@ -11,22 +11,25 @@ import { useChat } from "@/composables/useChat";
 import { useRoomStats } from "@/composables/useRoomStats";
 import { usePlayerControls } from "@/composables/usePlayerControls";
 import { useAnnouncement } from "@/composables/useAnnouncement";
-import { useAttendance, type AttendanceRole } from "@/composables/useAttendance";
 import { createWatchAdapter } from "@/live/createWatchAdapter";
 import type { WatchAdapter } from "@/live/WatchAdapter";
 import { formatSdkError } from "@/utils/sdk";
+import { getViewerId } from "@/utils/viewerAuth";
 import { useToast } from "@/composables/useToast";
+import { useReplayWatch } from "@/composables/useReplayWatch";
 
 export interface WatchSessionOptions {
   activityId: MaybeRefOrGetter<string>;
-  role: AttendanceRole;
-  /** SDK / 进入上报用昵称 */
+  /** SDK 昵称 */
   getNickname: () => string;
-  /** 认出自己 Join 的候选昵称 */
-  getMatchNicknames: () => string[];
-  /** 进出推送额外回调（如中控台名单本地改在线态） */
+  /** SDK 进出推送（中控台名单本地改在线态）。不写库，落库只走微吼回调。 */
   onPresenceOnline?: (msg: VhallUserPresenceMessage) => void;
   onPresenceOffline?: (msg: VhallUserPresenceMessage) => void;
+  /**
+   * 观看页：无 viewerId 时点聊天跳登录。
+   * 中控台不传，继续假验证弹窗。
+   */
+  onUnauthenticatedChat?: () => void;
 }
 
 function resolveId(id: MaybeRefOrGetter<string>): string {
@@ -34,8 +37,8 @@ function resolveId(id: MaybeRefOrGetter<string>): string {
 }
 
 /**
- * 观看页与中控台共用：拉 /sdk、init 适配器、播放/聊天/弹幕/点赞/公告/进出上报。
- * 页面只负责布局壳与角色差异（viewer / assistant）。
+ * 观看页与中控台共用：拉 /sdk、init 适配器、播放/聊天/弹幕/点赞/公告。
+ * 观众上下线落库不在这里：生产靠微吼回调，本地靠观看页按钮模拟回调。
  */
 export function useWatchSession(opts: WatchSessionOptions) {
   const { toast } = useToast();
@@ -71,61 +74,81 @@ export function useWatchSession(opts: WatchSessionOptions) {
     }),
     onIncoming: (msg) => barrage.spawnDanmaku(msg.msg),
     getActivityId: () => resolveId(opts.activityId),
-    getViewerId: () => {
-      try {
-        const raw = localStorage.getItem("viewerId");
-        if (!raw) return null;
-        const n = Number(raw);
-        return Number.isInteger(n) && n > 0 ? n : null;
-      } catch {
-        return null;
-      }
-    },
+    getViewerId: () => getViewerId(),
+    onUnauthenticatedChat: opts.onUnauthenticatedChat,
   });
   const stats = useRoomStats(getSdk);
   const notice = useAnnouncement(getSdk);
+  const replayWatch = useReplayWatch({
+    activityId: () => resolveId(opts.activityId),
+    active: () => {
+      const d = data.value;
+      if (!d || d.playbackEnabled === false) return false;
+      return d.state === 3 || d.state === 4 || d.state === 5;
+    },
+  });
   const player = usePlayerControls({
     getSdk,
     onError: (msg) => {
       error.value = msg;
     },
+    onUserPlay: () => replayWatch.onPlay(),
+    onUserPause: () => replayWatch.onPause(),
+    onMediaEnded: () => replayWatch.onEnded(),
   });
-  const attendance = useAttendance(() => {
-    if (!data.value) return null;
-    // 进出推送里的 sender_id 常为 visit_v*，对不上本站 guestId；主要靠昵称认自己。
-    // 跳过填昵称时 SDK username 默认为「观众」，必须纳入匹配，否则永远不上报 enter。
-    const storedNick = opts.getNickname().trim();
-    const sdkNick = data.value.nickname?.trim() || data.value.sdk?.username?.trim() || "";
-    const matchNicknames = [
-      ...opts.getMatchNicknames(),
-      storedNick,
-      sdkNick,
-      "观众",
-    ].filter((n, i, arr) => !!n && arr.indexOf(n) === i);
-    return {
-      activityId: resolveId(opts.activityId),
-      provider: data.value.provider,
-      guestId: data.value.guestId || getStoredGuestId(),
-      nickname: storedNick || sdkNick || "观众",
-      matchNicknames,
-      role: opts.role,
-    };
-  });
-
   const isLive = computed(() => data.value?.state === 1);
   const isPreview = computed(() => data.value?.state === 2);
   const isEnded = computed(() => data.value?.state === 3);
   const isReplay = computed(() => data.value?.state === 4 || data.value?.state === 5);
   const isAudioLive = computed(() => data.value?.type === 1);
+  const canPlayReplay = computed(() => {
+    if (!data.value) return false;
+    if (data.value.playbackEnabled === false) return false;
+    return isEnded.value || isReplay.value;
+  });
   const sdkReady = computed(() => !!adapter?.getSdk() && !sdkFailed.value && isLive.value);
 
-  function buildWatchParams(): { guestId?: string; nickname?: string } {
-    const params: { guestId?: string; nickname?: string } = {};
+  function shouldInitSdk(res: WatchSdkData): boolean {
+    if (res.state === 1 || res.state === 2) return true;
+    if (res.playbackEnabled === false) return false;
+    return res.state === 3 || res.state === 4 || res.state === 5;
+  }
+
+  /** 本次 SDK 实例用的观众 id。undefined 表示还没拉过签名 */
+  let sdkViewerId: number | null | undefined;
+  let accountTimer: ReturnType<typeof setInterval> | null = null;
+
+  function buildWatchParams(): { guestId?: string; nickname?: string; viewerId?: number } {
+    const params: { guestId?: string; nickname?: string; viewerId?: number } = {};
     const guestId = getStoredGuestId();
     const nickname = opts.getNickname().trim();
+    const viewerId = getViewerId();
     if (guestId) params.guestId = guestId;
+    if (viewerId != null) params.viewerId = viewerId;
+    // 小程序 URL 已带展示昵称；有 viewerId 时一并传给 /watch/sdk 作 sdk.username（勿再拉 user-info）
     if (nickname) params.nickname = nickname;
     return params;
+  }
+
+  /**
+   * 本地切换账号后 viewerId 变了：旧 VhallSDK 仍是上一个 email，必须拆掉再 new。
+   * email 在签名里，所以要重新请求 /sdk，不能只改构造参数。
+   */
+  function reloadIfViewerChanged() {
+    if (sdkViewerId === undefined || loading.value) return;
+    if (getViewerId() === sdkViewerId) return;
+    void load();
+  }
+
+  function onViewerStorage(ev: StorageEvent) {
+    if (ev.key != null && ev.key !== "viewerId") return;
+    reloadIfViewerChanged();
+  }
+
+  window.addEventListener("storage", onViewerStorage);
+  window.addEventListener("focus", reloadIfViewerChanged);
+  if (import.meta.env.DEV) {
+    accountTimer = setInterval(reloadIfViewerChanged, 1000);
   }
 
   function handleLiveStart() {
@@ -192,7 +215,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
           // 可恢复：AUTO_RETRY_RETRYABLE_SDK=true，或用户点遮罩「刷新」/「切换嵌入」。
           console.warn("[vhall-sdk] 可重试错误（已关闭自动 destroy 重拉）:", text);
           if (!AUTO_RETRY_RETRYABLE_SDK) return;
-          if (data.value?.state === 1 || data.value?.state === 2) {
+          if (data.value && shouldInitSdk(data.value)) {
             if (sdkRetryTimer) return;
             sdkRetryTimer = setTimeout(() => {
               sdkRetryTimer = null;
@@ -220,11 +243,9 @@ export function useWatchSession(opts: WatchSessionOptions) {
         onOnlinePopulation: stats.handleOnlinePopulation,
         onPraiseTotal: stats.handlePraiseTotal,
         onUserOnline: (msg) => {
-          void attendance.onUserOnline(msg);
           opts.onPresenceOnline?.(msg);
         },
         onUserOffline: (msg) => {
-          void attendance.onUserOffline(msg);
           opts.onPresenceOffline?.(msg);
         },
         afterInit: () => beginAfterInitSideEffects(epoch),
@@ -261,11 +282,13 @@ export function useWatchSession(opts: WatchSessionOptions) {
       const res = await getWatchSdk(resolveId(opts.activityId), buildWatchParams());
       storeGuestId(res.guestId);
       data.value = res;
-      if (res.state === 3 || res.state === 4 || res.state === 5) {
+      if (!shouldInitSdk(res)) {
         loading.value = false;
-        attendance.stopOnLiveEnded();
         stats.markLiveEnded();
         return;
+      }
+      if (res.state === 3 || res.state === 4 || res.state === 5) {
+        stats.markLiveEnded();
       }
       await initSdk();
     } catch (e) {
@@ -275,7 +298,6 @@ export function useWatchSession(opts: WatchSessionOptions) {
   }
 
   async function switchToEndedFromLive() {
-    attendance.stopOnLiveEnded();
     stats.markLiveEnded();
     player.resetPlayback();
     destroySdk();
@@ -290,9 +312,14 @@ export function useWatchSession(opts: WatchSessionOptions) {
         data.value = { id, state: 3, title: "", nickname: "", guestId: "" } as WatchSdkData;
       }
     }
+    if (data.value && shouldInitSdk(data.value)) {
+      await initSdk();
+    }
   }
 
   async function load() {
+    const requestedViewerId = getViewerId();
+    sdkViewerId = requestedViewerId;
     loading.value = true;
     error.value = "";
     sdkFailed.value = false;
@@ -300,22 +327,27 @@ export function useWatchSession(opts: WatchSessionOptions) {
     sdkRetryCount = 0;
     data.value = null;
     stopCountdown();
-    attendance.reset();
     stats.resetLiveEnded();
+    replayWatch.reset();
     destroySdk();
     try {
       const res = await getWatchSdk(resolveId(opts.activityId), buildWatchParams());
+      if (getViewerId() !== requestedViewerId) {
+        await load();
+        return;
+      }
       storeGuestId(res.guestId);
       data.value = res;
 
       if (res.state === 2 && res.startTime) {
         startCountdown(res.startTime);
-        await initSdk();
-      } else if (res.state === 1) {
+      }
+      if (shouldInitSdk(res)) {
+        if (res.state === 3 || res.state === 4 || res.state === 5) {
+          stats.markLiveEnded();
+        }
         await initSdk();
       } else {
-        // 结束/回放：名单仍可看，进出停报；实时在线强制 0
-        attendance.stopOnLiveEnded();
         stats.markLiveEnded();
         loading.value = false;
       }
@@ -347,8 +379,12 @@ export function useWatchSession(opts: WatchSessionOptions) {
   }
 
   function dispose() {
-    // SPA 卸载：刷 leave 队列并 leave 自己；整页刷新另有 pagehide keepalive
-    attendance.flushPending();
+    window.removeEventListener("storage", onViewerStorage);
+    window.removeEventListener("focus", reloadIfViewerChanged);
+    if (accountTimer) {
+      clearInterval(accountTimer);
+      accountTimer = null;
+    }
     stopCountdown();
     destroySdk();
   }
@@ -372,6 +408,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
     isPreview,
     isEnded,
     isReplay,
+    canPlayReplay,
     isAudioLive,
     sdkReady,
     load,

@@ -20,6 +20,7 @@ export interface SdkInitPayload {
   jqueryUrl?: string | null;
   /** 本站 guestId 回显；3.9.1 init 不要传 account（与 email 互斥） */
   account: string;
+  /** 已签名。有 viewerId 时为 `{id}@qkzb.com`，不要在前端改，否则签名失效 */
   email: string;
   username: string;
   webinarId: string;
@@ -42,11 +43,15 @@ export interface WatchSdkData {
   provider?: LiveProvider;
   sdk: SdkInitPayload;
   embedUrl: string;
+  /** 本站回放开关；结束态据此决定是否拉播放器。缺省当开启。 */
+  playbackEnabled?: boolean;
 }
 
 export interface WatchParams {
   guestId?: string;
   nickname?: string;
+  /** 当前观众数字 id。有值时后端把微吼 email 签成 `{id}@qkzb.com` */
+  viewerId?: number;
 }
 
 export interface WatchActivityItem {

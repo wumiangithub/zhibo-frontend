@@ -85,12 +85,6 @@ onMounted(load);
             >
               去审核
             </UiButton>
-            <UiButton
-              v-if="data.status === 'rejected' || (data.status === 'passed' && !data.boundLiveCount)"
-              @click="router.push(`/live-reports/edit/${data.id}`)"
-            >
-              编辑
-            </UiButton>
             <UiButton @click="audits = true">审核记录</UiButton>
             <UiButton @click="onDelete">删除</UiButton>
           </div>

@@ -152,7 +152,11 @@ function refreshReadyStatus() {
 
 function goLive() {
   if (!detail.value?.canBroadcast || timedHostUnsupported.value) return;
-  void router.push(buildLiveStudioPath(id.value, ActivityMemberRole.HOST));
+  window.open(
+    buildLiveStudioPath(id.value, ActivityMemberRole.HOST),
+    "_blank",
+    "noopener",
+  );
 }
 
 function goConsole() {

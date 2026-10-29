@@ -2,10 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { attributeAudience } from "@/api/audienceAttribute";
+import { getOrCreateDevSocketId, simulateDevPresence } from "@/api/devPresence";
 import {
   getStoredNickname,
   storeNickname,
 } from "@/api/watch";
+import { useToast } from "@/composables/useToast";
 import NicknameForm from "@/components/watch/NicknameForm.vue";
 import PreviewScreen from "@/components/watch/PreviewScreen.vue";
 import EndedScreen from "@/components/watch/EndedScreen.vue";
@@ -20,11 +22,26 @@ import { listViewerProductsForBoundSpus } from "@/api/orderCenter";
 import { useWatchSession } from "@/composables/useWatchSession";
 import { decodeAudienceInviteToken } from "@/utils/audienceInviteToken";
 import { pingViewerPresence } from "@/api/presence";
-import { isViewerLoggedIn } from "@/utils/viewerAuth";
+import {
+  getViewerId,
+  isViewerLoggedIn,
+  readNicknameFromSearch,
+  syncViewerIdFromUrl,
+} from "@/utils/viewerAuth";
+import { ensureWxJsSdk, navigateToViewerLogin } from "@/utils/miniProgram";
 
 const route = useRoute();
 const router = useRouter();
 const id = String(route.params.id);
+const { toast } = useToast();
+
+const routeQuery = route.query as Record<string, unknown>;
+/** 小程序 web-view：viewerId + nickname（展示规则串）写入本地，再拉 /watch/sdk */
+const syncedViewerId = syncViewerIdFromUrl(routeQuery);
+const urlNickname = readNicknameFromSearch(routeQuery);
+if (urlNickname) {
+  storeNickname(urlNickname);
+}
 
 const INVITE_STORAGE_PREFIX = "zhibo.audienceInvite.";
 
@@ -43,16 +60,7 @@ function captureInviteFromQuery() {
 }
 
 function tryAttributeInvite() {
-  let viewerId: number | null = null;
-  try {
-    const raw = localStorage.getItem("viewerId");
-    if (raw) {
-      const n = Number(raw);
-      if (Number.isInteger(n) && n > 0) viewerId = n;
-    }
-  } catch {
-    /* ignore */
-  }
+  const viewerId = getViewerId();
   if (viewerId == null) return;
   let payload: { kind: "employee"; inviterId: number } | null = null;
   try {
@@ -73,17 +81,18 @@ function tryAttributeInvite() {
   });
 }
 
-const showNicknameForm = ref(!getStoredNickname());
+/** 小程序已带 viewerId+nickname 时跳过随意昵称表单 */
+const showNicknameForm = ref(syncedViewerId == null && !getStoredNickname());
 const nicknameSaving = ref(false);
 const activeTab = ref<"chat" | "intro" | "barrage">("chat");
 
 const session = useWatchSession({
   activityId: id,
-  role: "viewer",
   getNickname: () => getStoredNickname().trim(),
-  getMatchNicknames: () => {
-    const nick = getStoredNickname().trim();
-    return nick ? [nick] : [];
+  onUnauthenticatedChat: () => {
+    void navigateToViewerLogin().then((ok) => {
+      if (!ok) toast("请先登录后再参与聊天");
+    });
   },
 });
 
@@ -104,6 +113,7 @@ const {
   isPreview,
   isEnded,
   isReplay,
+  canPlayReplay,
   isAudioLive,
   load,
   enterLiveFromPreview,
@@ -111,9 +121,44 @@ const {
   shareWatch,
 } = session;
 
+const hasViewerId = computed(() => getViewerId() != null);
+
 const displayNickname = computed(
-  () => data.value?.nickname || getStoredNickname() || "观众",
+  () =>
+    data.value?.nickname ||
+    (hasViewerId.value ? "" : getStoredNickname()) ||
+    "观众",
 );
+
+/** Vite 开发构建才显示。生产包里这两个按钮不存在。 */
+const showDevPresence = import.meta.env.DEV;
+const devPresenceBusy = ref(false);
+/** 点过上线后才露出离线；离线成功后回到上线。 */
+const devPresenceOnline = ref(false);
+
+async function simulatePresence(type: "Join" | "Leave") {
+  const email = (data.value?.sdk?.email || "").trim();
+  if (!email) {
+    toast("还没有观众身份，请先进入直播间");
+    return;
+  }
+  const socketId = getOrCreateDevSocketId(id);
+  devPresenceBusy.value = true;
+  try {
+    await simulateDevPresence(id, {
+      type,
+      email,
+      socketId,
+      nickname: displayNickname.value,
+    });
+    devPresenceOnline.value = type === "Join";
+    toast(type === "Join" ? "已模拟上线回调" : "已模拟离线回调");
+  } catch (e) {
+    toast(e instanceof Error ? e.message : "模拟回调失败");
+  } finally {
+    devPresenceBusy.value = false;
+  }
+}
 
 const cartOpen = ref(false);
 const cartLoading = ref(false);
@@ -208,6 +253,8 @@ function syncTabForViewport() {
 }
 
 onMounted(() => {
+  // 预热微信 JS-SDK，聊天跳登录时不必等首屏脚本
+  void ensureWxJsSdk().catch(() => {});
   captureInviteFromQuery();
   tryAttributeInvite();
   pingViewerPresence("live");
@@ -232,6 +279,34 @@ onBeforeUnmount(() => {
       />
 
       <template v-else>
+        <div
+          v-if="showDevPresence"
+          class="flex flex-none items-center gap-2 border-b border-amber-800 bg-amber-950 px-3 py-1.5 text-xs text-amber-100"
+        >
+          <span class="flex-none font-medium text-amber-300">本地开发</span>
+          <span class="hidden min-w-0 flex-1 truncate text-amber-200/80 sm:inline">
+            模拟微吼上下线回调
+          </span>
+          <button
+            v-if="!devPresenceOnline"
+            type="button"
+            class="rounded bg-emerald-700 px-2.5 py-1 text-white hover:bg-emerald-600 disabled:opacity-50"
+            :disabled="devPresenceBusy"
+            @click="simulatePresence('Join')"
+          >
+            上线
+          </button>
+          <button
+            v-else
+            type="button"
+            class="rounded bg-gray-700 px-2.5 py-1 text-white hover:bg-gray-600 disabled:opacity-50"
+            :disabled="devPresenceBusy"
+            @click="simulatePresence('Leave')"
+          >
+            离线
+          </button>
+        </div>
+
         <!-- PC 顶栏 -->
         <div class="hidden flex-none items-center justify-between gap-4 border-b border-gray-800 px-4 py-2 md:flex">
           <div class="flex min-w-0 items-center gap-2">
@@ -270,6 +345,7 @@ onBeforeUnmount(() => {
               昵称：<span class="text-gray-200">{{ displayNickname }}</span>
             </p>
             <button
+              v-if="!hasViewerId"
               class="bg-transparent text-xs text-gray-500 hover:text-gray-300"
               @click="changeNickname"
             >
@@ -328,12 +404,12 @@ onBeforeUnmount(() => {
         />
 
         <EndedScreen
-          v-else-if="data && (isEnded || isReplay)"
+          v-else-if="data && (isEnded || isReplay) && !canPlayReplay"
           :data="data"
         />
 
         <div
-          v-else-if="data && isLive"
+          v-else-if="data && (isLive || canPlayReplay)"
           class="flex min-h-0 flex-1 flex-col"
         >
           <div
@@ -420,7 +496,7 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
                 <!-- 小屏简介 Tab 也保留底栏（无头像）；点入口切回聊天 -->
-                <div class="flex flex-none items-center gap-2 border-t border-gray-800 px-3 py-2 md:hidden">
+                <div class="flex flex-none items-center gap-2 border-t border-gray-800 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] md:hidden">
                   <button
                     type="button"
                     class="min-w-0 flex-1 rounded-full bg-gray-800 px-3 py-2 text-left text-sm text-gray-500"

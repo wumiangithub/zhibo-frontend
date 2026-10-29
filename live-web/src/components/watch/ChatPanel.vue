@@ -222,7 +222,7 @@ function sendMobileChat() {
     </div>
 
     <!-- 小屏底栏：未聚焦=参与聊天+点赞；聚焦=表情+输入+发送（无头像；md 及以上隐藏） -->
-    <div class="flex flex-none items-center gap-2 border-t border-gray-800 bg-gray-900 px-3 py-2 md:hidden">
+    <div class="flex flex-none items-center gap-2 border-t border-gray-800 bg-gray-900 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] md:hidden">
       <!-- 发送态：左侧表情 -->
       <div
         v-if="mobileComposerActive"

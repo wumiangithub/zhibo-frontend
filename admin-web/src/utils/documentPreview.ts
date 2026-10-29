@@ -3,6 +3,7 @@ import { isTosCdnConfigured, rewriteTosUrlToCdn } from "@/utils/tosUpload";
 
 const OFFICE_EXT = /\.(docx?)$/i;
 const PDF_EXT = /\.pdf$/i;
+const TXT_EXT = /\.txt$/i;
 
 /** 新窗口打开文档预览；依赖 `VITE_APP_TOS_CDN_URL`（原生桶强制 attachment，无法在线看） */
 export function previewDocument(url: string, fileName?: string): void {
@@ -19,7 +20,7 @@ export function previewDocument(url: string, fileName?: string): void {
   const accessUrl = rewriteTosUrlToCdn(raw);
   const name = (fileName || accessUrl.split("?")[0] || "").toLowerCase();
 
-  if (PDF_EXT.test(name)) {
+  if (PDF_EXT.test(name) || TXT_EXT.test(name)) {
     window.open(accessUrl, "_blank", "noopener,noreferrer");
     return;
   }

@@ -202,7 +202,6 @@ async function loadFilterTags() {
 
 function onSortChange(payload: { prop: string; order: string | null }) {
   const map: Record<string, string> = {
-    stayDurationSec: "stayDuration",
     totalWatchDurationSec: "totalWatchDuration",
     liveWatchDurationSec: "liveWatchDuration",
     replayWatchDurationSec: "replayWatchDuration",
@@ -711,6 +710,15 @@ onUnmounted(() => {
           </template>
         </ElTableColumn>
         <ElTableColumn
+          label="导入人"
+          min-width="120"
+        >
+          <template #default="{ row }">
+            <span v-if="row.importerName">{{ row.importerName }}</span>
+            <span v-else>—</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
           label="标签"
           min-width="140"
         >
@@ -733,35 +741,60 @@ onUnmounted(() => {
           </template>
         </ElTableColumn>
         <ElTableColumn
-          prop="stayDurationSec"
-          label="直播间停留时长"
+          prop="totalWatchDurationSec"
           width="168"
           sortable="custom"
         >
-          <template #default="{ row }">{{ formatDurationSec(row.stayDurationSec) }}</template>
-        </ElTableColumn>
-        <ElTableColumn
-          prop="totalWatchDurationSec"
-          label="累计观看时长"
-          width="148"
-          sortable="custom"
-        >
+          <template #header>
+            <span class="th-with-tip">
+              累计观看时长
+              <ElTooltip
+                content="用户观看直播的时长，播放时计算。统计直播中 + 直播回放，开播前不算。"
+                placement="top"
+                :show-after="200"
+              >
+                <ElIcon class="info-icon"><InfoFilled /></ElIcon>
+              </ElTooltip>
+            </span>
+          </template>
           <template #default="{ row }">{{ formatDurationSec(row.totalWatchDurationSec) }}</template>
         </ElTableColumn>
         <ElTableColumn
           prop="liveWatchDurationSec"
-          label="直播观看时长"
-          width="148"
+          width="168"
           sortable="custom"
         >
+          <template #header>
+            <span class="th-with-tip">
+              直播观看时长
+              <ElTooltip
+                content="用户观看直播的时长，播放时计算。只统计直播中，不包括开播前和回放。"
+                placement="top"
+                :show-after="200"
+              >
+                <ElIcon class="info-icon"><InfoFilled /></ElIcon>
+              </ElTooltip>
+            </span>
+          </template>
           <template #default="{ row }">{{ formatDurationSec(row.liveWatchDurationSec) }}</template>
         </ElTableColumn>
         <ElTableColumn
           prop="replayWatchDurationSec"
-          label="回放观看时长"
-          width="148"
+          width="168"
           sortable="custom"
         >
+          <template #header>
+            <span class="th-with-tip">
+              回放观看时长
+              <ElTooltip
+                content="用户观看直播的时长，播放时计算。只统计回放。"
+                placement="top"
+                :show-after="200"
+              >
+                <ElIcon class="info-icon"><InfoFilled /></ElIcon>
+              </ElTooltip>
+            </span>
+          </template>
           <template #default="{ row }">{{ formatDurationSec(row.replayWatchDurationSec) }}</template>
         </ElTableColumn>
         <ElTableColumn
@@ -1186,6 +1219,16 @@ onUnmounted(() => {
   margin-left: auto;
   font-size: 13px;
   color: var(--el-text-color-regular, #606266);
+}
+.th-with-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.th-with-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .info-icon {
   font-size: 14px;

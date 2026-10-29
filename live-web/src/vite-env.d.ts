@@ -1,10 +1,6 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_ATTENDANCE_CLIENT_REPORT?: string;
-  readonly VITE_ATTENDANCE_LEAVE_THROTTLE_MS?: string;
-  readonly VITE_ATTENDANCE_LEAVE_LAST_VIEWER?: string;
-  readonly VITE_ATTENDANCE_LEAVE_ASSISTANT?: string;
   /** 订单中心根地址（无尾斜杠）；开发代理目标 / 构建直连 */
   readonly VITE_ORDER_CENTER_BASE_URL?: string;
 }
@@ -133,9 +129,10 @@ interface VhallUserPresenceData {
 /**
  * 微吼 `$on("userOnline")` / `$on("userOffline")` 共用回调体。
  * 上线日志「用户上线消息」，下线日志「用户下线事件消息」；service_type 都是 service_online。
- * 用户 id：`sender_id`；时间：`date_time`（yyyy-MM-dd HH:mm:ss）；昵称/头像在 `context`。
+ * 本站认人读顶层 `email`（D85），不读 `sender_id`（微吼访客 id，样例 `visit_v…`）。
+ * 时间：`date_time`（yyyy-MM-dd HH:mm:ss）；昵称/头像在 `context`。
  * 进入看 `data.type === "Join"`，离开看 `data.type === "Leave"`。
- * 辅通道 enter/leave 的 `mid` 由前端按 `{activityId}_{userId}_{enterTime|leaveTime到分}` 拼接（去掉秒），不用本消息的 `msg_id`。
+ * 这些推送只给中控台本地改名单展示；落库走微吼回调，不由前端上报。
  */
 interface VhallUserPresenceMessage {
   app_id: string;
@@ -149,6 +146,8 @@ interface VhallUserPresenceMessage {
   msg_id: string;
   msg_source: string;
   sender_id: string;
+  /** 观看签名邮箱。中控台据此解析 userId；缺失或对不上三种形态则忽略本条。 */
+  email?: string;
   service_type: "service_online";
   uv: number;
   pv: number;
