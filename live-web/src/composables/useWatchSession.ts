@@ -84,7 +84,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
     active: () => {
       const d = data.value;
       if (!d || d.playbackEnabled === false) return false;
-      return d.state === 3 || d.state === 4 || d.state === 5;
+      // 仅点播/回放态计时长；纯结束态（state=3）出结束页，不启回放心跳
+      return d.state === 4 || d.state === 5;
     },
   });
   const player = usePlayerControls({
@@ -101,17 +102,19 @@ export function useWatchSession(opts: WatchSessionOptions) {
   const isEnded = computed(() => data.value?.state === 3);
   const isReplay = computed(() => data.value?.state === 4 || data.value?.state === 5);
   const isAudioLive = computed(() => data.value?.type === 1);
+  /** 回放播放器：仅 state 4/5 且本站开启回放。state=3 一律结束页（回放未就绪或刚 live_over） */
   const canPlayReplay = computed(() => {
     if (!data.value) return false;
     if (data.value.playbackEnabled === false) return false;
-    return isEnded.value || isReplay.value;
+    return isReplay.value;
   });
   const sdkReady = computed(() => !!adapter?.getSdk() && !sdkFailed.value && isLive.value);
 
   function shouldInitSdk(res: WatchSdkData): boolean {
     if (res.state === 1 || res.state === 2) return true;
     if (res.playbackEnabled === false) return false;
-    return res.state === 3 || res.state === 4 || res.state === 5;
+    // state=3：结束页，不 init（避免默认 playbackEnabled=true 时卡在「播放器加载中」）
+    return res.state === 4 || res.state === 5;
   }
 
   /** 本次 SDK 实例用的观众 id。undefined 表示还没拉过签名 */
@@ -287,7 +290,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
         stats.markLiveEnded();
         return;
       }
-      if (res.state === 3 || res.state === 4 || res.state === 5) {
+      if (res.state === 4 || res.state === 5) {
         stats.markLiveEnded();
       }
       await initSdk();
@@ -297,6 +300,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
     }
   }
 
+  /** live_over：立刻切结束页，不顺手再 init 回放（契约：立刻切结束态） */
   async function switchToEndedFromLive() {
     stats.markLiveEnded();
     player.resetPlayback();
@@ -304,7 +308,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
     const id = resolveId(opts.activityId);
     try {
       const res = await getWatchSdk(id, buildWatchParams());
-      data.value = { ...res, state: res.state === 1 ? 3 : res.state };
+      // 强制 state=3 出 EndedScreen；刷新后再按云侧 4/5 进回放
+      data.value = { ...res, state: 3 };
     } catch {
       if (data.value) {
         data.value = { ...data.value, state: 3 };
@@ -312,9 +317,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
         data.value = { id, state: 3, title: "", nickname: "", guestId: "" } as WatchSdkData;
       }
     }
-    if (data.value && shouldInitSdk(data.value)) {
-      await initSdk();
-    }
+    loading.value = false;
   }
 
   async function load() {
@@ -343,11 +346,12 @@ export function useWatchSession(opts: WatchSessionOptions) {
         startCountdown(res.startTime);
       }
       if (shouldInitSdk(res)) {
-        if (res.state === 3 || res.state === 4 || res.state === 5) {
+        if (res.state === 4 || res.state === 5) {
           stats.markLiveEnded();
         }
         await initSdk();
       } else {
+        // state=3 或回放关闭的 4/5：出结束页，不挂播放器
         stats.markLiveEnded();
         loading.value = false;
       }

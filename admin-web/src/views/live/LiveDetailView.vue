@@ -7,6 +7,7 @@ import {
   ActivityReady,
   activityReadyLabel,
   getActivity,
+  LIVE_STATE_LABEL,
   type ActivityDetail,
   type ActivityId,
 } from "@/api/activity";
@@ -91,6 +92,17 @@ const timeRange = computed(() => {
       : "";
   return end ? `${start} 至 ${end}` : start;
 });
+
+const stateLabel = computed(() => {
+  const state = detail.value?.state;
+  if (state == null) return "";
+  return LIVE_STATE_LABEL[state] ?? String(state);
+});
+
+/** 与列表页一致：仅「直播中」亮绿点，其余灰点 */
+function stateDotClass(state: number) {
+  return state === 1 ? "dot--green" : "dot--grey";
+}
 
 function currentDirtyTab(): DirtyTab | null {
   if (activeTab.value === "basic") {
@@ -207,6 +219,16 @@ watch(id, fetchDetail);
           <div class="summary-info">
             <h1 class="summary-title">
               {{ detail.title }}
+              <span
+                v-if="stateLabel"
+                class="state-badge"
+              >
+                <i
+                  class="dot"
+                  :class="stateDotClass(detail.state)"
+                />
+                {{ stateLabel }}
+              </span>
               <span
                 v-if="detail.type === 4"
                 class="ready-badge"
@@ -432,6 +454,27 @@ watch(id, fetchDetail);
   font-weight: 600;
   color: var(--color-text);
   line-height: 1.4;
+}
+.state-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  line-height: 1;
+}
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #bfbfbf;
+}
+.dot--green {
+  background: #52c41a;
+}
+.dot--grey {
+  background: #bfbfbf;
 }
 .ready-badge {
   font-size: 14px;
