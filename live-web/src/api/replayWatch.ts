@@ -3,6 +3,12 @@ import { getViewerAccessToken, isViewerLoggedIn } from "@/utils/viewerAuth";
 
 export interface WatchRecordItem {
   id: number;
+  title?: string;
+  duration?: string;
+  coverUrl?: string;
+  /** 本站 TOS/CDN；直接作 video src */
+  tosUrl?: string;
+  createdTime?: string;
 }
 
 export interface WatchRecordListData {

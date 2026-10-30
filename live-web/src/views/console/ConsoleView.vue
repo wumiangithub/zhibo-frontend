@@ -298,6 +298,7 @@ onMounted(() => {
         <EndedScreen
           v-else-if="data && (isEnded || isReplay)"
           :data="data"
+          :show-replay-entry="false"
         />
         <PlayerStage
           v-else-if="data && isLive"

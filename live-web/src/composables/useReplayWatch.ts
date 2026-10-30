@@ -2,7 +2,6 @@ import { onBeforeUnmount, unref, type MaybeRefOrGetter } from "vue";
 import {
   heartbeatReplayWatch,
   heartbeatReplayWatchKeepalive,
-  listWatchRecords,
   startReplayWatch,
 } from "@/api/replayWatch";
 import { isViewerLoggedIn } from "@/utils/viewerAuth";
@@ -11,7 +10,9 @@ const HEARTBEAT_MS = 3 * 60 * 1000;
 
 export interface ReplayWatchOptions {
   activityId: MaybeRefOrGetter<string>;
-  /** 结束/回放且本站回放开启时为 true */
+  /** 当前所选云侧回放 id；无效则不 start */
+  recordId: () => number | null;
+  /** 回放页激活且本站回放开启时为 true */
   active: () => boolean;
 }
 
@@ -62,21 +63,24 @@ export function useReplayWatch(opts: ReplayWatchOptions) {
 
   async function onPlay() {
     if (!opts.active()) return;
-    if (!isViewerLoggedIn()) return;
+    if (!isViewerLoggedIn()) {
+      // 与是否微吼无关：缺 H5 JWT 时静默跳过；小程序须在 web-view URL 注入 viewerAccessToken
+      console.warn("回放 start 跳过：H5 无观众 JWT（localStorage.viewerAccessToken）");
+      return;
+    }
     if (socketId) {
       startTimer();
       return;
     }
     if (starting) return;
+    const recordId = opts.recordId();
+    if (recordId == null || recordId <= 0) {
+      console.warn("回放 start 跳过：没有 recordId");
+      return;
+    }
     starting = true;
     try {
-      const records = await listWatchRecords(activityId());
-      const recordId = records.list?.find((row) => Number(row.id) > 0)?.id;
-      if (recordId == null) {
-        console.warn("回放 start 跳过：没有 recordId");
-        return;
-      }
-      const res = await startReplayWatch(activityId(), Number(recordId));
+      const res = await startReplayWatch(activityId(), recordId);
       const sid = res.socketId?.trim() ?? "";
       if (!sid) return;
       socketId = sid;

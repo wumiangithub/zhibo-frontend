@@ -43,8 +43,16 @@ export interface WatchSdkData {
   provider?: LiveProvider;
   sdk: SdkInitPayload;
   embedUrl: string;
-  /** 本站回放开关；结束态据此决定是否拉播放器。缺省当开启。 */
+  /** 本站回放开关；结束态据此决定是否展示「查看回放」。缺省当开启。 */
   playbackEnabled?: boolean;
+  playbackValidityType?: "forever" | "days" | string;
+  playbackValidityDays?: number;
+  /** 是否已超过回放有效期 */
+  playbackExpired?: boolean;
+  /** 是否允许倍速 */
+  playbackSpeedAllow?: boolean;
+  /** 是否允许快进/拖进度 */
+  playbackFastForwardAllow?: boolean;
 }
 
 export interface WatchParams {

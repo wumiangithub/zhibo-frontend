@@ -1,4 +1,4 @@
-/** 与小程序 utils/auth.js 同键，便于日后 H5 登录或 web-view 注入共用。 */
+/** 与小程序 utils/auth.js 同键，便于 H5 登录或 web-view 注入共用。 */
 const ACCESS_KEY = "viewerAccessToken";
 const VIEWER_ID_KEY = "viewerId";
 
@@ -8,6 +8,17 @@ export function getViewerAccessToken(): string {
     return localStorage.getItem(ACCESS_KEY)?.trim() || "";
   } catch {
     return "";
+  }
+}
+
+/** 写入观众 access（小程序 web-view URL 注入后落本地）。 */
+export function setViewerAccessToken(token: string): void {
+  const t = token.trim();
+  if (!t) return;
+  try {
+    localStorage.setItem(ACCESS_KEY, t);
+  } catch {
+    /* ignore */
   }
 }
 
@@ -79,6 +90,48 @@ export function syncViewerIdFromUrl(
     return fromUrl;
   }
   return getViewerId();
+}
+
+/**
+ * 小程序 web-view 须带 `viewerAccessToken`（观众 JWT），H5 写入 localStorage 后
+ * 才能调需鉴权接口（如 `replay/start`）。读到后从地址栏去掉该参数，降低残留。
+ * 兼容别名 `accessToken`。
+ */
+export function syncViewerAccessTokenFromUrl(
+  query?: Record<string, unknown> | { [key: string]: unknown },
+): string {
+  const fromUrl =
+    queryParam(query, "viewerAccessToken") || queryParam(query, "accessToken");
+  if (fromUrl) {
+    setViewerAccessToken(fromUrl);
+    stripAccessTokenFromLocation();
+    return fromUrl;
+  }
+  return getViewerAccessToken();
+}
+
+/** 是否应从路由转发中排除（避免 SPA 跳转把 JWT 再写进 query）。 */
+export function isViewerAuthQueryKey(key: string): boolean {
+  return key === "viewerAccessToken" || key === "accessToken";
+}
+
+function stripAccessTokenFromLocation(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const url = new URL(window.location.href);
+    let dirty = false;
+    for (const key of ["viewerAccessToken", "accessToken"]) {
+      if (url.searchParams.has(key)) {
+        url.searchParams.delete(key);
+        dirty = true;
+      }
+    }
+    if (!dirty) return;
+    const next = url.pathname + (url.search || "") + url.hash;
+    window.history.replaceState(window.history.state, "", next);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function isViewerLoggedIn(): boolean {

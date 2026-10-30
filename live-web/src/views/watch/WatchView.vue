@@ -11,6 +11,7 @@ import { useToast } from "@/composables/useToast";
 import NicknameForm from "@/components/watch/NicknameForm.vue";
 import PreviewScreen from "@/components/watch/PreviewScreen.vue";
 import EndedScreen from "@/components/watch/EndedScreen.vue";
+import RecordPickerSheet from "@/components/watch/RecordPickerSheet.vue";
 import PlayerStage from "@/components/watch/PlayerStage.vue";
 import ChatPanel from "@/components/watch/ChatPanel.vue";
 import BarragePanel from "@/components/watch/BarragePanel.vue";
@@ -19,13 +20,16 @@ import ProductSheet, {
 } from "@/components/watch/ProductSheet.vue";
 import { listWatchProducts } from "@/api/watchProducts";
 import { listViewerProductsForBoundSpus } from "@/api/orderCenter";
+import { listWatchRecords, type WatchRecordItem } from "@/api/replayWatch";
 import { useWatchSession } from "@/composables/useWatchSession";
 import { decodeAudienceInviteToken } from "@/utils/audienceInviteToken";
 import { pingViewerPresence } from "@/api/presence";
 import {
   getViewerId,
   isViewerLoggedIn,
+  isViewerAuthQueryKey,
   readNicknameFromSearch,
+  syncViewerAccessTokenFromUrl,
   syncViewerIdFromUrl,
 } from "@/utils/viewerAuth";
 import { ensureWxJsSdk, navigateToViewerLogin } from "@/utils/miniProgram";
@@ -36,8 +40,9 @@ const id = String(route.params.id);
 const { toast } = useToast();
 
 const routeQuery = route.query as Record<string, unknown>;
-/** 小程序 web-view：viewerId + nickname（展示规则串）写入本地，再拉 /watch/sdk */
+/** 小程序 web-view：viewerId + JWT + nickname 写入本地，再拉 /watch/sdk */
 const syncedViewerId = syncViewerIdFromUrl(routeQuery);
+syncViewerAccessTokenFromUrl(routeQuery);
 const urlNickname = readNicknameFromSearch(routeQuery);
 if (urlNickname) {
   storeNickname(urlNickname);
@@ -113,7 +118,6 @@ const {
   isPreview,
   isEnded,
   isReplay,
-  canPlayReplay,
   isAudioLive,
   load,
   enterLiveFromPreview,
@@ -129,6 +133,63 @@ const displayNickname = computed(
     (hasViewerId.value ? "" : getStoredNickname()) ||
     "观众",
 );
+
+/** D89：结束页回放入口 */
+const showReplayEntry = computed(
+  () => !!data.value && data.value.playbackEnabled !== false,
+);
+const playbackExpired = computed(() => !!data.value?.playbackExpired);
+const replayLoading = ref(false);
+const recordPickerOpen = ref(false);
+const recordCandidates = ref<WatchRecordItem[]>([]);
+
+function preservedWatchQuery(): Record<string, string | string[]> {
+  const q: Record<string, string | string[]> = {};
+  for (const [k, v] of Object.entries(route.query)) {
+    if (v == null) continue;
+    if (isViewerAuthQueryKey(k)) continue;
+    q[k] = v as string | string[];
+  }
+  return q;
+}
+
+function goReplay(recordId: number) {
+  void router.push({
+    name: "watch-replay",
+    params: { id },
+    query: { ...preservedWatchQuery(), recordId: String(recordId) },
+  });
+}
+
+async function onViewReplay() {
+  if (!showReplayEntry.value || playbackExpired.value) return;
+  replayLoading.value = true;
+  try {
+    const res = await listWatchRecords(id);
+    const list = (res.list ?? []).filter(
+      (row) => Number(row.id) > 0 && !!row.tosUrl,
+    );
+    if (list.length === 0) {
+      toast("回放生成中，请稍后再试");
+      return;
+    }
+    if (list.length === 1) {
+      goReplay(Number(list[0].id));
+      return;
+    }
+    recordCandidates.value = list;
+    recordPickerOpen.value = true;
+  } catch (e) {
+    toast(e instanceof Error ? e.message : "加载回放失败");
+  } finally {
+    replayLoading.value = false;
+  }
+}
+
+function onPickRecord(row: WatchRecordItem) {
+  recordPickerOpen.value = false;
+  goReplay(Number(row.id));
+}
 
 /** Vite 开发构建才显示。生产包里这两个按钮不存在。 */
 const showDevPresence = import.meta.env.DEV;
@@ -404,12 +465,16 @@ onBeforeUnmount(() => {
         />
 
         <EndedScreen
-          v-else-if="data && (isEnded || isReplay) && !canPlayReplay"
+          v-else-if="data && (isEnded || isReplay)"
           :data="data"
+          :show-replay-entry="showReplayEntry"
+          :playback-expired="playbackExpired"
+          :replay-loading="replayLoading"
+          @replay="onViewReplay"
         />
 
         <div
-          v-else-if="data && (isLive || canPlayReplay)"
+          v-else-if="data && isLive"
           class="flex min-h-0 flex-1 flex-col"
         >
           <div
@@ -544,6 +609,13 @@ onBeforeUnmount(() => {
       :error="cartError"
       :products="cartProducts"
       @close="closeCart"
+    />
+
+    <RecordPickerSheet
+      :open="recordPickerOpen"
+      :records="recordCandidates"
+      @close="recordPickerOpen = false"
+      @select="onPickRecord"
     />
   </div>
 </template>

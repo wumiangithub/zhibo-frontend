@@ -16,7 +16,6 @@ import type { WatchAdapter } from "@/live/WatchAdapter";
 import { formatSdkError } from "@/utils/sdk";
 import { getViewerId } from "@/utils/viewerAuth";
 import { useToast } from "@/composables/useToast";
-import { useReplayWatch } from "@/composables/useReplayWatch";
 
 export interface WatchSessionOptions {
   activityId: MaybeRefOrGetter<string>;
@@ -79,42 +78,27 @@ export function useWatchSession(opts: WatchSessionOptions) {
   });
   const stats = useRoomStats(getSdk);
   const notice = useAnnouncement(getSdk);
-  const replayWatch = useReplayWatch({
-    activityId: () => resolveId(opts.activityId),
-    active: () => {
-      const d = data.value;
-      if (!d || d.playbackEnabled === false) return false;
-      // 仅点播/回放态计时长；纯结束态（state=3）出结束页，不启回放心跳
-      return d.state === 4 || d.state === 5;
-    },
-  });
   const player = usePlayerControls({
     getSdk,
     onError: (msg) => {
       error.value = msg;
     },
-    onUserPlay: () => replayWatch.onPlay(),
-    onUserPause: () => replayWatch.onPause(),
-    onMediaEnded: () => replayWatch.onEnded(),
   });
   const isLive = computed(() => data.value?.state === 1);
   const isPreview = computed(() => data.value?.state === 2);
   const isEnded = computed(() => data.value?.state === 3);
   const isReplay = computed(() => data.value?.state === 4 || data.value?.state === 5);
   const isAudioLive = computed(() => data.value?.type === 1);
-  /** 回放播放器：仅 state 4/5 且本站开启回放。state=3 一律结束页（回放未就绪或刚 live_over） */
-  const canPlayReplay = computed(() => {
-    if (!data.value) return false;
-    if (data.value.playbackEnabled === false) return false;
-    return isReplay.value;
-  });
+  /**
+   * D89：回放改走本站 TOS H5 页，观看页不再挂微吼 SDK 播回放。
+   * 保留字段名兼容模板；恒为 false。
+   */
+  const canPlayReplay = computed(() => false);
   const sdkReady = computed(() => !!adapter?.getSdk() && !sdkFailed.value && isLive.value);
 
   function shouldInitSdk(res: WatchSdkData): boolean {
-    if (res.state === 1 || res.state === 2) return true;
-    if (res.playbackEnabled === false) return false;
-    // state=3：结束页，不 init（避免默认 playbackEnabled=true 时卡在「播放器加载中」）
-    return res.state === 4 || res.state === 5;
+    // 仅直播 / 预告挂 SDK；结束与云侧 4/5 一律结束页 + 本站回放页
+    return res.state === 1 || res.state === 2;
   }
 
   /** 本次 SDK 实例用的观众 id。undefined 表示还没拉过签名 */
@@ -331,7 +315,6 @@ export function useWatchSession(opts: WatchSessionOptions) {
     data.value = null;
     stopCountdown();
     stats.resetLiveEnded();
-    replayWatch.reset();
     destroySdk();
     try {
       const res = await getWatchSdk(resolveId(opts.activityId), buildWatchParams());
