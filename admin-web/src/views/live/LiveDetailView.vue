@@ -130,11 +130,15 @@ async function setTab(key: TabKey) {
 
 onBeforeRouteLeave(async () => confirmLeaveDirtyIfNeeded());
 
-async function fetchDetail(opts?: { silent?: boolean }) {
+async function fetchDetail(opts?: { silent?: boolean; forReady?: boolean }) {
   const silent = opts?.silent === true;
+  const forReady = opts?.forReady === true;
   if (silent) {
-    if (readyRefreshing.value) return;
-    readyRefreshing.value = true;
+    // 转码状态按钮：防连点 + 转圈；保存后静默刷新不要走这套，否则整页 loading 会卸掉当前 Tab
+    if (forReady) {
+      if (readyRefreshing.value) return;
+      readyRefreshing.value = true;
+    }
   } else {
     loading.value = true;
     error.value = "";
@@ -150,16 +154,21 @@ async function fetchDetail(opts?: { silent?: boolean }) {
       error.value = msg;
     }
   } finally {
-    if (silent) {
+    if (silent && forReady) {
       readyRefreshing.value = false;
-    } else {
+    } else if (!silent) {
       loading.value = false;
     }
   }
 }
 
-function refreshReadyStatus() {
+/** 子 Tab 保存成功：静默拉详情，不闪「加载中」、不卸路由面板 */
+function onTabRefreshed() {
   void fetchDetail({ silent: true });
+}
+
+function refreshReadyStatus() {
+  void fetchDetail({ silent: true, forReady: true });
 }
 
 function goLive() {
@@ -313,7 +322,7 @@ watch(id, fetchDetail);
             ref="basicTabRef"
             :activity-id="id"
             :detail="detail"
-            @refreshed="fetchDetail"
+            @refreshed="onTabRefreshed"
           />
           <BroadcastSettingsTab
             v-else-if="activeTab === 'broadcast'"
@@ -325,15 +334,16 @@ watch(id, fetchDetail);
             :host-locked="!!detail.reportId"
             :activity-type="detail.type"
             :is-timing="detail.isTiming"
+            :activity-state="detail.state"
             @error="pageError = $event"
-            @refreshed="fetchDetail"
+            @refreshed="onTabRefreshed"
           />
           <CommerceSettingsTab
             v-else-if="activeTab === 'commerce'"
             ref="commerceTabRef"
             :activity-id="id"
             :detail="detail"
-            @refreshed="fetchDetail"
+            @refreshed="onTabRefreshed"
           />
           <UserOpsTab
             v-else-if="activeTab === 'userOps'"

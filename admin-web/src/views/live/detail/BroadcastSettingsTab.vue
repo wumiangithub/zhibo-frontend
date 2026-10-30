@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { Refresh } from "@element-plus/icons-vue";
 import { ElIcon, ElMessage, ElMessageBox } from "element-plus";
 import {
+  endActivity,
   getActivityPasscode,
   getPushStream,
   getStreamStatus,
@@ -36,6 +37,8 @@ const props = withDefaults(
     activityType?: number | null;
     /** 录播是否定时；省略按 true */
     isTiming?: boolean | null;
+    /** 活动直播状态：1=直播中（结束按钮高亮条件） */
+    activityState?: number | null;
   }>(),
   {
     canBroadcast: false,
@@ -44,6 +47,7 @@ const props = withDefaults(
     hostLocked: false,
     activityType: null,
     isTiming: null,
+    activityState: null,
   },
 );
 const emit = defineEmits<{ error: [msg: string]; refreshed: [] }>();
@@ -62,6 +66,7 @@ function openInviteHost() {
 
 const subTab = ref<"method" | "role">("method");
 const startingLive = ref(false);
+const endingLive = ref(false);
 const otherMethod = ref<"push" | "passcode">("push");
 const pushProtocol = ref<"rtmp" | "srt">("rtmp");
 const showSrt = computed(() => props.provider === "tencent");
@@ -127,7 +132,20 @@ const canStartLive = computed(
     !!currentPush.value.server &&
     !!currentPush.value.streamKey &&
     streamStatus.value === 1 &&
-    !startingLive.value,
+    !startingLive.value &&
+    !endingLive.value,
+);
+
+/** 有流且本站 state=1（直播中）才可结束；仅有流不够 */
+const canEndLive = computed(
+  () =>
+    pushProtocol.value === "rtmp" &&
+    !!currentPush.value.server &&
+    !!currentPush.value.streamKey &&
+    streamStatus.value === 1 &&
+    props.activityState === 1 &&
+    !startingLive.value &&
+    !endingLive.value,
 );
 
 async function loadRtmp() {
@@ -258,6 +276,30 @@ async function startThirdPartyLive() {
     emit("error", e instanceof Error ? e.message : "开始直播失败");
   } finally {
     startingLive.value = false;
+  }
+}
+
+async function endThirdPartyLive() {
+  if (!canEndLive.value) return;
+  try {
+    await ElMessageBox.confirm("确认结束直播？结束后将生成回放。", "结束直播", {
+      type: "warning",
+      confirmButtonText: "结束直播",
+      cancelButtonText: "取消",
+    });
+  } catch {
+    return;
+  }
+  endingLive.value = true;
+  try {
+    await endActivity(props.activityId);
+    emit("error", "");
+    ElMessage.success("已结束直播");
+    emit("refreshed");
+  } catch (e) {
+    emit("error", e instanceof Error ? e.message : "结束直播失败");
+  } finally {
+    endingLive.value = false;
   }
 }
 
@@ -572,6 +614,13 @@ function openHost() {
                   @click="startThirdPartyLive"
                 >
                   {{ startingLive ? "开播中…" : "开始直播" }}
+                </UiButton>
+                <UiButton
+                  variant="default"
+                  :disabled="!canEndLive"
+                  @click="endThirdPartyLive"
+                >
+                  {{ endingLive ? "结束中…" : "结束直播" }}
                 </UiButton>
               </div>
               <div class="push-notes">
