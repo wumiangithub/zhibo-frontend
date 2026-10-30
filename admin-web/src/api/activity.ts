@@ -428,12 +428,14 @@ export interface ActivityRecordItem {
   duration?: string;
   createdTime?: string;
   coverUrl?: string;
-  /** 体积（KB），微吼 storage */
+  /** 体积（KB） */
   storage?: string;
-  /** 到期时间，微吼 save_time */
-  saveTime?: string;
-  /** 本轮可能无下载直链 */
+  /** 本库状态 INT：1 pending_package / 2 packaging / 3 downloading / 4 ready / 5 failed；仅云侧未入库时可无 */
+  status?: number;
+  /** 仅本库 ready 时为本站 TOS/CDN（与 tosUrl 同值，兼容旧字段） */
   downloadUrl?: string;
+  /** 本库有 tos_url 时返回；有值可直接下载 */
+  tosUrl?: string;
 }
 
 export async function listActivityRecords(id: ActivityId) {
@@ -449,12 +451,17 @@ export async function listActivityRecords(id: ActivityId) {
   };
 }
 
-/** 微吼 check-download：0 未开始 / 1 已完成 / 2 进行中 / 3 失败 */
+/** D88 download：packStatus 0 未开始 / 1 可下载（本站 TOS）/ 2 处理中 / 3 失败 */
 export interface ActivityRecordDownload {
   recordId: number;
+  /** 本站 TOS/CDN；有值时与 tosUrl 同值（兼容） */
   downloadUrl?: string;
-  status?: number;
+  /** 本站 TOS/CDN；有值时前端直接走下载封装 */
+  tosUrl?: string;
+  packStatus?: number;
   progress?: number;
+  /** 本站内存任务开始下载时间 yyyy-MM-dd HH:mm:ss；packStatus=2 且任务在跑时有 */
+  downloadStartedTime?: string;
 }
 
 /** GET /activities/records/{id}/download/{recordId} */

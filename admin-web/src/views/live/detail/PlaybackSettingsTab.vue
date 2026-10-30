@@ -21,6 +21,7 @@ import {
 } from "@/api/activity";
 import { useLeaveConfirm } from "@/composables/useLeaveConfirm";
 import { resolveCreatedTime } from "@/utils/createdTime";
+import { downloadFiles } from "@/utils/downloadFile";
 import FormRow from "../components/FormRow.vue";
 import UiButton from "@/components/ui/UiButton.vue";
 
@@ -94,12 +95,23 @@ async function onToggleEnabled(val: boolean | string | number) {
   }
 }
 
-/** 微吼 storage 单位为 KB */
-function formatStorageKb(raw?: string | null): string {
+/** 列表 storage 为 KB（数字或带 KB 后缀）→ 展示 MB / GB */
+function formatStorageSize(raw?: string | null): string {
   if (raw == null || String(raw).trim() === "") return "";
-  const s = String(raw).trim();
-  if (/kb$/i.test(s)) return s;
-  return `${s} KB`;
+  const n = Number(String(raw).trim().replace(/kb$/i, "").trim());
+  if (!Number.isFinite(n) || n < 0) return String(raw).trim();
+  const bytes = n * 1024;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)}KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)}GB`;
+}
+
+async function downloadByUrl(url: string, fileName: string) {
+  const res = await downloadFiles(
+    [{ fileUrl: url, fileName }],
+    { useLink: true },
+  );
+  if (!res.success) ElMessage.error("下载失败");
 }
 
 async function onDownload(row: ActivityRecordItem) {
@@ -109,23 +121,37 @@ async function onDownload(row: ActivityRecordItem) {
   }
   if (downloadingId.value === row.id) return;
   downloadingId.value = row.id;
+  const fileName = (row.title?.trim() || `playback-${row.id}`) + ".mp4";
   try {
+    // 列表里已有 tosUrl → 直接下；否则打 download 接口（上传完成后会带回 tosUrl）
+    const listUrl = (row.tosUrl || row.downloadUrl || "").trim();
+    if (listUrl) {
+      await downloadByUrl(listUrl, fileName);
+      return;
+    }
     const data = await getActivityRecordDownload(props.activityId, row.id);
-    const status = data.status;
-    if (status === 1 && data.downloadUrl) {
-      window.open(data.downloadUrl, "_blank", "noopener");
+    const apiUrl = (data.tosUrl || data.downloadUrl || "").trim();
+    if (apiUrl) {
+      row.tosUrl = apiUrl;
+      await downloadByUrl(apiUrl, fileName);
       return;
     }
-    if (status === 2) {
-      ElMessage.info(`回放打包中（${data.progress ?? 0}%），请稍后重试`);
+    const packStatus = data.packStatus;
+    if (packStatus === 2) {
+      const started = data.downloadStartedTime?.trim();
+      ElMessage.info(
+        started
+          ? `回放处理中（开始于 ${started}），请稍后重试`
+          : `回放打包/处理中（${data.progress ?? 0}%），请稍后重试`,
+      );
       return;
     }
-    if (status === 0) {
-      ElMessage.info("已提交回放打包任务，请稍后再次点击下载");
+    if (packStatus === 0) {
+      ElMessage.info("已提交回放打包任务（或尚未开始），请稍后再次点击下载");
       return;
     }
-    if (status === 3) {
-      ElMessage.error("回放打包失败，请稍后重试");
+    if (packStatus === 3) {
+      ElMessage.error("回放打包失败，可稍后重试");
       return;
     }
     ElMessage.info("暂无下载地址");
@@ -311,7 +337,7 @@ defineExpose({
             width="110"
           >
             <template #default="{ row }">
-              {{ formatStorageKb(row.storage) }}
+              {{ formatStorageSize(row.storage) }}
             </template>
           </ElTableColumn>
           <ElTableColumn
@@ -322,11 +348,6 @@ defineExpose({
               {{ resolveCreatedTime(row) }}
             </template>
           </ElTableColumn>
-          <ElTableColumn
-            prop="saveTime"
-            label="到期时间"
-            width="180"
-          />
           <ElTableColumn
             label="操作"
             width="100"
@@ -357,7 +378,7 @@ defineExpose({
 
 <style scoped>
 .tab-panel {
-  padding-bottom: 24px;
+  padding-bottom: 88px; /* 给固定底栏留空，避免最后一项被挡住 */
 }
 .hint {
   font-size: 12px;
@@ -401,10 +422,20 @@ defineExpose({
   color: #cf1322;
   font-size: 13px;
 }
+/* 与基本信息 / 新建页同款：贴视口底，避开左侧 176px 导航 */
 .save-bar {
+  position: fixed;
+  left: 176px;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
   display: flex;
+  align-items: center;
   justify-content: center;
-  padding: 24px 0 8px;
+  height: 64px;
+  padding: 0 32px;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
 }
 :deep(.form-row) {
   margin-bottom: 18px;
