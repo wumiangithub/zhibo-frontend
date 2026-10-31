@@ -362,7 +362,6 @@ onMounted(fetchList);
                 >
                   <p class="title">{{ row.title }}</p>
                 </ElTooltip>
-                <p class="sell-tag">未设置</p>
               </div>
             </div>
           </template>
@@ -452,7 +451,7 @@ onMounted(fetchList);
         </ElTableColumn>
         <ElTableColumn
           label="操作"
-          width="172"
+          width="208"
           fixed="right"
         >
           <template #default="{ row }">
@@ -631,11 +630,6 @@ onMounted(fetchList);
   font-weight: 500;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-.sell-tag {
-  margin: 2px 0 0;
-  color: #f5222d;
-  font-size: 12px;
 }
 .status-dot {
   display: inline-flex;

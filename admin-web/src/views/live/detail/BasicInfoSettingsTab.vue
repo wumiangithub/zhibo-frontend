@@ -281,7 +281,6 @@ defineExpose({
       <BasicInfoSection :form="form" />
       <ProviderModeSection
         :form="form"
-        hide-provider
         provider-readonly
         mode-readonly
         viewer-style-readonly

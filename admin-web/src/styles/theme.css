@@ -64,3 +64,76 @@ html[data-theme="green"] {
   --el-color-primary-dark-2: color-mix(in srgb, var(--color-primary) 80%, #000);
 }
 */
+
+/* 细滚动条（占位）：始终可见的细灰 pill；稳定 gutter，避免内容区宽度跳动 */
+.thin-scrollbar {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #c1c1c1 transparent;
+}
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #c1c1c1;
+  border-radius: 999px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #a8abb2;
+}
+.thin-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 隐藏滚动条（不占位）：仍可滚动，但不预留 gutter / 宽度 */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+  background: transparent;
+}
+
+/* 悬停滚动条（占位）：默认视觉隐藏但预留 gutter；hover / focus-within 显示细灰 pill */
+.hover-scrollbar {
+  scrollbar-gutter: stable;
+  /* Firefox：始终 thin + 透明 thumb 占位，hover 再显色，避免布局跳动 */
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.hover-scrollbar:hover,
+.hover-scrollbar:focus-within {
+  scrollbar-color: #c0c4cc transparent;
+}
+.hover-scrollbar::-webkit-scrollbar {
+  /* 始终占 6px，默认透明 thumb，避免 hover 时挤内容 */
+  width: 6px;
+  height: 6px;
+  background: transparent;
+}
+.hover-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.hover-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+}
+.hover-scrollbar:hover::-webkit-scrollbar-thumb,
+.hover-scrollbar:focus-within::-webkit-scrollbar-thumb {
+  background-color: #c0c4cc;
+}
+.hover-scrollbar:hover::-webkit-scrollbar-thumb:hover,
+.hover-scrollbar:focus-within::-webkit-scrollbar-thumb:hover {
+  background-color: #a8abb2;
+}
+.hover-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+

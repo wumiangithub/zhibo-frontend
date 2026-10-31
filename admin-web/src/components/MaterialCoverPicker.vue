@@ -198,6 +198,13 @@ function openPreview() {
   border: 0;
   background: transparent;
   cursor: pointer;
+  outline: none;
+  box-shadow: none;
+}
+.cover-pick__pick:focus,
+.cover-pick__pick:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 .cover-pick__mask {
   position: absolute;

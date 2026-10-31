@@ -221,7 +221,10 @@ onBeforeUnmount(() => {
         v-if="form.coursewares.length"
         class="cw-table-wrap"
       >
-        <table class="cw-table">
+        <table
+          class="cw-table"
+          :class="{ 'has-perm': enableAccessPermission }"
+        >
           <thead>
             <tr>
               <th class="col-file">
@@ -402,10 +405,15 @@ onBeforeUnmount(() => {
 }
 .cw-table {
   width: 100%;
+  /* 窄面板时横向滚动，勿把「文件」列压扁导致拖拽叠到格式上 */
+  min-width: 640px;
   border-collapse: collapse;
   table-layout: fixed;
   font-size: 13px;
   color: #333;
+}
+.cw-table.has-perm {
+  min-width: 820px;
 }
 .cw-table thead th {
   padding: 10px 12px;
@@ -420,13 +428,14 @@ onBeforeUnmount(() => {
   padding: 12px;
   border-bottom: 1px solid #ebeef5;
   vertical-align: middle;
+  overflow: hidden;
 }
 .cw-table tbody tr:last-child td {
   border-bottom: none;
 }
 .col-file {
-  width: auto;
-  min-width: 220px;
+  width: 36%;
+  min-width: 200px;
 }
 .col-format {
   width: 72px;
@@ -450,7 +459,7 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 .cw-drag {
-  flex: none;
+  flex: 0 0 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
