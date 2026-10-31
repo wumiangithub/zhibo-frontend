@@ -94,11 +94,18 @@ function formatCommentTime(ts: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function persistComment(options: ChatOptions, msg: ChatMessage) {
+/**
+ * 上报本站评论。
+ * viewerId 只在「本人发言」时带：每条 chatMsg 各端都会上报（幂等），
+ * 若把当前登录观众 id 绑到他人消息上，用户管理「评论次数」会算错。
+ */
+function persistComment(options: ChatOptions, msg: ChatMessage, own = false) {
   const activityId = options.getActivityId?.()?.trim() ?? "";
   if (!activityId || !msg.msg?.trim()) return;
   const guestId = msg.sender_id?.trim() || options.getSender().id || "";
-  const viewerId = options.getViewerId?.() ?? null;
+  const selfId = options.getSender().id?.trim() || "";
+  const isOwn = own || (!!selfId && msg.sender_id?.trim() === selfId);
+  const viewerId = isOwn ? (options.getViewerId?.() ?? null) : null;
   if (!guestId && viewerId == null) return;
   void reportComment(activityId, {
     content: msg.msg.slice(0, 500),
@@ -239,7 +246,8 @@ export function useChat(options: ChatOptions) {
     );
     if (placeholderIdx !== -1) {
       chat.chatMessages.splice(placeholderIdx, 1, msg);
-      persistComment(options, msg);
+      // 本地发送回声：一定是本人，带上 viewerId 供评论次数聚合
+      persistComment(options, msg, true);
       return;
     }
     // 他人消息或无占位命中时的常规去重：近 5 秒内相同发送者 + 内容视为同一条

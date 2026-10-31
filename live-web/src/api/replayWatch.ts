@@ -1,4 +1,5 @@
 import { get, post } from "./http";
+import { activityAccessHeader } from "@/utils/activityAccess";
 import { getViewerAccessToken, isViewerLoggedIn } from "@/utils/viewerAuth";
 
 export interface WatchRecordItem {
@@ -23,20 +24,26 @@ export interface ReplayHeartbeatResult {
   lastReportTime: string;
 }
 
-function viewerAuthHeader(): { Authorization: string } | Record<string, never> {
+function watchGateHeaders(activityId: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    ...activityAccessHeader(activityId),
+  };
   const token = getViewerAccessToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
 }
 
 export function listWatchRecords(activityId: string) {
-  return get<WatchRecordListData>(`/watch/records/${activityId}`);
+  return get<WatchRecordListData>(`/watch/records/${activityId}`, {
+    headers: watchGateHeaders(activityId),
+  });
 }
 
 export function startReplayWatch(activityId: string, recordId: number) {
   return post<ReplayStartResult>(
     `/watch/replay/start/${activityId}`,
     { recordId },
-    { headers: viewerAuthHeader() },
+    { headers: watchGateHeaders(activityId) },
   );
 }
 
@@ -44,7 +51,7 @@ export function heartbeatReplayWatch(activityId: string, socketId: string) {
   return post<ReplayHeartbeatResult>(
     `/watch/replay/heartbeat/${activityId}`,
     { socketId },
-    { headers: viewerAuthHeader() },
+    { headers: watchGateHeaders(activityId) },
   );
 }
 
@@ -60,7 +67,7 @@ export function heartbeatReplayWatchKeepalive(activityId: string, socketId: stri
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        ...watchGateHeaders(activityId),
       },
       body: JSON.stringify({ socketId }),
       keepalive: true,

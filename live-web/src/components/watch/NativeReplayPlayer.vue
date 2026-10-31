@@ -1,12 +1,24 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
-const props = defineProps<{
-  src: string;
-  title?: string;
-  speedAllow?: boolean;
-  fastForwardAllow?: boolean;
-}>();
+const props = withDefaults(
+  defineProps<{
+    src: string;
+    title?: string;
+    speedAllow?: boolean;
+    fastForwardAllow?: boolean;
+    /**
+     * 嵌入 WatchRoomShell：小屏 16:9 顶置、PC 占满视频槽（对齐 PlayerStage）。
+     * 单独全页居中时勿开。
+     */
+    embedInRoom?: boolean;
+  }>(),
+  {
+    speedAllow: true,
+    fastForwardAllow: true,
+    embedInRoom: false,
+  },
+);
 
 const emit = defineEmits<{
   play: [];
@@ -249,12 +261,22 @@ onBeforeUnmount(() => {
 <template>
   <div
     class="relative flex w-full flex-col bg-black"
-    :class="{ 'replay-pseudo-fs': pseudoFullscreen }"
+    :class="[
+      embedInRoom
+        ? 'flex-none md:min-h-0 md:min-w-0 md:flex-1'
+        : '',
+      { 'replay-pseudo-fs': pseudoFullscreen },
+    ]"
   >
     <div
       ref="stageRef"
-      class="relative aspect-video w-full overflow-hidden bg-black md:mx-auto md:max-w-5xl"
-      :class="{ 'replay-stage-fs': pseudoFullscreen }"
+      class="relative w-full overflow-hidden bg-black"
+      :class="[
+        embedInRoom
+          ? 'aspect-video flex-none md:aspect-auto md:min-h-0 md:flex-1'
+          : 'aspect-video md:mx-auto md:max-w-5xl',
+        { 'replay-stage-fs': pseudoFullscreen },
+      ]"
       @click="togglePlay"
     >
       <video
@@ -283,13 +305,14 @@ onBeforeUnmount(() => {
     </div>
 
     <div
-      class="flex flex-col gap-2 border-t border-gray-800 bg-gray-950/95 px-3 py-2 md:mx-auto md:w-full md:max-w-5xl"
+      class="flex flex-none flex-col gap-2 border-t border-gray-800 bg-gray-900/95 px-3 py-2"
+      :class="embedInRoom ? '' : 'md:mx-auto md:w-full md:max-w-5xl'"
       @click.stop
     >
       <div class="flex items-center gap-2 text-xs text-gray-300">
         <span class="w-12 tabular-nums">{{ formatTime(current) }}</span>
         <input
-          class="h-1.5 min-w-0 flex-1 accent-blue-500 disabled:opacity-40"
+          class="h-1.5 min-w-0 flex-1 accent-red-500 disabled:opacity-40"
           type="range"
           min="0"
           :max="duration || 0"
@@ -332,7 +355,7 @@ onBeforeUnmount(() => {
                 :key="opt"
                 type="button"
                 class="block w-full px-3 py-2 text-left text-sm hover:bg-gray-800"
-                :class="opt === rate ? 'text-blue-400' : 'text-gray-200'"
+                :class="opt === rate ? 'text-red-400' : 'text-gray-200'"
                 @click="setRate(opt)"
               >
                 {{ opt }}x

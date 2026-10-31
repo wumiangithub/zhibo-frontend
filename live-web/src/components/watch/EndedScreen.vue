@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { WatchSdkData } from "@/api/watch";
+import type { WatchSummaryData } from "@/api/watch";
 
 defineProps<{
-  data: WatchSdkData;
+  data: WatchSummaryData;
   /** 是否展示「查看回放」入口（开关开） */
   showReplayEntry?: boolean;
   /** 回放已过期：提示 + 按钮不可点 */

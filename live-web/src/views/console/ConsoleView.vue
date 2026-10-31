@@ -75,8 +75,6 @@ const {
   loading,
   error,
   data,
-  sdkFailed,
-  useFallback,
   showLiveStartPopup,
   countdown,
   barrage,
@@ -92,7 +90,6 @@ const {
   sdkReady,
   load,
   enterLiveFromPreview,
-  switchToFallback,
   shareWatch,
 } = session;
 
@@ -269,7 +266,7 @@ onMounted(() => {
           加载中…
         </div>
         <div
-          v-else-if="error && !useFallback && !data"
+          v-else-if="error && !data"
           class="player-state is-err"
         >
           <p>{{ error }}</p>
@@ -281,13 +278,6 @@ onMounted(() => {
             重试
           </button>
         </div>
-        <iframe
-          v-else-if="data && useFallback"
-          :src="data.embedUrl"
-          class="player-iframe"
-          allowfullscreen
-          allow="fullscreen; microphone; camera; autoplay; display-capture"
-        />
         <PreviewScreen
           v-else-if="data && isPreview"
           :data="data"
@@ -307,9 +297,7 @@ onMounted(() => {
           :stats="stats"
           :title="data.title"
           :is-audio-live="isAudioLive"
-          :can-fallback="!!data.embedUrl"
           @retry="load"
-          @fallback="switchToFallback"
         />
         <div
           v-else

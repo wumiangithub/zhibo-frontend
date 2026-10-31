@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { getWatchSdk, type WatchSdkData } from "@/api/watch";
+import { getWatchSummary, type WatchSummaryData } from "@/api/watch";
 import { listWatchRecords, type WatchRecordItem } from "@/api/replayWatch";
 import NativeReplayPlayer from "@/components/watch/NativeReplayPlayer.vue";
+import WatchRoomShell from "@/components/watch/WatchRoomShell.vue";
+import WatchSidePanel from "@/components/watch/WatchSidePanel.vue";
+import ProductSheet from "@/components/watch/ProductSheet.vue";
 import { useReplayWatch } from "@/composables/useReplayWatch";
+import { useChatHistory } from "@/composables/useChatHistory";
+import { useWatchCart } from "@/composables/useWatchCart";
 import {
-  getViewerId,
   isViewerAuthQueryKey,
   readNicknameFromSearch,
   syncViewerAccessTokenFromUrl,
   syncViewerIdFromUrl,
 } from "@/utils/viewerAuth";
-import { getStoredNickname, storeNickname } from "@/api/watch";
+import { storeNickname } from "@/api/watch";
 import { ensureWxJsSdk } from "@/utils/miniProgram";
 
 const route = useRoute();
@@ -27,7 +31,7 @@ const recordIdParam = computed(() => {
 
 const loading = ref(true);
 const error = ref("");
-const sdkData = ref<WatchSdkData | null>(null);
+const summary = ref<WatchSummaryData | null>(null);
 const record = ref<WatchRecordItem | null>(null);
 
 const routeQuery = route.query as Record<string, unknown>;
@@ -36,20 +40,30 @@ syncViewerAccessTokenFromUrl(routeQuery);
 const urlNickname = readNicknameFromSearch(routeQuery);
 if (urlNickname) storeNickname(urlNickname);
 
-const speedAllow = computed(() => sdkData.value?.playbackSpeedAllow !== false);
+const speedAllow = computed(() => summary.value?.playbackSpeedAllow !== false);
 const fastForwardAllow = computed(
-  () => sdkData.value?.playbackFastForwardAllow !== false,
+  () => summary.value?.playbackFastForwardAllow !== false,
 );
 
 const replayWatch = useReplayWatch({
   activityId: () => activityId.value,
   recordId: () => record.value?.id ?? recordIdParam.value,
   active: () => {
-    const d = sdkData.value;
+    const d = summary.value;
     if (!d || d.playbackEnabled === false || d.playbackExpired) return false;
     return !!record.value?.tosUrl;
   },
 });
+
+const chatHistory = useChatHistory(() => activityId.value);
+const {
+  cartOpen,
+  cartLoading,
+  cartError,
+  cartProducts,
+  openCart,
+  closeCart,
+} = useWatchCart(() => activityId.value);
 
 function preservedQuery(): Record<string, string | string[]> {
   const q: Record<string, string | string[]> = {};
@@ -87,20 +101,17 @@ async function load() {
       return;
     }
 
-    const [sdk, records] = await Promise.all([
-      getWatchSdk(id, {
-        nickname: getStoredNickname().trim() || undefined,
-        viewerId: getViewerId() ?? undefined,
-      }),
+    const [shell, records] = await Promise.all([
+      getWatchSummary(id),
       listWatchRecords(id),
     ]);
-    sdkData.value = sdk;
+    summary.value = shell;
 
-    if (sdk.playbackEnabled === false) {
+    if (shell.playbackEnabled === false) {
       error.value = "回放未开启";
       return;
     }
-    if (sdk.playbackExpired) {
+    if (shell.playbackExpired) {
       error.value = "回放已过期";
       return;
     }
@@ -111,6 +122,7 @@ async function load() {
       return;
     }
     record.value = hit;
+    void chatHistory.loadFirstPage();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "加载失败";
   } finally {
@@ -131,16 +143,23 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex min-h-dvh flex-col bg-black text-white">
+  <div class="flex h-dvh flex-col bg-black text-white">
     <header
-      class="flex flex-none items-center border-b border-gray-800 px-3 py-2 md:px-4"
+      class="flex flex-none items-center gap-3 border-b border-gray-800 px-3 py-2 md:px-4"
     >
+      <button
+        type="button"
+        class="flex-none rounded-md bg-transparent px-2 py-1 text-sm text-gray-400 hover:bg-gray-800 hover:text-white"
+        @click="goBackToWatch"
+      >
+        返回
+      </button>
       <h1 class="min-w-0 flex-1 truncate text-sm font-medium md:text-base">
-        {{ record?.title || sdkData?.title || "回放" }}
+        {{ record?.title || summary?.title || "回放" }}
       </h1>
     </header>
 
-    <main class="flex min-h-0 flex-1 flex-col justify-center">
+    <div class="flex min-h-0 flex-1 flex-col">
       <p
         v-if="loading"
         class="py-16 text-center text-sm text-gray-400"
@@ -162,16 +181,39 @@ onMounted(() => {
           返回直播间
         </button>
       </div>
-      <NativeReplayPlayer
-        v-else-if="record?.tosUrl"
-        :src="record.tosUrl"
-        :title="record.title"
-        :speed-allow="speedAllow"
-        :fast-forward-allow="fastForwardAllow"
-        @play="replayWatch.onPlay()"
-        @pause="replayWatch.onPause()"
-        @ended="replayWatch.onEnded()"
-      />
-    </main>
+      <WatchRoomShell v-else-if="record?.tosUrl">
+        <template #media>
+          <NativeReplayPlayer
+            embed-in-room
+            :src="record.tosUrl"
+            :title="record.title"
+            :speed-allow="speedAllow"
+            :fast-forward-allow="fastForwardAllow"
+            @play="replayWatch.onPlay()"
+            @pause="replayWatch.onPause()"
+            @ended="replayWatch.onEnded()"
+          />
+        </template>
+        <template #side>
+          <WatchSidePanel
+            mode="replay"
+            :chat="chatHistory.chat"
+            :intro-title="summary?.title || record.title || '回放'"
+            :intro-start-time="summary?.startTime"
+            :intro-end-time="summary?.endTime"
+            @cart="openCart"
+            @chat-scroll-top="chatHistory.onScrollNearTop()"
+          />
+        </template>
+      </WatchRoomShell>
+    </div>
+
+    <ProductSheet
+      :open="cartOpen"
+      :loading="cartLoading"
+      :error="cartError"
+      :products="cartProducts"
+      @close="closeCart"
+    />
   </div>
 </template>

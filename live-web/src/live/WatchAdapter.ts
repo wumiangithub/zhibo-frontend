@@ -1,4 +1,4 @@
-import type { WatchSdkData } from "@/api/watch";
+import type { WatchSdkSignData } from "@/api/watch";
 
 export interface WatchAdapterHandlers {
   onError: (msg: unknown) => void;
@@ -39,6 +39,6 @@ export interface WatchAdapterHandlers {
 export interface WatchAdapter {
   /** 返回底层 SDK 实例，供现有 useChat/useBarrage 等 getSdk 使用；未接入可为 null */
   getSdk(): VhallSdkInstance | null;
-  init(data: WatchSdkData, handlers: WatchAdapterHandlers): Promise<void>;
+  init(data: WatchSdkSignData, handlers: WatchAdapterHandlers): Promise<void>;
   destroy(): void;
 }

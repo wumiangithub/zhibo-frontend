@@ -62,7 +62,6 @@ onMounted(() => {
       <div class="mt-3">
         <ElRadioGroup v-model="form.sellType">
           <ElRadioButton value="free">免费</ElRadioButton>
-          <ElRadioButton value="paid">付费</ElRadioButton>
           <ElRadioButton value="encrypted">加密</ElRadioButton>
           <ElRadioButton value="specified">指定学员</ElRadioButton>
         </ElRadioGroup>

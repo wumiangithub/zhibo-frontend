@@ -1,4 +1,4 @@
-import type { WatchSdkData } from "@/api/watch";
+import type { WatchSdkSignData } from "@/api/watch";
 import {
   formatSdkError,
   isHardFatalSdkError,
@@ -6,6 +6,9 @@ import {
   loadScript,
 } from "@/utils/sdk";
 import type { WatchAdapter, WatchAdapterHandlers } from "../WatchAdapter";
+
+/** 微吼 JSSDK 3.9.1 CDN（D93：前端常量，不进 /sdk-sign） */
+const VHALL_SDK_SCRIPT_URL = "https://cnstatic01.e.vhall.com/jssdk/dist/3.9.1/VhallSDK.js";
 
 /** 微吼自带隐藏控制条 class（官方拼写即为 hiddne，非 typo） */
 const HIDDNE_CONTROL_CLASS = "hiddneControl";
@@ -23,11 +26,8 @@ export class VhallWatchAdapter implements WatchAdapter {
     return this.sdk;
   }
 
-  async init(data: WatchSdkData, handlers: WatchAdapterHandlers): Promise<void> {
-    if (data.sdk.jqueryUrl) {
-      await loadScript(data.sdk.jqueryUrl);
-    }
-    await loadScript(data.sdk.scriptUrl);
+  async init(data: WatchSdkSignData, handlers: WatchAdapterHandlers): Promise<void> {
+    await loadScript(VHALL_SDK_SCRIPT_URL);
 
     // loadScript 可能耗时数秒；期间 load/卸页会使容器消失，new 前必须再确认
     if (handlers.isInitCurrent && !handlers.isInitCurrent()) {

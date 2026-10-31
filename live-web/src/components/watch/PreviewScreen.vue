@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { WatchSdkData } from "@/api/watch";
+import type { WatchSummaryData } from "@/api/watch";
 
 defineProps<{
-  data: WatchSdkData;
+  data: WatchSummaryData;
   countdown: string;
   showLiveStartPopup: boolean;
 }>();

@@ -1,4 +1,4 @@
-import type { WatchSdkData } from "@/api/watch";
+import type { WatchSdkSignData } from "@/api/watch";
 import type { WatchAdapter, WatchAdapterHandlers } from "../WatchAdapter";
 
 const NOT_READY = "该直播服务商尚未接入";
@@ -8,7 +8,7 @@ export class TencentWatchAdapter implements WatchAdapter {
     return null;
   }
 
-  async init(_data: WatchSdkData, _handlers: WatchAdapterHandlers): Promise<void> {
+  async init(_data: WatchSdkSignData, _handlers: WatchAdapterHandlers): Promise<void> {
     throw new Error(NOT_READY);
   }
 

@@ -13,14 +13,13 @@ const props = defineProps<{
   title: string;
   /** type=1 音频直播：浏览器常因自动播放策略把音轨挂起 */
   isAudioLive: boolean;
-  canFallback?: boolean;
   /** 观看页小屏：播放器 16:9 顶置；中控台勿开 */
   mobileAspectVideo?: boolean;
   /** 观看页小屏：点赞改走聊天底栏；中控台勿开 */
   hideMobileBarActions?: boolean;
 }>();
 
-const emit = defineEmits<{ retry: []; fallback: [] }>();
+const emit = defineEmits<{ retry: [] }>();
 
 /** 纯音频场（type=1）或清晰度选「音频」(code=a) 都走同一套 EQ 遮罩 */
 const showAudioVisual = computed(
@@ -74,7 +73,7 @@ onBeforeUnmount(() => syncStageEl(null));
     >
       <span class="text-sm text-red-300">{{ player.failReason || '播放器加载失败' }}</span>
       <span class="text-xs text-gray-400">
-        若直播确实在播，多半是微吼 SDK 瞬时抖动（20005），可点刷新或改用嵌入页
+        若直播确实在播，多半是微吼 SDK 瞬时抖动（20005），可点刷新重试
       </span>
       <div class="flex flex-wrap items-center justify-center gap-2">
         <button
@@ -83,14 +82,6 @@ onBeforeUnmount(() => syncStageEl(null));
           @click="emit('retry')"
         >
           刷新重试
-        </button>
-        <button
-          v-if="canFallback"
-          type="button"
-          class="rounded-md border border-gray-600 bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700"
-          @click="emit('fallback')"
-        >
-          切换嵌入模式
         </button>
       </div>
     </div>

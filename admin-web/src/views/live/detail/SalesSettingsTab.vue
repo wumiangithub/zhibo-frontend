@@ -19,6 +19,9 @@ import { useLeaveConfirm } from "@/composables/useLeaveConfirm";
 import FormRow from "../components/FormRow.vue";
 import UiButton from "@/components/ui/UiButton.vue";
 
+/** 管理端可选售卖类型（不含已下线的 paid） */
+const SELECTABLE_SELL_TYPES: SellType[] = ["free", "encrypted", "specified"];
+
 const props = defineProps<{
   activityId: ActivityId;
   detail: ActivityDetail;
@@ -29,8 +32,6 @@ const emit = defineEmits<{ refreshed: [] }>();
 const form = reactive({
   sellAlone: true,
   sellType: "free" as SellType,
-  price: "",
-  linePrice: "",
   password: "",
   accessValidityType: "long" as "long" | "days",
   accessValidityDays: 7,
@@ -42,24 +43,10 @@ const leave = useLeaveConfirm({ routeLeave: false });
 function applyDetail(d: ActivityDetail) {
   form.sellAlone = d.sellAlone ?? true;
   form.sellType = (d.sellType as SellType) || "free";
-  form.price = d.price != null ? String(d.price) : "";
-  form.linePrice = d.linePrice != null ? String(d.linePrice) : "";
   form.password = d.password ?? "";
   form.accessValidityType = d.accessValidityType === "days" ? "days" : "long";
   form.accessValidityDays =
     d.accessValidityDays && d.accessValidityDays > 0 ? d.accessValidityDays : 7;
-}
-
-/** 价格按数字语义比，避免 "10" vs "10.00" 误判 */
-function samePrice(a: string, b: string): boolean {
-  const ta = a.trim();
-  const tb = b.trim();
-  if (ta === "" && tb === "") return true;
-  if (ta === "" || tb === "") return false;
-  const na = Number(ta);
-  const nb = Number(tb);
-  if (Number.isNaN(na) || Number.isNaN(nb)) return ta === tb;
-  return na === nb;
 }
 
 /** 当前值相对详情基线是否有差异（改完又改回不算脏） */
@@ -69,16 +56,10 @@ const hasEdits = computed(() => {
   const baselineAccess = d.accessValidityType === "days" ? "days" : "long";
   const baselineDays =
     d.accessValidityDays && d.accessValidityDays > 0 ? d.accessValidityDays : 7;
-  const baselinePrice = d.price != null ? String(d.price) : "";
-  const baselineLine = d.linePrice != null ? String(d.linePrice) : "";
   const baselinePwd = d.password ?? "";
 
   if (form.sellAlone !== (d.sellAlone ?? true)) return true;
   if (form.sellType !== baselineType) return true;
-  if (form.sellType === "paid") {
-    if (!samePrice(form.price, baselinePrice)) return true;
-    if (!samePrice(form.linePrice, baselineLine)) return true;
-  }
   if (form.sellType === "encrypted") {
     if (form.password.trim() !== baselinePwd.trim()) return true;
   }
@@ -107,17 +88,8 @@ watch(
 
 function validateSales(): string | null {
   if (!form.sellAlone) return null;
-  if (form.sellType === "paid") {
-    if (form.price === "" || form.price == null) return "请填写商品价格";
-    const price = Number(form.price);
-    if (Number.isNaN(price) || price < 0) return "商品价格须为 ≥0 的数字";
-    if (!/^\d+(\.\d{1,2})?$/.test(String(form.price).trim())) {
-      return "商品价格最多两位小数";
-    }
-    if (form.linePrice !== "" && form.linePrice != null) {
-      const line = Number(form.linePrice);
-      if (Number.isNaN(line) || line <= price) return "划线价格须大于商品价格";
-    }
+  if (!SELECTABLE_SELL_TYPES.includes(form.sellType)) {
+    return "付费类型已下线，请改选其他售卖类型";
   }
   if (form.sellType === "encrypted") {
     if (!/^\d{6}$/.test(form.password.trim())) return "请设置 6 位数字密码";
@@ -145,12 +117,6 @@ async function onSave() {
       sellAlone: form.sellAlone,
       sellType: form.sellType,
     };
-    if (form.sellType === "paid") {
-      payload.price = String(form.price).trim();
-      if (form.linePrice !== "" && form.linePrice != null) {
-        payload.linePrice = String(form.linePrice).trim();
-      }
-    }
     if (form.sellType === "encrypted") {
       payload.password = form.password.trim();
     }
@@ -217,7 +183,6 @@ defineExpose({
           @change="leave.markDirty"
         >
           <ElRadio value="free">免费</ElRadio>
-          <ElRadio value="paid">付费</ElRadio>
           <ElRadio value="encrypted">加密</ElRadio>
           <ElRadio value="specified">指定用户</ElRadio>
         </ElRadioGroup>
@@ -227,56 +192,6 @@ defineExpose({
       <template v-if="form.sellType === 'free'">
         <FormRow label="有效期:">
           <span class="locked">长期有效，暂不支持修改</span>
-        </FormRow>
-      </template>
-
-      <!-- 付费 -->
-      <template v-else-if="form.sellType === 'paid'">
-        <FormRow
-          label="商品价格:"
-          required
-        >
-          <div class="flex items-center gap-2">
-            <ElInput
-              v-model="form.price"
-              placeholder="请输入"
-              style="width: 160px"
-              @input="leave.markDirty"
-            />
-            <span>元</span>
-          </div>
-        </FormRow>
-        <FormRow label="划线价格:">
-          <div class="flex items-center gap-2">
-            <ElInput
-              v-model="form.linePrice"
-              placeholder="选填，须大于商品价格"
-              style="width: 160px"
-              @input="leave.markDirty"
-            />
-            <span>元</span>
-          </div>
-        </FormRow>
-        <FormRow label="有效期:">
-          <ElRadioGroup
-            v-model="form.accessValidityType"
-            @change="leave.markDirty"
-          >
-            <ElRadio value="long">长期有效</ElRadio>
-            <ElRadio value="days">
-              自定义时长 购买后
-              <ElInputNumber
-                v-model="form.accessValidityDays"
-                :min="1"
-                :max="9999"
-                :controls="false"
-                class="days-input"
-                :disabled="form.accessValidityType !== 'days'"
-                @change="leave.markDirty"
-              />
-              天有效
-            </ElRadio>
-          </ElRadioGroup>
         </FormRow>
       </template>
 
@@ -301,7 +216,7 @@ defineExpose({
           >
             <ElRadio value="long">长期有效</ElRadio>
             <ElRadio value="days">
-              自定义时长 购买后
+              自定义时长&nbsp;&nbsp;直播结束后
               <ElInputNumber
                 v-model="form.accessValidityDays"
                 :min="1"
@@ -318,7 +233,7 @@ defineExpose({
       </template>
 
       <!-- 指定用户 -->
-      <template v-else>
+      <template v-else-if="form.sellType === 'specified'">
         <p class="spec-tip">
           仅被指定用户可免费学习课程，添加指定用户请前往【直播间-用户管理】手动操作
         </p>
@@ -329,7 +244,7 @@ defineExpose({
           >
             <ElRadio value="long">长期有效</ElRadio>
             <ElRadio value="days">
-              自定义时长 购买后
+              自定义时长&nbsp;&nbsp;直播结束后
               <ElInputNumber
                 v-model="form.accessValidityDays"
                 :min="1"
@@ -343,6 +258,13 @@ defineExpose({
             </ElRadio>
           </ElRadioGroup>
         </FormRow>
+      </template>
+
+      <!-- 存量 paid 等已下线类型 -->
+      <template v-else>
+        <p class="spec-tip">
+          付费类型已下线，请改选免费 / 加密 / 指定用户后保存
+        </p>
       </template>
     </fieldset>
 
@@ -377,7 +299,11 @@ defineExpose({
   pointer-events: none;
 }
 .locked {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
   font-size: 13px;
+  line-height: 32px;
   color: #999;
 }
 .days-input {

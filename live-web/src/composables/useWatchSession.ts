@@ -1,9 +1,10 @@
 import { computed, nextTick, onBeforeUnmount, ref, unref, type MaybeRefOrGetter, type Ref } from "vue";
 import {
   getWatchSdk,
-  getStoredGuestId,
-  storeGuestId,
-  type WatchSdkData,
+  getWatchSummary,
+  type WatchSdkSignData,
+  type WatchSdkSignParams,
+  type WatchSummaryData,
 } from "@/api/watch";
 import { useCountdown } from "@/composables/useCountdown";
 import { useBarrage } from "@/composables/useBarrage";
@@ -36,16 +37,18 @@ function resolveId(id: MaybeRefOrGetter<string>): string {
 }
 
 /**
- * 观看页与中控台共用：拉 /sdk、init 适配器、播放/聊天/弹幕/点赞/公告。
+ * 观看页与中控台共用：先 /summary 定页壳，需挂 SDK 时再 /sdk-sign + init。
  * 观众上下线落库不在这里：生产靠微吼回调，本地靠观看页按钮模拟回调。
  */
 export function useWatchSession(opts: WatchSessionOptions) {
   const { toast } = useToast();
   const loading = ref(true);
   const error = ref("");
-  const data = ref<WatchSdkData | null>(null) as Ref<WatchSdkData | null>;
+  /** 页壳（D95 summary） */
+  const data = ref<WatchSummaryData | null>(null) as Ref<WatchSummaryData | null>;
+  /** 最近一次签名（仅直播/预告 init 时有） */
+  const sign = ref<WatchSdkSignData | null>(null) as Ref<WatchSdkSignData | null>;
   const sdkFailed = ref(false);
-  const useFallback = ref(false);
   const showLiveStartPopup = ref(false);
 
   let adapter: WatchAdapter | null = null;
@@ -68,8 +71,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
   const chat = useChat({
     getSdk,
     getSender: () => ({
-      id: data.value?.guestId || "",
-      name: opts.getNickname() || data.value?.nickname || "我",
+      id: sign.value?.sdk?.account || (getViewerId() != null ? String(getViewerId()) : ""),
+      name: opts.getNickname() || sign.value?.nickname || "我",
     }),
     onIncoming: (msg) => barrage.spawnDanmaku(msg.msg),
     getActivityId: () => resolveId(opts.activityId),
@@ -96,7 +99,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
   const canPlayReplay = computed(() => false);
   const sdkReady = computed(() => !!adapter?.getSdk() && !sdkFailed.value && isLive.value);
 
-  function shouldInitSdk(res: WatchSdkData): boolean {
+  function shouldInitSdk(res: WatchSummaryData): boolean {
     // 仅直播 / 预告挂 SDK；结束与云侧 4/5 一律结束页 + 本站回放页
     return res.state === 1 || res.state === 2;
   }
@@ -105,21 +108,19 @@ export function useWatchSession(opts: WatchSessionOptions) {
   let sdkViewerId: number | null | undefined;
   let accountTimer: ReturnType<typeof setInterval> | null = null;
 
-  function buildWatchParams(): { guestId?: string; nickname?: string; viewerId?: number } {
-    const params: { guestId?: string; nickname?: string; viewerId?: number } = {};
-    const guestId = getStoredGuestId();
+  function buildWatchParams(): WatchSdkSignParams {
+    const params: WatchSdkSignParams = {};
     const nickname = opts.getNickname().trim();
     const viewerId = getViewerId();
-    if (guestId) params.guestId = guestId;
     if (viewerId != null) params.viewerId = viewerId;
-    // 小程序 URL 已带展示昵称；有 viewerId 时一并传给 /watch/sdk 作 sdk.username（勿再拉 user-info）
+    // 小程序 URL 已带展示昵称；一并传给 /watch/sdk-sign 作 sdk.username（勿再拉 user-info）
     if (nickname) params.nickname = nickname;
     return params;
   }
 
   /**
    * 本地切换账号后 viewerId 变了：旧 VhallSDK 仍是上一个 email，必须拆掉再 new。
-   * email 在签名里，所以要重新请求 /sdk，不能只改构造参数。
+   * email 在签名里，所以要重新请求 /sdk-sign，不能只改构造参数。
    */
   function reloadIfViewerChanged() {
     if (sdkViewerId === undefined || loading.value) return;
@@ -152,6 +153,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
     }
     adapter?.destroy();
     adapter = null;
+    sign.value = null;
   }
 
   /** afterInit：仅安全绑定后工作，不碰房间信息 API */
@@ -177,9 +179,10 @@ export function useWatchSession(opts: WatchSessionOptions) {
     player.scheduleQualityLabels();
   }
 
-  async function initSdk() {
+  async function initSdk(signData: WatchSdkSignData) {
     if (!data.value) return;
     const epoch = ++initEpoch;
+    sign.value = signData;
     // 先关 loading，让 WatchView/ConsoleView 挂上 PlayerStage 或 PreviewScreen（内含 #player/#docWrap）
     loading.value = false;
     player.resetPlayback();
@@ -187,8 +190,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
     if (epoch !== initEpoch) return;
 
     try {
-      adapter = createWatchAdapter(data.value.provider ?? "vhall");
-      await adapter.init(data.value, {
+      adapter = createWatchAdapter(signData.provider ?? "vhall");
+      await adapter.init(signData, {
         isInitCurrent: () => epoch === initEpoch,
         onError: (msg) => {
           if (epoch !== initEpoch) return;
@@ -199,7 +202,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
           if (epoch !== initEpoch) return;
           // 贴官方 demo：默认可重试错误只打日志，不自动 destroy 重拉。
           // 刷新时二次 init 更易放大 handleRoomInfo / nick_name / marquee（20005）。
-          // 可恢复：AUTO_RETRY_RETRYABLE_SDK=true，或用户点遮罩「刷新」/「切换嵌入」。
+          // 可恢复：AUTO_RETRY_RETRYABLE_SDK=true，或用户点遮罩「刷新」。
           console.warn("[vhall-sdk] 可重试错误（已关闭自动 destroy 重拉）:", text);
           if (!AUTO_RETRY_RETRYABLE_SDK) return;
           if (data.value && shouldInitSdk(data.value)) {
@@ -254,6 +257,11 @@ export function useWatchSession(opts: WatchSessionOptions) {
     }
   }
 
+  async function fetchSignAndInit() {
+    const signRes = await getWatchSdk(resolveId(opts.activityId), buildWatchParams());
+    await initSdk(signRes);
+  }
+
   async function retrySdkInit(reason: string) {
     if (sdkRetryCount >= SDK_MAX_RETRIES) {
       player.markMediaFailed(`${reason}（已自动重试 ${SDK_MAX_RETRIES} 次仍失败）`);
@@ -266,18 +274,17 @@ export function useWatchSession(opts: WatchSessionOptions) {
     player.waitingForMedia = true;
     destroySdk();
     try {
-      const res = await getWatchSdk(resolveId(opts.activityId), buildWatchParams());
-      storeGuestId(res.guestId);
-      data.value = res;
-      if (!shouldInitSdk(res)) {
+      const summary = await getWatchSummary(resolveId(opts.activityId));
+      data.value = summary;
+      if (!shouldInitSdk(summary)) {
         loading.value = false;
         stats.markLiveEnded();
         return;
       }
-      if (res.state === 4 || res.state === 5) {
+      if (summary.state === 4 || summary.state === 5) {
         stats.markLiveEnded();
       }
-      await initSdk();
+      await fetchSignAndInit();
     } catch (e) {
       player.markMediaFailed(e instanceof Error ? e.message : "重试加载失败");
       sdkFailed.value = true;
@@ -291,14 +298,14 @@ export function useWatchSession(opts: WatchSessionOptions) {
     destroySdk();
     const id = resolveId(opts.activityId);
     try {
-      const res = await getWatchSdk(id, buildWatchParams());
+      const summary = await getWatchSummary(id);
       // 强制 state=3 出 EndedScreen；刷新后再按云侧 4/5 进回放
-      data.value = { ...res, state: 3 };
+      data.value = { ...summary, state: 3 };
     } catch {
       if (data.value) {
         data.value = { ...data.value, state: 3 };
       } else {
-        data.value = { id, state: 3, title: "", nickname: "", guestId: "" } as WatchSdkData;
+        data.value = { id, state: 3, title: "", type: 2 };
       }
     }
     loading.value = false;
@@ -310,29 +317,28 @@ export function useWatchSession(opts: WatchSessionOptions) {
     loading.value = true;
     error.value = "";
     sdkFailed.value = false;
-    useFallback.value = false;
     sdkRetryCount = 0;
     data.value = null;
+    sign.value = null;
     stopCountdown();
     stats.resetLiveEnded();
     destroySdk();
     try {
-      const res = await getWatchSdk(resolveId(opts.activityId), buildWatchParams());
+      const summary = await getWatchSummary(resolveId(opts.activityId));
       if (getViewerId() !== requestedViewerId) {
         await load();
         return;
       }
-      storeGuestId(res.guestId);
-      data.value = res;
+      data.value = summary;
 
-      if (res.state === 2 && res.startTime) {
-        startCountdown(res.startTime);
+      if (summary.state === 2 && summary.startTime) {
+        startCountdown(summary.startTime);
       }
-      if (shouldInitSdk(res)) {
-        if (res.state === 4 || res.state === 5) {
+      if (shouldInitSdk(summary)) {
+        if (summary.state === 4 || summary.state === 5) {
           stats.markLiveEnded();
         }
-        await initSdk();
+        await fetchSignAndInit();
       } else {
         // state=3 或回放关闭的 4/5：出结束页，不挂播放器
         stats.markLiveEnded();
@@ -348,11 +354,6 @@ export function useWatchSession(opts: WatchSessionOptions) {
   function enterLiveFromPreview() {
     showLiveStartPopup.value = false;
     void load();
-  }
-
-  function switchToFallback() {
-    useFallback.value = true;
-    error.value = "";
   }
 
   async function shareWatch() {
@@ -382,8 +383,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
     loading,
     error,
     data,
+    sign,
     sdkFailed,
-    useFallback,
     showLiveStartPopup,
     countdown,
     barrage,
@@ -400,7 +401,6 @@ export function useWatchSession(opts: WatchSessionOptions) {
     sdkReady,
     load,
     enterLiveFromPreview,
-    switchToFallback,
     shareWatch,
     dispose,
   };
