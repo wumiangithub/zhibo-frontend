@@ -1,337 +1,386 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { ElDatePicker, ElMessage, ElTabPane, ElTabs, ElTooltip } from "element-plus";
 import {
-  getStats,
-  getOnlineTrend,
-  STATE_LABEL,
+  getActivityPresenceTrend,
+  getActivityUserData,
   type ActivityId,
-  type StatsOverview,
-  type TrendPoint,
+  type ActivityUserData,
+  type PresenceTrendPoint,
+  type UserDataRowType,
 } from "@/api/activity";
+import { loadEcharts, type EChartsInstance } from "@/utils/loadEcharts";
 
 const props = defineProps<{ activityId: ActivityId }>();
 
-const overview = ref<StatsOverview | null>(null);
+const POLL_MS = 120_000;
+/** ElTabs 必须绑 v-model，否则页签内容区不展开（只剩标题线） */
+const innerTab = ref("user");
+
+const userData = ref<ActivityUserData | null>(null);
 const overviewError = ref("");
-const points = ref<TrendPoint[]>([]);
+const overviewLoading = ref(false);
+
+const range = ref<[Date, Date] | null>(null);
+const points = ref<PresenceTrendPoint[]>([]);
 const trendError = ref("");
 const trendLoading = ref(false);
 
-type Preset = "1h" | "today" | "yesterday" | "custom";
-const activePreset = ref<Preset>("today");
-const customStart = ref("");
-const customEnd = ref("");
-
-const POLL_INTERVAL = 60_000;
+const chartEl = ref<HTMLDivElement | null>(null);
+let chart: EChartsInstance | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let resizeObserver: ResizeObserver | null = null;
+
+const ROW_LABEL: Record<UserDataRowType, string> = {
+  live_replay: "直播+回放",
+  live: "直播",
+  replay: "回放",
+};
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
-function formatTime(d: Date) {
+function formatApiTime(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function getPresetRange(preset: Preset): [string, string] {
-  const now = new Date();
-  let start: Date;
-  let end: Date = now;
-  if (preset === "1h") {
-    start = new Date(now.getTime() - 3600_000);
-  } else if (preset === "today") {
-    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  } else {
-    const y = new Date(now);
-    y.setDate(y.getDate() - 1);
-    start = new Date(y.getFullYear(), y.getMonth(), y.getDate());
-    end = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59);
-  }
-  return [formatTime(start), formatTime(end)];
+function parseApiTime(s: string): Date | null {
+  if (!s) return null;
+  const normalized = s.trim().replace(" ", "T");
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
-async function fetchOverview() {
+function formatDurationSec(sec: number) {
+  const n = Math.max(0, Math.floor(sec || 0));
+  const h = Math.floor(n / 3600);
+  const m = Math.floor((n % 3600) / 60);
+  const s = n % 60;
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+
+function clampRangeToOneDay(start: Date, end: Date): [Date, Date] {
+  let s = start;
+  let e = end;
+  if (e.getTime() < s.getTime()) {
+    e = new Date(s.getTime() + 60_000);
+  }
+  if (e.getTime() - s.getTime() > 86_400_000) {
+    e = new Date(s.getTime() + 86_400_000);
+  }
+  return [s, e];
+}
+
+async function fetchUserData(resetRange: boolean) {
+  overviewLoading.value = true;
+  overviewError.value = "";
   try {
-    overview.value = await getStats(props.activityId);
-    overviewError.value = "";
+    const data = await getActivityUserData(props.activityId);
+    userData.value = data;
+    if (resetRange || !range.value) {
+      const start = parseApiTime(data.trendDefault.startTime);
+      const end = parseApiTime(data.trendDefault.endTime);
+      if (start && end) {
+        range.value = clampRangeToOneDay(start, end);
+      }
+    }
   } catch (e) {
-    overviewError.value = e instanceof Error ? e.message : "加载概览失败";
+    overviewError.value = e instanceof Error ? e.message : "加载用户数据失败";
+  } finally {
+    overviewLoading.value = false;
   }
 }
 
 async function fetchTrend() {
+  if (!range.value) {
+    trendError.value = "请选择起止时间";
+    points.value = [];
+    renderChart();
+    return;
+  }
+  const [rawStart, rawEnd] = clampRangeToOneDay(range.value[0], range.value[1]);
+  range.value = [rawStart, rawEnd];
   trendLoading.value = true;
   trendError.value = "";
-  points.value = [];
   try {
-    let start: string;
-    let end: string;
-    if (activePreset.value === "custom") {
-      if (!customStart.value || !customEnd.value) {
-        trendError.value = "请选择起止时间";
-        trendLoading.value = false;
-        return;
-      }
-      start = customStart.value.replace("T", " ") + ":00";
-      end = customEnd.value.replace("T", " ") + ":00";
-    } else {
-      [start, end] = getPresetRange(activePreset.value);
-    }
-    const data = await getOnlineTrend(props.activityId, start, end);
+    const data = await getActivityPresenceTrend(
+      props.activityId,
+      formatApiTime(rawStart),
+      formatApiTime(rawEnd),
+      60,
+    );
     points.value = data.points ?? [];
   } catch (e) {
+    points.value = [];
     trendError.value = e instanceof Error ? e.message : "加载趋势失败";
   } finally {
     trendLoading.value = false;
+    await nextTick();
+    renderChart();
   }
 }
 
-function selectPreset(p: Preset) {
-  activePreset.value = p;
+async function ensureChart() {
+  if (chart || !chartEl.value) return;
+  try {
+    const echarts = await loadEcharts();
+    if (!chartEl.value) return;
+    chart = echarts.init(chartEl.value);
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "ECharts 加载失败");
+  }
+}
+
+function renderChart() {
+  void (async () => {
+    await ensureChart();
+    if (!chart) return;
+    if (points.value.length === 0) {
+      chart.clear();
+      return;
+    }
+    const times = points.value.map((p) => p.time);
+    const online = points.value.map((p) => p.online ?? 0);
+    chart.setOption(
+      {
+        color: ["#409eff"],
+        grid: { left: 48, right: 24, top: 24, bottom: 72 },
+        tooltip: {
+          trigger: "axis",
+          formatter: (params: unknown) => {
+            const list = Array.isArray(params) ? params : [params];
+            const first = list[0] as { axisValue?: string; data?: number };
+            const time = first?.axisValue ?? "";
+            const val = first?.data ?? 0;
+            return `${time}<br/>在线人数：${val}`;
+          },
+        },
+        dataZoom: [
+          { type: "inside", xAxisIndex: 0 },
+          {
+            type: "slider",
+            xAxisIndex: 0,
+            height: 18,
+            bottom: 12,
+          },
+        ],
+        xAxis: {
+          type: "category",
+          boundaryGap: false,
+          data: times,
+          axisLabel: {
+            formatter: (v: string) => (v.length >= 19 ? v.slice(11) : v),
+          },
+        },
+        yAxis: {
+          type: "value",
+          minInterval: 1,
+          splitLine: { lineStyle: { color: "#f0f0f0" } },
+        },
+        series: [
+          {
+            name: "在线人数",
+            type: "line",
+            smooth: false,
+            showSymbol: true,
+            symbolSize: 6,
+            areaStyle: { opacity: 0.25 },
+            data: online,
+          },
+        ],
+      },
+      true,
+    );
+  })();
+}
+
+function onRangeChange(val: [Date, Date] | null) {
+  if (!val) {
+    range.value = null;
+    return;
+  }
+  range.value = clampRangeToOneDay(val[0], val[1]);
   void fetchTrend();
 }
 
-function useCustomRange() {
-  activePreset.value = "custom";
-  void fetchTrend();
+async function refreshAll(resetRange: boolean) {
+  await fetchUserData(resetRange);
+  await fetchTrend();
 }
-
-const chartWidth = 720;
-const chartHeight = 240;
-const chartPad = { top: 20, right: 20, bottom: 40, left: 50 };
-const innerW = chartWidth - chartPad.left - chartPad.right;
-const innerH = chartHeight - chartPad.top - chartPad.bottom;
-
-const maxCount = computed(() => {
-  if (points.value.length === 0) return 1;
-  return Math.max(1, ...points.value.map((p) => p.count));
-});
-
-const polylinePoints = computed(() => {
-  if (points.value.length === 0) return "";
-  const n = points.value.length;
-  return points.value
-    .map((p, i) => {
-      const x = chartPad.left + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
-      const y = chartPad.top + innerH - (p.count / maxCount.value) * innerH;
-      return `${x},${y}`;
-    })
-    .join(" ");
-});
-
-const yTicks = computed(() => {
-  const max = maxCount.value;
-  const ticks: { y: number; label: string }[] = [];
-  for (let i = 0; i <= 4; i++) {
-    const val = Math.round((max / 4) * i);
-    const y = chartPad.top + innerH - (val / max) * innerH;
-    ticks.push({ y, label: String(val) });
-  }
-  return ticks;
-});
-
-const xLabels = computed(() => {
-  if (points.value.length === 0) return [];
-  const n = points.value.length;
-  const step = Math.max(1, Math.floor(n / 6));
-  const labels: { x: number; text: string }[] = [];
-  for (let i = 0; i < n; i += step) {
-    const x = chartPad.left + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
-    const t = points.value[i].time;
-    labels.push({ x, text: t.slice(11, 16) || t.slice(5, 10) });
-  }
-  return labels;
-});
 
 function startPoll() {
-  void fetchOverview();
-  void fetchTrend();
+  void refreshAll(true);
   if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(() => void fetchOverview(), POLL_INTERVAL);
+  pollTimer = setInterval(() => void refreshAll(false), POLL_MS);
 }
 
-onMounted(startPoll);
+const EMPTY_ROWS: ActivityUserData["rows"] = [
+  { type: "live_replay", viewerCount: 0, viewCount: 0, avgWatchDurationSec: 0 },
+  { type: "live", viewerCount: 0, viewCount: 0, avgWatchDurationSec: 0 },
+  { type: "replay", viewerCount: 0, viewCount: 0, avgWatchDurationSec: 0 },
+];
+
+const summary = computed(() => userData.value?.summary ?? null);
+const displayRows = computed(() =>
+  userData.value?.rows?.length ? userData.value.rows : EMPTY_ROWS,
+);
+
+onMounted(() => {
+  startPoll();
+  void nextTick(() => {
+    if (chartEl.value && typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => chart?.resize());
+      resizeObserver.observe(chartEl.value);
+    }
+  });
+});
+
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer);
+  resizeObserver?.disconnect();
+  chart?.dispose();
+  chart = null;
 });
-watch(() => props.activityId, startPoll);
+
+watch(
+  () => props.activityId,
+  () => startPoll(),
+);
 </script>
 
 <template>
   <div class="data-tab">
-    <p
-      v-if="overviewError && !overview"
-      class="err"
+    <ElTabs
+      v-model="innerTab"
+      class="data-tabs"
     >
-      {{ overviewError }}
-    </p>
-
-    <template v-if="overview">
-      <div class="overview">
-        <div class="overview-head">
-          <div>
-            <h3 class="overview-title">{{ overview.title }}</h3>
-            <p class="overview-id">ID: {{ overview.id }}</p>
-          </div>
-          <span class="state-badge">{{ STATE_LABEL[overview.state] ?? overview.state }}</span>
-        </div>
-        <div class="metrics">
-          <div class="metric">
-            <p class="metric-label">热度 (PV)</p>
-            <p class="metric-value">{{ overview.pv ?? 0 }}</p>
-          </div>
-          <div class="metric">
-            <p class="metric-label">当前在线</p>
-            <p class="metric-value is-online">{{ overview.onlineCount ?? 0 }}</p>
-          </div>
-        </div>
-        <p class="hint">概览每 60 秒自动刷新</p>
-      </div>
-
-      <div class="trend">
-        <h3 class="trend-title">在线趋势</h3>
-        <div class="presets">
-          <button
-            type="button"
-            class="preset"
-            :class="{ 'is-active': activePreset === '1h' }"
-            @click="selectPreset('1h')"
-          >
-            近 1 小时
-          </button>
-          <button
-            type="button"
-            class="preset"
-            :class="{ 'is-active': activePreset === 'today' }"
-            @click="selectPreset('today')"
-          >
-            今天
-          </button>
-          <button
-            type="button"
-            class="preset"
-            :class="{ 'is-active': activePreset === 'yesterday' }"
-            @click="selectPreset('yesterday')"
-          >
-            昨天
-          </button>
-          <span class="sep">|</span>
-          <input
-            v-model="customStart"
-            type="datetime-local"
-            class="dt"
-          />
-          <span class="to">至</span>
-          <input
-            v-model="customEnd"
-            type="datetime-local"
-            class="dt"
-          />
-          <button
-            type="button"
-            class="preset"
-            @click="useCustomRange"
-          >
-            查询
-          </button>
-        </div>
-
+      <ElTabPane
+        label="用户数据"
+        name="user"
+      >
         <p
-          v-if="trendError"
+          v-if="overviewError"
           class="err"
         >
-          {{ trendError }}
+          {{ overviewError }}
         </p>
         <p
-          v-else-if="trendLoading"
+          v-else-if="overviewLoading && !userData"
           class="empty"
         >
           加载中…
         </p>
-        <p
-          v-else-if="points.length === 0"
-          class="empty"
-        >
-          该时段暂无在线数据
-        </p>
-        <div
-          v-else
-          class="chart-wrap"
-        >
-          <svg
-            :viewBox="`0 0 ${chartWidth} ${chartHeight}`"
-            class="chart"
-            preserveAspectRatio="xMidYMid meet"
-          >
-            <line
-              :x1="chartPad.left"
-              :y1="chartPad.top + innerH"
-              :x2="chartPad.left + innerW"
-              :y2="chartPad.top + innerH"
-              stroke="#e5e7eb"
-              stroke-width="1"
-            />
-            <line
-              :x1="chartPad.left"
-              :y1="chartPad.top"
-              :x2="chartPad.left"
-              :y2="chartPad.top + innerH"
-              stroke="#e5e7eb"
-              stroke-width="1"
-            />
-            <line
-              v-for="(tick, i) in yTicks"
-              :key="i"
-              :x1="chartPad.left"
-              :y1="tick.y"
-              :x2="chartPad.left + innerW"
-              :y2="tick.y"
-              stroke="#f3f4f6"
-              stroke-width="1"
-            />
-            <text
-              v-for="(tick, i) in yTicks"
-              :key="'l' + i"
-              :x="chartPad.left - 8"
-              :y="tick.y + 4"
-              text-anchor="end"
-              class="tick-text"
+
+        <template v-else>
+          <section class="block traffic">
+            <div class="block-head">
+              <h3 class="block-title">流量观看</h3>
+            </div>
+            <div class="summary-bar">
+              <span class="summary-label">全时段数据</span>
+              <div class="summary-metrics">
+                <div class="summary-item">
+                  <span class="k">直播间访客数</span>
+                  <span class="v">{{ summary?.visitorCount ?? 0 }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="k">直播间浏览量</span>
+                  <span class="v">{{ summary?.viewCount ?? 0 }}</span>
+                </div>
+                <div class="summary-item">
+                  <span class="k">直播间人均停留时长</span>
+                  <span class="v">{{ formatDurationSec(summary?.avgStayDurationSec ?? 0) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <table class="watch-table">
+              <thead>
+                <tr>
+                  <th>观看类型</th>
+                  <th>观看人数</th>
+                  <th>观看人次</th>
+                  <th>人均观看时长</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="row in displayRows"
+                  :key="row.type"
+                >
+                  <td>{{ ROW_LABEL[row.type] ?? row.type }}</td>
+                  <td>{{ row.viewerCount }}</td>
+                  <td>{{ row.viewCount }}</td>
+                  <td>{{ formatDurationSec(row.avgWatchDurationSec) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section class="block trend">
+            <div class="trend-head">
+              <div class="trend-title-wrap">
+                <h3 class="block-title">在线人数趋势图</h3>
+                <ElTooltip
+                  content="数据每2分钟更新1次"
+                  placement="top"
+                >
+                  <span
+                    class="info-i"
+                    aria-label="数据更新说明"
+                  >i</span>
+                </ElTooltip>
+              </div>
+              <ElDatePicker
+                v-model="range"
+                type="datetimerange"
+                range-separator="至"
+                start-placeholder="开始时间"
+                end-placeholder="结束时间"
+                format="YYYY-MM-DD HH:mm:ss"
+                :clearable="false"
+                @change="onRangeChange"
+              />
+            </div>
+
+            <p
+              v-if="trendError"
+              class="err"
             >
-              {{ tick.label }}
-            </text>
-            <polyline
-              :points="polylinePoints"
-              fill="none"
-              stroke="var(--color-primary)"
-              stroke-width="2"
-              stroke-linejoin="round"
-            />
-            <circle
-              v-for="(p, i) in points"
-              :key="i"
-              :cx="chartPad.left + (points.length === 1 ? innerW / 2 : (i / (points.length - 1)) * innerW)"
-              :cy="chartPad.top + innerH - (p.count / maxCount) * innerH"
-              r="3"
-              fill="var(--color-primary)"
-            />
-            <text
-              v-for="(label, i) in xLabels"
-              :key="'x' + i"
-              :x="label.x"
-              :y="chartPad.top + innerH + 24"
-              text-anchor="middle"
-              class="tick-text"
+              {{ trendError }}
+            </p>
+            <p
+              v-else-if="trendLoading && points.length === 0"
+              class="empty"
             >
-              {{ label.text }}
-            </text>
-          </svg>
-        </div>
-      </div>
-    </template>
+              加载中…
+            </p>
+            <p
+              v-else-if="!trendLoading && points.length === 0"
+              class="empty"
+            >
+              该时段暂无在线数据
+            </p>
+            <div
+              ref="chartEl"
+              class="chart"
+              :class="{ 'is-hidden': points.length === 0 }"
+            />
+          </section>
+        </template>
+      </ElTabPane>
+    </ElTabs>
   </div>
 </template>
 
 <style scoped>
+.data-tab {
+  padding: 4px 0 24px;
+}
+.data-tabs :deep(.el-tabs__header) {
+  margin-bottom: 16px;
+}
 .err {
   margin: 0 0 12px;
   padding: 8px 12px;
@@ -340,120 +389,108 @@ watch(() => props.activityId, startPoll);
   color: var(--color-danger);
   font-size: 13px;
 }
-.overview-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-.overview-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text);
-}
-.overview-id {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--color-text-placeholder);
-}
-.state-badge {
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-  font-size: 12px;
-}
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  max-width: 420px;
-}
-.metric {
-  padding: 14px;
-  border-radius: 6px;
-  background: #fafbfc;
-}
-.metric-label {
-  margin: 0;
-  font-size: 12px;
-  color: var(--color-text-placeholder);
-}
-.metric-value {
-  margin: 6px 0 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--color-text);
-}
-.metric-value.is-online {
-  color: var(--color-success);
-}
-.hint {
-  margin: 12px 0 0;
-  font-size: 12px;
-  color: var(--color-text-placeholder);
-}
-.trend {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--color-border-light);
-}
-.trend-title {
-  margin: 0 0 12px;
-  font-size: 15px;
-  font-weight: 600;
-}
-.presets {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.preset {
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: #fff;
-  font-size: 13px;
-  color: var(--color-text);
-  cursor: pointer;
-  outline: none;
-}
-.preset.is-active {
-  border-color: var(--color-primary);
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
-}
-.sep,
-.to {
-  color: var(--color-text-placeholder);
-  font-size: 13px;
-}
-.dt {
-  height: 30px;
-  padding: 0 8px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  font-size: 13px;
-}
 .empty {
   padding: 32px 0;
   text-align: center;
   font-size: 13px;
   color: var(--color-text-placeholder);
 }
-.chart-wrap {
-  overflow-x: auto;
+.block {
+  margin-bottom: 28px;
+}
+.block-head {
+  margin-bottom: 12px;
+}
+.block-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 28px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border: 1px solid var(--color-border-light, #ebeef5);
+  border-radius: 4px;
+  background: #fafbfc;
+}
+.summary-label {
+  font-size: 13px;
+  color: var(--color-text-secondary, #606266);
+  white-space: nowrap;
+}
+.summary-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 36px;
+}
+.summary-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.summary-item .k {
+  font-size: 13px;
+  color: var(--color-text-placeholder, #909399);
+}
+.summary-item .v {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.watch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.watch-table th,
+.watch-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border-light, #ebeef5);
+  text-align: left;
+}
+.watch-table th {
+  color: var(--color-text-secondary, #606266);
+  font-weight: 500;
+  background: #fafbfc;
+}
+.trend-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.trend-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.info-i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid #c0c4cc;
+  color: #909399;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1;
+  cursor: default;
+  user-select: none;
 }
 .chart {
   width: 100%;
-  max-width: 48rem;
+  height: 360px;
 }
-.tick-text {
-  fill: #9ca3af;
-  font-size: 11px;
+.chart.is-hidden {
+  display: none;
 }
 </style>

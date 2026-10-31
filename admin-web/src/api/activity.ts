@@ -372,6 +372,62 @@ export function getOnlineTrend(id: ActivityId, startTime: string, endTime: strin
   });
 }
 
+/** 直播设置 · 用户数据汇总（本站三表；顶部≡直播行） */
+export type UserDataRowType = "live_replay" | "live" | "replay";
+
+export interface UserDataRow {
+  type: UserDataRowType;
+  viewerCount: number;
+  viewCount: number;
+  avgWatchDurationSec: number;
+}
+
+export interface ActivityUserData {
+  id: ActivityId;
+  summary: {
+    visitorCount: number;
+    viewCount: number;
+    avgStayDurationSec: number;
+  };
+  rows: UserDataRow[];
+  trendDefault: {
+    startTime: string;
+    endTime: string;
+  };
+}
+
+export function getActivityUserData(id: ActivityId) {
+  return get<ActivityUserData>(`/activities/user-data/${encodeURIComponent(id)}`);
+}
+
+/** 本站进出三线走势（管理端；用户数据页只用 online） */
+export interface PresenceTrendPoint {
+  time: string;
+  online: number;
+  enter: number;
+  leave: number;
+}
+
+export interface PresenceTrendData {
+  id: ActivityId;
+  startTime: string;
+  endTime: string;
+  bucketSeconds: number;
+  points: PresenceTrendPoint[];
+}
+
+export function getActivityPresenceTrend(
+  id: ActivityId,
+  startTime: string,
+  endTime: string,
+  bucketSeconds = 60,
+) {
+  return get<PresenceTrendData>(
+    `/activities/presence-trend/${encodeURIComponent(id)}`,
+    { params: { startTime, endTime, bucketSeconds } },
+  );
+}
+
 export interface UpdateActivityPayload {
   title?: string;
   startTime?: string;
