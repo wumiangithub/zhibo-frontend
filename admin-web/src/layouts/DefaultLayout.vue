@@ -13,11 +13,14 @@ const { message, visible, toast } = useToast();
 
 /** 用户模块侧栏「用户管理」分组是否展开 */
 const userGroupOpen = ref(true);
+/** 交易模块侧栏「订单管理」分组是否展开 */
+const tradeGroupOpen = ref(true);
 
 const topNav = [
   { key: "workbench", label: "工作台", to: "/" },
   { key: "course", label: "课程", to: "/course" },
   { key: "live", label: "直播", to: "/live" },
+  { key: "trade", label: "交易", to: "/trade/orders" },
   { key: "user", label: "用户", to: "/user/list" },
   { key: "settings", label: "设置", to: "/settings/materials" },
 ] as const;
@@ -68,6 +71,11 @@ const userSideNav = [
   { key: "tags", label: "标签管理", to: "/user/tags" },
 ] as const;
 
+/** 顶栏交易模块侧栏：订单管理 */
+const tradeSideNav = [
+  { key: "orders", label: "全部订单", to: "/trade/orders" },
+] as const;
+
 const isLiveModule = computed(() => {
   const name = route.name;
   return (
@@ -87,9 +95,12 @@ const isSettingsModule = computed(
 
 const isUserModule = computed(() => route.path.startsWith("/user"));
 
+const isTradeModule = computed(() => route.path.startsWith("/trade"));
+
 const activeTop = computed(() => {
   if (isLiveModule.value) return "live";
   if (isCourseModule.value) return "course";
+  if (isTradeModule.value) return "trade";
   if (isSettingsModule.value) return "settings";
   if (isUserModule.value) return "user";
   if (route.name === "dashboard" || route.path === "/") return "workbench";
@@ -97,6 +108,10 @@ const activeTop = computed(() => {
 });
 
 const activeSide = computed(() => {
+  if (isTradeModule.value) {
+    if (route.name === "trade-orders" || route.path.startsWith("/trade/orders")) return "orders";
+    return "";
+  }
   if (isUserModule.value) {
     if (route.name === "user-learning-stats") return "learning-stats";
     if (
@@ -151,6 +166,7 @@ const viewKey = computed(() => {
 });
 
 const currentSideNav = computed(() => {
+  if (isTradeModule.value) return tradeSideNav;
   if (isUserModule.value) return userSideNav;
   if (isSettingsModule.value) return settingsSideNav;
   if (isCourseModule.value) return courseSideNav;
@@ -314,7 +330,9 @@ async function onAccountClick() {
     <div class="flex min-h-0 flex-1">
       <aside
         class="side-aside flex w-[176px] flex-none flex-col border-r border-[#ebebeb] bg-[#fafbfc]"
-        :class="{ 'is-live-module': isLiveModule || isCourseModule || isUserModule }"
+        :class="{
+          'is-live-module': isLiveModule || isCourseModule || isUserModule || isTradeModule,
+        }"
       >
         <nav class="side-nav min-h-0 flex-1 space-y-0.5 px-2 py-3 text-[13px]">
           <button
@@ -344,7 +362,38 @@ async function onAccountClick() {
               />
             </svg>
           </button>
-          <template v-if="!isUserModule || userGroupOpen">
+          <button
+            v-if="isTradeModule"
+            type="button"
+            class="side-group-toggle"
+            :aria-expanded="tradeGroupOpen"
+            @click="tradeGroupOpen = !tradeGroupOpen"
+          >
+            <span class="side-group-label">
+              <SideIcon name="order" />
+              <span>订单管理</span>
+            </span>
+            <svg
+              class="side-group-chevron"
+              :class="{ 'is-collapsed': !tradeGroupOpen }"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </button>
+          <template
+            v-if="
+              (!isUserModule || userGroupOpen) && (!isTradeModule || tradeGroupOpen)
+            "
+          >
             <template
               v-for="item in currentSideNav"
               :key="item.key"
@@ -355,7 +404,7 @@ async function onAccountClick() {
                 class="side-nav-item"
                 :class="{
                   'is-active': activeSide === item.key,
-                  'is-nested': isUserModule,
+                  'is-nested': isUserModule || isTradeModule,
                 }"
               >
                 <SideIcon
@@ -368,7 +417,7 @@ async function onAccountClick() {
                 v-else
                 type="button"
                 class="side-nav-item"
-                :class="{ 'is-nested': isUserModule }"
+                :class="{ 'is-nested': isUserModule || isTradeModule }"
                 @click="onSideClick(item)"
               >
                 <SideIcon
@@ -382,7 +431,13 @@ async function onAccountClick() {
         </nav>
 
         <div
-          v-if="!isLiveModule && !isSettingsModule && !isCourseModule && !isUserModule"
+          v-if="
+            !isLiveModule &&
+              !isSettingsModule &&
+              !isCourseModule &&
+              !isUserModule &&
+              !isTradeModule
+          "
           class="box-border px-2 pb-3"
         >
           <button

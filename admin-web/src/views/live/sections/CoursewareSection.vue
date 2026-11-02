@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { ElMessage, ElPopover, ElRadio, ElRadioGroup, ElTooltip } from "element-plus";
-import { InfoFilled, Rank } from "@element-plus/icons-vue";
+import { InfoFilled } from "@element-plus/icons-vue";
 import Sortable from "sortablejs";
 import type { MaterialListItem } from "@/api/materials";
 import {
@@ -17,6 +17,7 @@ import { formatUploadSize } from "@/views/settings/materials/materialUploadForma
 import { getMaterialFileIcon } from "@/views/settings/materials/materialFileIcons";
 import { getTosPreviewUrl } from "@/utils/fileInfo";
 import coursewareExampleImg from "@/assets/images/example_of_courseware_materials.png";
+import dragGripIcon from "@/assets/icons/drag-grip.svg?raw";
 
 const ARCHIVE_EXTS = new Set(["zip", "rar", "7z", "tar", "gz", "tgz"]);
 
@@ -219,7 +220,7 @@ onBeforeUnmount(() => {
 
       <div
         v-if="form.coursewares.length"
-        class="cw-table-wrap"
+        class="cw-table-wrap hover-scrollbar"
       >
         <table
           class="cw-table"
@@ -262,9 +263,10 @@ onBeforeUnmount(() => {
                     class="cw-drag"
                     title="拖拽排序"
                   >
-                    <el-icon :size="16">
-                      <Rank />
-                    </el-icon>
+                    <span
+                      class="cw-drag-icon"
+                      v-html="dragGripIcon"
+                    />
                   </button>
                   <div
                     class="cw-thumb"
@@ -473,6 +475,17 @@ onBeforeUnmount(() => {
 }
 .cw-drag:active {
   cursor: grabbing;
+}
+.cw-drag-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  line-height: 0;
+}
+.cw-drag-icon :deep(svg) {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 .cw-thumb {
   flex: none;

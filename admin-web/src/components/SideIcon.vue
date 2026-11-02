@@ -195,6 +195,25 @@ defineProps<{
       <path d="M3 17l6-6 4 4 7-7" />
       <path d="M14 8h6v6" />
     </svg>
+    <!-- 订单管理 -->
+    <svg
+      v-else-if="name === 'order'"
+      class="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.8"
+      viewBox="0 0 24 24"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M7 3.5h10a1.5 1.5 0 011.5 1.5v14a1.5 1.5 0 01-1.5 1.5H7A1.5 1.5 0 015.5 19V5A1.5 1.5 0 017 3.5z"
+      />
+      <path
+        stroke-linecap="round"
+        d="M9 8h6M9 12h6M9 16h4"
+      />
+    </svg>
     <!-- 素材 / 默认 -->
     <svg
       v-else

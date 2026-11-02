@@ -10,18 +10,33 @@ export type ShareTabKey = "poster" | "link" | "qrcode" | "terminal";
 const props = withDefaults(
   defineProps<{
     modelValue: boolean;
-    /** 直播标题 */
+    /** 直播 / 课程标题 */
     title: string;
-    /** 本站观看长链接 */
+    /** 本站观看 / 学习长链接 */
     watchUrl: string;
     /** 短链，缺省与 watchUrl 相同 */
     shortUrl?: string;
     /** 预览文案第一行 */
     brandLine?: string;
+    /** 链接 Tab 提示，如「给用户分享这个直播：」 */
+    hint?: string;
+    /** 「点击观看」/「点击学习」 */
+    watchVerb?: string;
+    /** 标题缺省文案 */
+    titleFallback?: string;
+    /**
+     * 链接下方说明（勿含明文密钥）。
+     * 例：「参数 c 含：courseId、inviterId（员工），已混淆」
+     */
+    payloadHint?: string;
   }>(),
   {
     shortUrl: "",
     brandLine: "钱坤云直播平台 发现一场精彩直播",
+    hint: "给用户分享这个直播：",
+    watchVerb: "点击观看",
+    titleFallback: "直播",
+    payloadHint: "",
   },
 );
 
@@ -51,8 +66,8 @@ const displayShortUrl = computed(() => props.shortUrl || props.watchUrl || "");
 const shareContent = computed(() => {
   const lines = [
     props.brandLine,
-    props.title || "直播",
-    `点击观看：${displayShortUrl.value}`,
+    props.title || props.titleFallback,
+    `${props.watchVerb}：${displayShortUrl.value}`,
   ];
   return lines.join("\n");
 });
@@ -123,12 +138,12 @@ watch(
       v-if="activeTab === 'link'"
       class="share-link"
     >
-      <p class="share-link__hint">给用户分享这个直播：</p>
+      <p class="share-link__hint">{{ hint }}</p>
       <div class="share-preview">
         <p class="share-preview__brand">{{ brandLine }}</p>
-        <p class="share-preview__title">{{ title || "直播" }}</p>
+        <p class="share-preview__title">{{ title || titleFallback }}</p>
         <p class="share-preview__watch">
-          点击观看：
+          {{ watchVerb }}：
           <a
             class="share-preview__url"
             :href="displayShortUrl"
@@ -152,6 +167,12 @@ watch(
           复制长链接
         </button>
       </div>
+      <p
+        v-if="payloadHint"
+        class="share-payload-hint"
+      >
+        {{ payloadHint }}
+      </p>
     </div>
 
     <template #footer>
@@ -250,6 +271,12 @@ watch(
 }
 .share-long__copy:hover {
   opacity: 0.85;
+}
+.share-payload-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
 }
 .share-footer {
   display: flex;

@@ -19,6 +19,11 @@ const router = createRouter({
       component: () => import("@/views/watch/WatchReplayView.vue"),
     },
     {
+      path: "/course/:id",
+      name: "course-watch",
+      component: () => import("@/views/course/CourseWatchView.vue"),
+    },
+    {
       path: "/console/:id",
       name: "console",
       component: () => import("@/views/console/ConsoleView.vue"),

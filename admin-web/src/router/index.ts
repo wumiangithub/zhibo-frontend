@@ -153,6 +153,11 @@ const router = createRouter({
           name: "user-tags-edit",
           component: () => import("@/views/user/TagFormView.vue"),
         },
+        {
+          path: "trade/orders",
+          name: "trade-orders",
+          component: () => import("@/views/trade/OrderAllListView.vue"),
+        },
       ],
     },
     /** 主播邀请页：邀请链接落地，独立壳。 */

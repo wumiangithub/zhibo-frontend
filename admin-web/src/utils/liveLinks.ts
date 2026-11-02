@@ -1,5 +1,6 @@
 import { encodeAudienceInviteToken } from "./audienceInviteToken";
 import { encodeInviteToken } from "./inviteToken";
+import { buildShareUrl } from "./shareUrl";
 
 /** 观众观看页根地址。换域名或端口只改这里。 */
 const AUDIENCE_WATCH_ORIGIN = "http://localhost:5174";
@@ -38,15 +39,17 @@ export const PASSCODE_DEFAULT_NICKNAME = "讲师";
  * 观众观看链接。
  * 列表分享、详情复制、开播设置都走本函数，避免各处手写地址。
  * 可选带员工邀请参数 `c`（D77 归因；不记观众邀请）。
+ * `c`：kind=1 + inviterId + sig（活动 id 在路径，见 audienceInviteToken）。
+ * 拼装一律走 {@link buildShareUrl}；hint 仅人读，解析/归因只信 `c`。
  */
 export function buildAudienceWatchUrl(activityId: string, employeeInviterId?: number): string {
   const id = activityId.trim();
   const base = `${AUDIENCE_WATCH_ORIGIN}/watch/${id}`;
   if (!employeeInviterId || employeeInviterId <= 0) return base;
-  const params = new URLSearchParams({
-    c: encodeAudienceInviteToken(employeeInviterId),
+  return buildShareUrl(base, encodeAudienceInviteToken(employeeInviterId), {
+    kind: 1,
+    inviterId: employeeInviterId,
   });
-  return `${base}?${params.toString()}`;
 }
 
 /**

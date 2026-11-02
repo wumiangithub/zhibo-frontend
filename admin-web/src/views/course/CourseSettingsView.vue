@@ -1,15 +1,30 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
+import { MoreFilled, Share } from "@element-plus/icons-vue";
+import {
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
+  ElIcon,
+  ElMessage,
+  ElMessageBox,
+} from "element-plus";
 import {
   getCourse,
+  setCourseShelf,
   SHELF_STATUS_LABEL,
   type CourseDetail,
   type ShelfStatus,
 } from "@/api/course";
 import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
+import ShareDialog from "@/components/share/ShareDialog.vue";
+import { useAuthStore } from "@/stores/auth";
+import { buildCourseShareUrl } from "@/utils/courseLinks";
+import DeleteCourseDialog from "./components/DeleteCourseDialog.vue";
 import CourseBasicInfoTab from "./detail/CourseBasicInfoTab.vue";
 import CourseCatalogTab from "./detail/CourseCatalogTab.vue";
+import CourseSalesSettingsTab from "./detail/CourseSalesSettingsTab.vue";
 
 type TabKey = "basic" | "catalog" | "sales";
 
@@ -17,12 +32,20 @@ const TAB_KEYS: TabKey[] = ["basic", "catalog", "sales"];
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 
 const id = computed(() => String(route.params.id ?? ""));
 const loading = ref(true);
 const error = ref("");
 const detail = ref<CourseDetail | null>(null);
 const basicTabRef = ref<InstanceType<typeof CourseBasicInfoTab> | null>(null);
+const salesTabRef = ref<InstanceType<typeof CourseSalesSettingsTab> | null>(null);
+const deleteDialogVisible = ref(false);
+const shareVisible = ref(false);
+
+const courseShareUrl = computed(() =>
+  buildCourseShareUrl(id.value, auth.user?.id),
+);
 
 const sideNav = [
   { key: "basic" as const, label: "基本信息" },
@@ -48,6 +71,13 @@ const shelfLabel = computed(() => {
   return SHELF_STATUS_LABEL[status] ?? status;
 });
 
+const showShelfOn = computed(() => {
+  const status = detail.value?.shelfStatus;
+  return status === "pending" || status === "off";
+});
+
+const showShelfOff = computed(() => detail.value?.shelfStatus === "on");
+
 function shelfDotClass(status?: ShelfStatus) {
   if (status === "on") return "dot--green";
   if (status === "banned") return "dot--red";
@@ -62,6 +92,9 @@ type DirtyTab = {
 function currentDirtyTab(): DirtyTab | null {
   if (activeTab.value === "basic") {
     return (basicTabRef.value as DirtyTab | null) ?? null;
+  }
+  if (activeTab.value === "sales") {
+    return (salesTabRef.value as DirtyTab | null) ?? null;
   }
   return null;
 }
@@ -100,6 +133,48 @@ async function fetchDetail(opts?: { silent?: boolean }) {
 
 function onTabRefreshed() {
   void fetchDetail({ silent: true });
+}
+
+function onShare() {
+  shareVisible.value = true;
+}
+
+async function onShelf(listed: boolean) {
+  const d = detail.value;
+  if (!d) return;
+  const action = listed ? "上架" : "下架";
+  try {
+    await ElMessageBox.confirm(`确定要${action}「${d.title}」吗？`, action, {
+      type: "warning",
+      confirmButtonText: "确定",
+      cancelButtonText: "取消",
+    });
+  } catch {
+    return;
+  }
+  try {
+    await setCourseShelf(d.id, listed);
+    ElMessage.success(`${action}成功`);
+    void fetchDetail({ silent: true });
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : `${action}失败`);
+  }
+}
+
+function onDelete() {
+  if (!detail.value) return;
+  deleteDialogVisible.value = true;
+}
+
+function onDeleteConfirmed() {
+  ElMessage.success("已删除");
+  void router.push("/course");
+}
+
+function onMoreCommand(cmd: string) {
+  if (cmd === "on") void onShelf(true);
+  else if (cmd === "off") void onShelf(false);
+  else if (cmd === "delete") onDelete();
 }
 
 onMounted(fetchDetail);
@@ -159,6 +234,57 @@ watch(id, fetchDetail);
             </div>
           </div>
         </div>
+        <div class="summary-actions">
+          <button
+            type="button"
+            class="action-btn"
+            @click="onShare"
+          >
+            <ElIcon :size="16">
+              <Share />
+            </ElIcon>
+            分享
+          </button>
+          <ElDropdown
+            trigger="click"
+            @command="onMoreCommand"
+          >
+            <button
+              type="button"
+              class="action-btn action-more"
+              aria-label="更多"
+            >
+              <ElIcon :size="16">
+                <MoreFilled />
+              </ElIcon>
+              更多
+            </button>
+            <template #dropdown>
+              <ElDropdownMenu>
+                <ElDropdownItem
+                  v-if="showShelfOn"
+                  command="on"
+                  :disabled="!detail.canList"
+                >
+                  上架
+                </ElDropdownItem>
+                <ElDropdownItem
+                  v-if="showShelfOff"
+                  command="off"
+                  :disabled="!detail.canUnlist"
+                >
+                  下架
+                </ElDropdownItem>
+                <ElDropdownItem
+                  command="delete"
+                  :divided="showShelfOn || showShelfOff"
+                >
+                  删除
+                </ElDropdownItem>
+              </ElDropdownMenu>
+            </template>
+          </ElDropdown>
+        </div>
       </div>
 
       <div class="body card">
@@ -188,15 +314,34 @@ watch(id, fetchDetail);
             :course-id="id"
             @refreshed="onTabRefreshed"
           />
-          <div
-            v-else
-            class="placeholder"
-          >
-            <p>{{ sideNav.find((item) => item.key === activeTab)?.label }}下一期再做。</p>
-          </div>
+          <CourseSalesSettingsTab
+            v-else-if="activeTab === 'sales'"
+            ref="salesTabRef"
+            :course-id="id"
+            :detail="detail"
+            @refreshed="onTabRefreshed"
+          />
         </div>
       </div>
     </template>
+
+    <DeleteCourseDialog
+      v-if="detail"
+      v-model="deleteDialogVisible"
+      :course-id="detail.id"
+      @confirmed="onDeleteConfirmed"
+    />
+
+    <ShareDialog
+      v-model="shareVisible"
+      :title="detail?.title ?? ''"
+      :watch-url="courseShareUrl"
+      brand-line="钱坤云直播平台 发现一门精彩课程"
+      hint="给用户分享这个课程："
+      watch-verb="点击学习"
+      title-fallback="课程"
+      payload-hint="c 含：kind（1=员工邀请）、inviterId；courseId 在路径。URL 同名 query 仅提示，业务只信 c"
+    />
   </div>
 </template>
 
@@ -226,11 +371,12 @@ watch(id, fetchDetail);
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 .course-settings.is-fill .panel > * {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 .status-text,
 .status-err {
@@ -258,6 +404,32 @@ watch(id, fetchDetail);
   align-items: center;
   gap: 16px;
   min-width: 0;
+}
+.summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  flex: none;
+}
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: #666;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.action-btn:hover,
+.action-more:hover {
+  color: var(--color-primary);
+}
+.action-more {
+  outline: none;
 }
 .cover {
   width: 96px;
@@ -364,15 +536,7 @@ watch(id, fetchDetail);
 .panel {
   flex: 1;
   min-width: 0;
+  /* 底 padding 留给目录等 tab；基本信息底部间隙在 Tab 内 spacer，勿改成 0 */
   padding: 20px 24px;
-}
-.placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  min-height: 280px;
-  color: #999;
-  font-size: 14px;
 }
 </style>

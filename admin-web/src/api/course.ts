@@ -1,8 +1,16 @@
-import { del, get, post } from "./http";
+import { del, get, post, put } from "./http";
 
 export type ShelfStatus = "pending" | "on" | "off" | "banned";
 export type RiskStatus = "pending" | "passed" | "rejected";
 export type CourseSortKey = "entitledUserCount" | "totalUserCount" | "salesCount" | "updatedTime";
+export type CourseSellType = "free" | "encrypted" | "specified";
+export type CourseAccessValidityType = "long" | "days";
+
+export const COURSE_SELL_TYPE_LABEL: Record<CourseSellType, string> = {
+  free: "免费",
+  encrypted: "加密",
+  specified: "指定学员",
+};
 
 export const SHELF_STATUS_LABEL: Record<ShelfStatus, string> = {
   pending: "待上架",
@@ -67,11 +75,14 @@ export interface CourseListItem {
   entitledUserCount: number;
   totalUserCount: number;
   salesCount: number;
+  sellType?: CourseSellType;
+  validityLabel?: string;
   updatedTime?: string;
   createdTime?: string;
   canList: boolean;
   canUnlist: boolean;
-  canDelete: boolean;
+  /** 提示可否删除；缺省按可删。UI 不置灰，由 DELETE 接口校验并 toast */
+  canDelete?: boolean;
 }
 
 export interface CourseDetail extends CourseListItem {
@@ -79,6 +90,11 @@ export interface CourseDetail extends CourseListItem {
   detailHtml?: string;
   coverMaterialId?: string;
   materials?: CourseMaterial[];
+  sellAlone?: boolean;
+  accessValidityType?: CourseAccessValidityType;
+  accessValidityDays?: number;
+  /** 仅 encrypted 时回显明文 */
+  password?: string;
 }
 
 export interface CourseListQuery {
@@ -125,6 +141,29 @@ export function listCourses(query: CourseListQuery) {
 
 export function getCourse(id: string) {
   return get<CourseDetail>(`/courses/detail/${encodeURIComponent(id)}`);
+}
+
+export interface UpdateCourseSalesPayload {
+  sellAlone: boolean;
+  sellType: CourseSellType;
+  password?: string;
+  accessValidityType?: CourseAccessValidityType;
+  accessValidityDays?: number;
+}
+
+export function updateCourseSales(id: string, payload: UpdateCourseSalesPayload) {
+  return put<{ id: string; sellType: CourseSellType; validityLabel: string }>(
+    `/courses/sales/${encodeURIComponent(id)}`,
+    payload,
+  );
+}
+
+/** 列表/导出售卖标签：免费 / 长期有效 */
+export function courseSellTagText(item: Pick<CourseListItem, "sellType" | "validityLabel">) {
+  const sell = item.sellType ? COURSE_SELL_TYPE_LABEL[item.sellType] : "";
+  const validity = item.validityLabel?.trim() || "长期有效";
+  if (sell) return `${sell} / ${validity}`;
+  return validity;
 }
 
 export function deleteCourse(id: string) {
@@ -241,6 +280,16 @@ export function bindCatalogLives(
 ) {
   return post<{ list: CatalogNode[]; contentCount: number }>(
     `/courses/catalog/lessons/bind-lives/${encodeURIComponent(courseId)}`,
+    payload,
+  );
+}
+
+export function bindCatalogMaterials(
+  courseId: string,
+  payload: { parentId: number; materialIds: string[] },
+) {
+  return post<{ list: CatalogNode[]; contentCount: number }>(
+    `/courses/catalog/lessons/bind-materials/${encodeURIComponent(courseId)}`,
     payload,
   );
 }

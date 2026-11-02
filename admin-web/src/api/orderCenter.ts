@@ -104,7 +104,8 @@ function orderCenterBase(): string {
 function stringifyBigIntIds(raw: string): string {
   return raw
     .replace(/"spuId"\s*:\s*(\d+)/g, '"spuId":"$1"')
-    .replace(/"skuId"\s*:\s*(\d+)/g, '"skuId":"$1"');
+    .replace(/"skuId"\s*:\s*(\d+)/g, '"skuId":"$1"')
+    .replace(/"orderId"\s*:\s*(\d+)/g, '"orderId":"$1"');
 }
 
 /**
@@ -491,4 +492,254 @@ export async function batchGetSalerProductDetails(
     out[mapped.spuId || String(key)] = mapped;
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// 业务员端订单列表（管理端「交易 → 全部订单」）
+// ---------------------------------------------------------------------------
+
+/**
+ * 订单状态（对方 order_stats）。
+ * 列表 Tab / 筛选用常见子集；详情文案见 ORDER_STATUS_LABEL。
+ */
+export const ORDER_STATUS = {
+  ALL: 0,
+  UNPAID: 1010,
+  PAY_CONFIRMING: 1015,
+  PARTIAL_PAID: 1020,
+  PAID: 1030,
+  CONFLICT: 1040,
+  CONFLICT_CLEARED: 1041,
+  SIGNED: 1050,
+  CANCELLED: 1060,
+  INSTALLMENT_REFUNDING: 1070,
+  REFUNDING: 1071,
+  PARTIAL_REFUND: 1080,
+  REFUNDED: 1081,
+} as const;
+
+export type OrderStatusCode = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS];
+
+/** 列表页状态文案（对齐原型：待付款/已付款/全部退款） */
+export const ORDER_STATUS_LABEL: Record<number, string> = {
+  [ORDER_STATUS.UNPAID]: "待付款",
+  [ORDER_STATUS.PAY_CONFIRMING]: "支付待确认",
+  [ORDER_STATUS.PARTIAL_PAID]: "部分支付",
+  [ORDER_STATUS.PAID]: "已付款",
+  [ORDER_STATUS.CONFLICT]: "撞单",
+  [ORDER_STATUS.CONFLICT_CLEARED]: "撞单状态解除",
+  [ORDER_STATUS.SIGNED]: "已签约",
+  [ORDER_STATUS.CANCELLED]: "已取消",
+  [ORDER_STATUS.INSTALLMENT_REFUNDING]: "分期退款中",
+  [ORDER_STATUS.REFUNDING]: "退款中",
+  [ORDER_STATUS.PARTIAL_REFUND]: "部分退款",
+  [ORDER_STATUS.REFUNDED]: "全部退款",
+};
+
+/** 列表状态 Tab（筛选项，值 = 对方 orderStatus；0=不限） */
+export const ORDER_STATUS_TABS: { key: number; label: string }[] = [
+  { key: ORDER_STATUS.ALL, label: "全部" },
+  { key: ORDER_STATUS.UNPAID, label: "待付款" },
+  { key: ORDER_STATUS.PAID, label: "已付款" },
+  { key: ORDER_STATUS.REFUNDING, label: "退款中" },
+  { key: ORDER_STATUS.PARTIAL_REFUND, label: "部分退款" },
+  { key: ORDER_STATUS.REFUNDED, label: "全部退款" },
+];
+
+/** 用户关键字下拉（UI 先做；当前接口统一传 userKeyWord） */
+export type OrderUserKeywordType = "nickname" | "id" | "phone";
+
+export interface SalerOrderListQuery {
+  page?: number;
+  pageSize?: number;
+  /** 用户关键字（账号/姓名模糊；下拉类型暂不区分） */
+  userKeyWord?: string;
+  orderNo?: string;
+  productName?: string;
+  /** 0=不限；其余精确匹配对方 order_stats */
+  orderStatus?: number;
+}
+
+export interface SalerOrderItem {
+  orderId: string;
+  orderNo: string;
+  productName: string;
+  customerAccount: string;
+  customerName: string;
+  orderStatus: number;
+  /** 金额字符串（元，两位小数） */
+  orderMoney: string;
+  createTime: string;
+  /** 以下字段对方列表暂未返回；有则展示，无则页面占位 -- */
+  avatar?: string;
+  nickname?: string;
+  userId?: string;
+  weComFriend?: boolean;
+  coverImg?: string;
+  validityLabel?: string;
+  payTime?: string;
+  payWayText?: string;
+  serviceStatus?: string;
+  serviceStatusText?: string;
+}
+
+export interface SalerOrderListResult {
+  list: SalerOrderItem[];
+  page: number;
+  size: number;
+  total: number;
+}
+
+interface OrderCenterOrderListBody {
+  code?: number | string;
+  msg?: string;
+  message?: string;
+  data?: {
+    list?: unknown[];
+    page?: number;
+    size?: number;
+    total?: number;
+  };
+}
+
+function asOptionalBool(v: unknown): boolean | undefined {
+  if (typeof v === "boolean") return v;
+  if (v === 1 || v === "1" || v === "true") return true;
+  if (v === 0 || v === "0" || v === "false") return false;
+  return undefined;
+}
+
+function mapOrderItem(row: unknown): SalerOrderItem | null {
+  if (!row || typeof row !== "object") return null;
+  const o = row as Record<string, unknown>;
+  const orderNo = asOptionalString(o.orderNo) ?? "";
+  const orderId = asOptionalString(o.orderId) ?? orderNo;
+  if (!orderId && !orderNo) return null;
+  const statusRaw = o.orderStatus;
+  const status =
+    typeof statusRaw === "number"
+      ? statusRaw
+      : statusRaw != null && statusRaw !== ""
+        ? Number(statusRaw)
+        : 0;
+  return {
+    orderId: orderId || orderNo,
+    orderNo: orderNo || orderId,
+    productName: asOptionalString(o.productName) ?? "",
+    customerAccount: asOptionalString(o.customerAccount) ?? "",
+    customerName: asOptionalString(o.customerName) ?? "",
+    orderStatus: Number.isFinite(status) ? status : 0,
+    orderMoney: asOptionalString(o.orderMoney) ?? "",
+    createTime: asOptionalString(o.createTime) ?? "",
+    avatar: asOptionalString(o.avatar),
+    nickname: asOptionalString(o.nickname),
+    userId:
+      asOptionalString(o.userId) ??
+      asOptionalString(o.customerUserId) ??
+      asOptionalString(o.uid),
+    weComFriend: asOptionalBool(o.weComFriend) ?? asOptionalBool(o.isWeComFriend),
+    coverImg: asOptionalString(o.coverImg) ?? asOptionalString(o.productCover),
+    validityLabel:
+      asOptionalString(o.validityLabel) ??
+      (o.buyDays != null && Number.isFinite(Number(o.buyDays))
+        ? `有效期：${Number(o.buyDays)}天`
+        : undefined),
+    payTime: asOptionalString(o.payTime) ?? asOptionalString(o.paymentTime),
+    payWayText:
+      asOptionalString(o.payWayText) ??
+      asOptionalString(o.payMethodText) ??
+      asOptionalString(o.payWay),
+    serviceStatus: asOptionalString(o.serviceStatus),
+    serviceStatusText:
+      asOptionalString(o.serviceStatusText) ?? asOptionalString(o.serviceStatus),
+  };
+}
+
+export function orderStatusLabel(status: number | string | undefined): string {
+  if (status == null || status === "") return "--";
+  const n = typeof status === "number" ? status : Number(status);
+  if (!Number.isFinite(n) || n === 0) return "--";
+  return ORDER_STATUS_LABEL[n] ?? `状态${n}`;
+}
+
+/** 状态圆点色：对齐原型灰/绿/红 */
+export function orderStatusDotClass(status: number | undefined): string {
+  if (status === ORDER_STATUS.PAID || status === ORDER_STATUS.SIGNED) return "dot--green";
+  if (
+    status === ORDER_STATUS.REFUNDING ||
+    status === ORDER_STATUS.INSTALLMENT_REFUNDING ||
+    status === ORDER_STATUS.PARTIAL_REFUND ||
+    status === ORDER_STATUS.REFUNDED
+  ) {
+    return "dot--red";
+  }
+  return "dot--gray";
+}
+
+/**
+ * 业务员端订单列表（分页；不经本站后端）。
+ * 鉴权头 `Authorization-Live-Saler`。
+ */
+export async function listSalerOrders(
+  query: SalerOrderListQuery = {},
+): Promise<SalerOrderListResult> {
+  const token = await salerAccessToken();
+  const page = query.page != null && query.page > 0 ? query.page : 1;
+  const pageSize =
+    query.pageSize != null && query.pageSize > 0
+      ? Math.min(query.pageSize, 100)
+      : 10;
+  const userKeyWord = query.userKeyWord?.trim() || undefined;
+  const orderNo = query.orderNo?.trim() || undefined;
+  const productName = query.productName?.trim() || undefined;
+  const orderStatus =
+    query.orderStatus != null && query.orderStatus > 0 ? query.orderStatus : 0;
+
+  const url = `${orderCenterBase()}/order-center/api/live/saler/order/list`;
+  let resp;
+  try {
+    resp = await axios.post(
+      url,
+      {
+        page,
+        pageSize,
+        ...(userKeyWord ? { userKeyWord } : {}),
+        ...(orderNo ? { orderNo } : {}),
+        ...(productName ? { productName } : {}),
+        orderStatus,
+      },
+      {
+        headers: {
+          "Authorization-Live-Saler": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+        transformResponse: [
+          (data: unknown) => {
+            if (typeof data !== "string") return data;
+            try {
+              return JSON.parse(stringifyBigIntIds(data)) as OrderCenterOrderListBody;
+            } catch {
+              return data;
+            }
+          },
+        ],
+      },
+    );
+  } catch (e) {
+    throw new Error(axiosErrorMessage(e, "拉取订单列表失败"));
+  }
+
+  const body = resp.data as OrderCenterOrderListBody;
+  if (!isOrderCenterSuccess(body?.code)) {
+    throw new Error(body?.msg || body?.message || "拉取订单列表失败");
+  }
+  const rawList = body.data?.list ?? [];
+  const list = rawList.map(mapOrderItem).filter((p): p is SalerOrderItem => !!p);
+  return {
+    list,
+    page: body.data?.page ?? page,
+    size: body.data?.size ?? pageSize,
+    total: body.data?.total ?? list.length,
+  };
 }

@@ -18,7 +18,7 @@ import {
   ElTooltip,
 } from "element-plus";
 import {
-  deleteCourse,
+  courseSellTagText,
   listCourses,
   RISK_STATUS_LABEL,
   setCourseShelf,
@@ -28,10 +28,15 @@ import {
   type RiskStatus,
   type ShelfStatus,
 } from "@/api/course";
+import ShareDialog from "@/components/share/ShareDialog.vue";
+import { useAuthStore } from "@/stores/auth";
+import { buildCourseShareUrl } from "@/utils/courseLinks";
 import AuditRecordsDrawer from "./components/AuditRecordsDrawer.vue";
+import DeleteCourseDialog from "./components/DeleteCourseDialog.vue";
 import { exportCourseRows } from "./exportCourseRows";
 
 const router = useRouter();
+const auth = useAuthStore();
 const loading = ref(false);
 const error = ref("");
 const list = ref<CourseListItem[]>([]);
@@ -43,6 +48,13 @@ const auditDrawerTitle = ref("");
 const auditDrawerId = ref("");
 const auditDrawerCover = ref("");
 const auditDrawerCreatedTime = ref("");
+
+const deleteDialogVisible = ref(false);
+const deleteCourseId = ref("");
+
+const shareVisible = ref(false);
+const shareTitle = ref("");
+const shareWatchUrl = ref("");
 
 const filters = reactive({
   keyword: "",
@@ -158,8 +170,10 @@ function onExport() {
   exportCourseRows(list.value.filter((item) => selectedIds.value.includes(item.id)));
 }
 
-function onShare() {
-  ElMessage.info("课程观看页尚未开通");
+function onShare(item: CourseListItem) {
+  shareTitle.value = item.title;
+  shareWatchUrl.value = buildCourseShareUrl(item.id, auth.user?.id);
+  shareVisible.value = true;
 }
 
 function openAuditRecords(item: CourseListItem) {
@@ -190,31 +204,22 @@ async function onShelf(item: CourseListItem, listed: boolean) {
   }
 }
 
-async function onDelete(item: CourseListItem) {
-  try {
-    await ElMessageBox.confirm("删除后不可恢复", "删除课程", {
-      type: "warning",
-      confirmButtonText: "删除",
-      cancelButtonText: "取消",
-    });
-  } catch {
-    return;
-  }
-  try {
-    await deleteCourse(item.id);
-    ElMessage.success("已删除");
-    void fetchList();
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : "删除失败");
-  }
+function onDelete(item: CourseListItem) {
+  deleteCourseId.value = item.id;
+  deleteDialogVisible.value = true;
+}
+
+function onDeleteConfirmed() {
+  ElMessage.success("已删除");
+  void fetchList();
 }
 
 function onMoreCommand(cmd: string, item: CourseListItem) {
-  if (cmd === "share") onShare();
+  if (cmd === "share") onShare(item);
   else if (cmd === "audit") void router.push(`/course/${item.id}/audit`);
   else if (cmd === "on") void onShelf(item, true);
   else if (cmd === "off") void onShelf(item, false);
-  else if (cmd === "delete") void onDelete(item);
+  else if (cmd === "delete") onDelete(item);
 }
 
 function onPageChange(page: number) {
@@ -362,6 +367,7 @@ onMounted(fetchList);
                 >
                   <p class="title">{{ row.title }}</p>
                 </ElTooltip>
+                <p class="sell-tag">{{ courseSellTagText(row) }}</p>
               </div>
             </div>
           </template>
@@ -506,7 +512,6 @@ onMounted(fetchList);
                     <ElDropdownItem
                       command="delete"
                       divided
-                      :disabled="!row.canDelete"
                     >
                       删除
                     </ElDropdownItem>
@@ -539,6 +544,23 @@ onMounted(fetchList);
       :course-id="auditDrawerId"
       :cover-url="auditDrawerCover"
       :created-time="auditDrawerCreatedTime"
+    />
+
+    <DeleteCourseDialog
+      v-model="deleteDialogVisible"
+      :course-id="deleteCourseId"
+      @confirmed="onDeleteConfirmed"
+    />
+
+    <ShareDialog
+      v-model="shareVisible"
+      :title="shareTitle"
+      :watch-url="shareWatchUrl"
+      brand-line="钱坤云直播平台 发现一门精彩课程"
+      hint="给用户分享这个课程："
+      watch-verb="点击学习"
+      title-fallback="课程"
+      payload-hint="c 含：kind（1=员工邀请）、inviterId；courseId 在路径。URL 同名 query 仅提示，业务只信 c"
     />
   </div>
 </template>
@@ -630,6 +652,11 @@ onMounted(fetchList);
   font-weight: 500;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.sell-tag {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #f5222d;
 }
 .status-dot {
   display: inline-flex;

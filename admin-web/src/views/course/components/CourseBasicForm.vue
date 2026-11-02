@@ -19,10 +19,13 @@ const props = withDefaults(
     /** 详情回显时的归属人快照，保证选项里能显示姓名 */
     knownOwners?: EmployeeItem[];
     disabled?: boolean;
+    /** 嵌在课程设置 Tab 内：去掉卡片阴影，避免多出一条线 */
+    embedded?: boolean;
   }>(),
   {
     knownOwners: () => [],
     disabled: false,
+    embedded: false,
   },
 );
 
@@ -122,7 +125,7 @@ onMounted(() => {
 <template>
   <div
     class="course-basic-form"
-    :class="{ 'is-disabled': disabled }"
+    :class="{ 'is-disabled': disabled, 'is-embedded': embedded }"
   >
     <div class="card">
       <div class="section">
@@ -322,6 +325,11 @@ onMounted(() => {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.course-basic-form.is-embedded .card {
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
 }
 .section__title,
 .related-business__title {

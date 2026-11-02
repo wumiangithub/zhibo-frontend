@@ -362,9 +362,15 @@ watch(
               <span v-else>封面</span>
             </div>
             <div class="sub-meta">
-              <div class="sub-title">
-                {{ sub.title }}
-              </div>
+              <ElTooltip
+                :content="sub.title"
+                placement="top"
+                :disabled="!sub.title"
+              >
+                <div class="sub-title">
+                  {{ sub.title }}
+                </div>
+              </ElTooltip>
               <div class="sub-stats">
                 章节数: {{ sub.chapterCount ?? 0 }}　小节数: {{ sub.lessonCount ?? 0 }}
               </div>
@@ -723,7 +729,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 280px;
+  width: 260px;
   padding: 10px 12px;
   border: 1px solid #ebeef5;
   border-radius: 8px;

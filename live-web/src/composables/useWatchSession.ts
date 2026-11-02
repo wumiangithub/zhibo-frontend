@@ -111,9 +111,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
   function buildWatchParams(): WatchSdkSignParams {
     const params: WatchSdkSignParams = {};
     const nickname = opts.getNickname().trim();
-    const viewerId = getViewerId();
-    if (viewerId != null) params.viewerId = viewerId;
-    // 小程序 URL 已带展示昵称；一并传给 /watch/sdk-sign 作 sdk.username（勿再拉 user-info）
+    // 小程序 URL 已带展示昵称；传给 /watch/sdk-sign 作 sdk.username（勿再拉 user-info）
+    // viewerId 只靠 Authorization JWT（D96），不进 Query
     if (nickname) params.nickname = nickname;
     return params;
   }
@@ -357,7 +356,12 @@ export function useWatchSession(opts: WatchSessionOptions) {
   }
 
   async function shareWatch() {
-    const url = `${window.location.origin}/watch/${resolveId(opts.activityId)}`;
+    // 复制当前观看 URL（保留已有 `c`/hint；去掉观众登录注入参数）。不手写 ?c=。
+    const u = new URL(window.location.href);
+    for (const key of ["viewerId", "viewerAccessToken", "accessToken", "token", "nickname"]) {
+      u.searchParams.delete(key);
+    }
+    const url = `${u.origin}${u.pathname}${u.search}`;
     try {
       await navigator.clipboard.writeText(url);
       toast("观看链接已复制");

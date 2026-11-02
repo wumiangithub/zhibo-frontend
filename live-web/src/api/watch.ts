@@ -65,7 +65,7 @@ export interface WatchSdkSignData {
 /** @deprecated 用 WatchSummaryData / WatchSdkSignData；保留别名避免漏改 */
 export type WatchSdkData = WatchSummaryData & Partial<WatchSdkSignData>;
 
-/** 嵌入兜底 detail 仍可带 guestId；sdk-sign 只用 viewerId（D92） */
+/** 嵌入兜底 detail 仍可带 guestId；sdk-sign 身份只从 JWT（D92/D96） */
 export interface WatchParams {
   guestId?: string;
   nickname?: string;
@@ -73,9 +73,8 @@ export interface WatchParams {
 }
 
 export interface WatchSdkSignParams {
+  /** 展示昵称；viewerId 只从 Authorization 观众 JWT 取（D96） */
   nickname?: string;
-  /** 当前观众数字 id；必填（亦可靠 Authorization 观众 JWT） */
-  viewerId?: number;
 }
 
 export interface WatchActivityItem {

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { ElDrawer, ElMessage } from "element-plus";
+import { ElDrawer } from "element-plus";
 import { CENTER_TYPE_TABS } from "@/views/settings/materials/mock";
 import type { MaterialCenterType } from "@/api/materials";
 import AssociateLiveDialog from "./AssociateLiveDialog.vue";
+import AssociateMaterialDialog from "./AssociateMaterialDialog.vue";
 
 const visible = defineModel<boolean>({ default: false });
 
@@ -15,6 +16,8 @@ const props = defineProps<{
 const emit = defineEmits<{ confirmed: [] }>();
 
 const liveDialogOpen = ref(false);
+const materialDialogOpen = ref(false);
+const materialType = ref<MaterialCenterType>("document");
 
 type LessonPick =
   | { kind: "live" }
@@ -25,11 +28,11 @@ function onPick(pick: LessonPick) {
     liveDialogOpen.value = true;
     return;
   }
-  const label = CENTER_TYPE_TABS.find((t) => t.key === pick.type)?.label ?? pick.type;
-  ElMessage.info(`添加「${label}」小节下一期再做`);
+  materialType.value = pick.type;
+  materialDialogOpen.value = true;
 }
 
-function onLiveConfirmed() {
+function onAssociated() {
   visible.value = false;
   emit("confirmed");
 }
@@ -122,7 +125,14 @@ function onLiveConfirmed() {
       v-model="liveDialogOpen"
       :course-id="props.courseId"
       :parent-id="props.parentId"
-      @confirmed="onLiveConfirmed"
+      @confirmed="onAssociated"
+    />
+    <AssociateMaterialDialog
+      v-model="materialDialogOpen"
+      :course-id="props.courseId"
+      :parent-id="props.parentId"
+      :material-type="materialType"
+      @confirmed="onAssociated"
     />
   </ElDrawer>
 </template>

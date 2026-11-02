@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import {
+  courseSellTagText,
   RISK_STATUS_LABEL,
   SHELF_STATUS_LABEL,
   type CourseListItem,
@@ -21,7 +22,7 @@ function timeText(raw?: string) {
 export function exportCourseRows(rows: CourseListItem[]) {
   const data = rows.map((item) => ({
     课程名称: item.title,
-    价格有效期: "未设置",
+    价格有效期: courseSellTagText(item),
     上架状态: SHELF_STATUS_LABEL[(item.shelfStatus ?? "pending") as ShelfStatus],
     上架时间: timeText(item.listedTime),
     归属人: ownersText(item),

@@ -25,6 +25,7 @@ import { useWatchCart } from "@/composables/useWatchCart";
 import { decodeAudienceInviteToken } from "@/utils/audienceInviteToken";
 import { pingViewerPresence } from "@/api/presence";
 import {
+  getViewerAccessToken,
   getViewerId,
   isViewerAuthQueryKey,
   readNicknameFromSearch,
@@ -58,6 +59,7 @@ if (urlNickname) {
 const INVITE_STORAGE_PREFIX = "zhibo.audienceInvite.";
 
 function captureInviteFromQuery() {
+  // 只解密 query `c`；`kind`/`inviterId` 等人读 hint 可被乱改，禁止当业务来源
   const raw = String(route.query.c ?? "").trim();
   const decoded = decodeAudienceInviteToken(raw);
   if (!decoded) return;
@@ -72,8 +74,8 @@ function captureInviteFromQuery() {
 }
 
 function tryAttributeInvite() {
-  const viewerId = getViewerId();
-  if (viewerId == null) return;
+  // D97：被邀请观众 id 只从 JWT；邀请人只来自上方解密后的 `c` 缓存，不读 hint query
+  if (!getViewerAccessToken()) return;
   let payload: { kind: "employee"; inviterId: number } | null = null;
   try {
     const raw = sessionStorage.getItem(`${INVITE_STORAGE_PREFIX}${id}`);
@@ -86,7 +88,6 @@ function tryAttributeInvite() {
     return;
   }
   void attributeAudience(id, {
-    viewerId,
     inviterId: payload.inviterId,
   }).catch((e) => {
     console.warn("邀请归因失败", e);

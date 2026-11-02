@@ -1,5 +1,14 @@
 /**
- * 观看链员工邀请参数混淆 → 不透明 query `c`（仅员工，D77）。
+ * 直播观看链员工邀请参数混淆 → 不透明 query `c`（仅员工，D77）。
+ *
+ * 明文组成字段（打点拼接后再 XOR+Base64URL；活动 id 在路径 `/watch/{id}`，不进 `c`）：
+ *   1. kind      — 邀请类型：`1` 员工邀请 / `2` 观众邀请（已废弃，解码丢弃）
+ *   2. inviterId — kind=1 时为员工 `rs_mainkey_id`
+ *   3. sig       — fnv1a(`${kind}.${inviterId}|SECRET`)
+ *
+ * 与课程 `courseShareToken` 共用同一套 kind 枚举；密钥不同。
+ * 分享 URL 经 `buildShareUrl` 附 `&kind=1&inviterId=` 人读 hint；解码与归因**只信 `c`**。
+ * 勿与 API Body 字符串 `inviterKind`（employee/audience）混淆。
  */
 
 export type AudienceInvitePayload = {

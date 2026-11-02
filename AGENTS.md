@@ -20,6 +20,8 @@ Cursor 做派给「前端」的待办；Grok bot 做派给「前端（Grok）」
 
 改 UI 共用能力或约束前：先查设计规范「公用组件」；协作/流程问题先查前端协作。**禁止**在本文件再写一套与上述文档重复的细则。
 
+admin-web 可滚动容器默认加 `hover-scrollbar`（见父仓 `.cursor/rules/scrollbar-hover-default.mdc`）。
+
 ## 契约红线（shared 决策，本仓强制）
 
 细则以 `../zhibo-shared/docs/API约定.md` / `决策.md` 为准，此处只列提醒：
