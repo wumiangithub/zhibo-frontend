@@ -39,11 +39,18 @@ interface ChatMessage {
   /** @deprecated 用 role_name === 1；保留给旧模板兼容 */
   is_host?: boolean;
   timestamp: number;
+  /**
+   * 回复引用（被回复人）。来自 context.replyMsg / reply_msg；
+   * 无有效 content 时不设。纯图片原文用「[图片]」。
+   * msgId：被回复消息 id，昵称缺失时可在列表内回填。
+   */
+  reply?: { nickname: string; content: string; msgId?: string };
 }
 
 interface ChatModule {
   sendChat(msg: string): void;
-  sendCustomEvent(event: { type: string; data: unknown }): void;
+  /** 官方文档：发送自定义消息，返回 Promise */
+  sendCustomEvent(msg: { type: string; data: unknown }): Promise<unknown>;
 }
 
 interface PraiseModule {
@@ -156,10 +163,42 @@ interface VhallUserPresenceMessage {
   pv: number;
 }
 
+/**
+ * 微吼回复引用体（context.replyMsg / reply_msg）。
+ * get-list 样例：nick_name + content.text_content；空回复为 {} 或 []。
+ * chatServer 归一化后多为 camelCase replyMsg，顶层也可能挂同形对象。
+ */
+interface VhallChatReplyMsg {
+  nick_name?: string;
+  nickname?: string;
+  /** chatServer / 部分实时包 camelCase */
+  nickName?: string;
+  user_name?: string;
+  type?: string;
+  content?:
+    | string
+    | {
+        text_content?: string;
+        barrage_txt?: string;
+        barrageTxt?: string;
+        type?: string;
+        nick_name?: string;
+        nickname?: string;
+        nickName?: string;
+        image_urls?: string[];
+        img_urls?: string[];
+      };
+  image_urls?: string[];
+  img_urls?: string[];
+  [key: string]: unknown;
+}
+
 /** 微吼 `$on("chatMsg")` 的 context。样例里 nickname 与 nick_name 同值。 */
 interface VhallChatMsgContext {
   atList: unknown[];
-  replyMsg: Record<string, unknown>;
+  /** 实时 chatMsg / chatServer 多为 camelCase；历史 get-list 常见 reply_msg */
+  replyMsg: VhallChatReplyMsg | Record<string, unknown> | unknown[];
+  reply_msg?: VhallChatReplyMsg | Record<string, unknown> | unknown[];
   avatar: string;
   nickname: string;
   /** 样例为字符串 "2" */
@@ -218,6 +257,10 @@ interface BarrageInfo {
 interface VhallSdkInstance {
   $on(event: "userOnline" | "userOffline", handler: (data: VhallUserPresenceMessage) => void): void;
   $on(event: "chatMsg", handler: (data: VhallChatMsgMessage) => void): void;
+  /** 发送自定义消息回执（官方：$on('sendCustomEvent')） */
+  $on(event: "sendCustomEvent", handler: (data: unknown) => void): void;
+  /** 自定义广播（官方：$on('customEvent')，与 chat.sendCustomEvent 对应） */
+  $on(event: "customEvent", handler: (data: unknown) => void): void;
   $on(event: string, handler: (data: unknown) => void): void;
   destroy?(): void;
   player?: VhallPlayerModule;

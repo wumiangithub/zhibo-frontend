@@ -5,6 +5,7 @@ import { insertEmojiAtCursor } from "@/composables/useEmojiInsert";
 import { splitEmojiText } from "@/constants/emoji";
 import type { ChatController } from "@/composables/useChat";
 import { useToast } from "@/composables/useToast";
+import { formatChatShowTime } from "@/utils/formatChatShowTime";
 import { vhallChatRoleBadge } from "@/utils/vhallChatRole";
 
 type DiscussTab = "all" | "user" | "mine" | "host" | "follower";
@@ -16,6 +17,7 @@ const props = defineProps<{
 }>();
 
 const { toast } = useToast();
+const isDev = import.meta.env.DEV;
 
 const tab = ref<DiscussTab>("all");
 const onlyQa = ref(false);
@@ -58,6 +60,14 @@ function badgeToneClass(msg: ChatMessage): string {
   if (msg.role_name === 4) return "is-guest";
   return "is-host";
 }
+
+/** 对齐 demo：相对上一条同日同小时不显示；首条/跨小时显示 HH:mm */
+const messageShowTimes = computed(() => {
+  const list = props.chat.chatMessages;
+  return list.map((m, i) =>
+    formatChatShowTime(i > 0 ? list[i - 1]?.timestamp : null, m.timestamp),
+  );
+});
 
 /** 跟进人下拉 Mock，筛选消息能力后续再接 */
 const MOCK_FOLLOWERS = [
@@ -339,72 +349,90 @@ onBeforeUnmount(() => {
         >
           暂无评论
         </p>
-        <article
+        <template
           v-for="(msg, idx) in chat.chatMessages"
           :key="msg.msgId || idx"
-          class="msg"
         >
-          <span class="avatar">
-            <img
-              v-if="avatarSrc(msg)"
-              :src="avatarSrc(msg)"
-              alt=""
-              @error="onAvatarError(msg.avatar)"
-            >
-            <template v-else>{{ (msg.sender_name || "?").charAt(0) }}</template>
-          </span>
-          <div class="msg-body">
-            <div class="msg-meta">
-              <span
-                class="name"
-                :class="nameToneClass(msg)"
-              >{{ msg.sender_name }}</span>
-              <span
-                v-if="roleBadge(msg)"
-                class="badge"
-                :class="badgeToneClass(msg)"
-              >{{ roleBadge(msg) }}</span>
-            </div>
-            <p
-              v-if="msg.msg?.trim()"
-              class="msg-text"
-            >
-              <template
-                v-for="(seg, segIdx) in splitEmojiText(msg.msg)"
-                :key="segIdx"
-              >
-                <img
-                  v-if="seg.kind === 'emoji'"
-                  :src="seg.src"
-                  :alt="seg.name"
-                  :title="seg.name"
-                  class="emoji"
-                >
-                <span v-else>{{ seg.value }}</span>
-              </template>
-            </p>
-            <div
-              v-if="msg.imageUrls?.length"
-              class="msg-images"
-            >
-              <a
-                v-for="(src, imgIdx) in msg.imageUrls"
-                :key="`${msg.msgId || idx}-img-${imgIdx}`"
-                :href="src.startsWith('//') ? `https:${src}` : src"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="msg-image-link"
-              >
-                <img
-                  :src="src"
-                  alt="聊天图片"
-                  class="msg-image"
-                  loading="lazy"
-                >
-              </a>
-            </div>
+          <div
+            v-if="messageShowTimes[idx]"
+            class="msg-time"
+          >
+            {{ messageShowTimes[idx] }}
           </div>
-        </article>
+          <article class="msg">
+            <span class="avatar">
+              <img
+                v-if="avatarSrc(msg)"
+                :src="avatarSrc(msg)"
+                alt=""
+                @error="onAvatarError(msg.avatar)"
+              >
+              <template v-else>{{ (msg.sender_name || "?").charAt(0) }}</template>
+            </span>
+            <div class="msg-body">
+              <div class="msg-meta">
+                <span
+                  v-if="roleBadge(msg)"
+                  class="badge"
+                  :class="badgeToneClass(msg)"
+                >{{ roleBadge(msg) }}</span>
+                <span
+                  class="name"
+                  :class="nameToneClass(msg)"
+                >{{ msg.sender_name }}</span>
+              </div>
+              <div
+                v-if="msg.reply || msg.msg?.trim()"
+                class="msg-text"
+              >
+                <div
+                  v-if="msg.reply"
+                  class="msg-reply"
+                >
+                  <span class="msg-reply-body">{{ msg.reply.nickname ? `${msg.reply.nickname} ${msg.reply.content}` : msg.reply.content }}</span>
+                </div>
+                <p
+                  v-if="msg.msg?.trim()"
+                  class="msg-body-text"
+                >
+                  <template
+                    v-for="(seg, segIdx) in splitEmojiText(msg.msg)"
+                    :key="segIdx"
+                  >
+                    <img
+                      v-if="seg.kind === 'emoji'"
+                      :src="seg.src"
+                      :alt="seg.name"
+                      :title="seg.name"
+                      class="emoji"
+                    >
+                    <span v-else>{{ seg.value }}</span>
+                  </template>
+                </p>
+              </div>
+              <div
+                v-if="msg.imageUrls?.length"
+                class="msg-images"
+              >
+                <a
+                  v-for="(src, imgIdx) in msg.imageUrls"
+                  :key="`${msg.msgId || idx}-img-${imgIdx}`"
+                  :href="src.startsWith('//') ? `https:${src}` : src"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="msg-image-link"
+                >
+                  <img
+                    :src="src"
+                    alt="聊天图片"
+                    class="msg-image"
+                    loading="lazy"
+                  >
+                </a>
+              </div>
+            </div>
+          </article>
+        </template>
       </template>
       <p
         v-else-if="!active"
@@ -533,14 +561,26 @@ onBeforeUnmount(() => {
           >
           提问
         </label>
-        <button
-          type="button"
-          class="send"
-          :disabled="!active || chat.isChatMuted || !chat.chatInput.trim()"
-          @click="send"
-        >
-          发送
-        </button>
+        <div class="composer-actions">
+          <button
+            v-if="isDev"
+            type="button"
+            class="custom-msg"
+            title="联调 sendCustomEvent"
+            :disabled="!active || chat.isChatMuted"
+            @click="chat.sendCustomEventTest()"
+          >
+            自定义消息
+          </button>
+          <button
+            type="button"
+            class="send"
+            :disabled="!active || chat.isChatMuted || !chat.chatInput.trim()"
+            @click="send"
+          >
+            发送
+          </button>
+        </div>
       </div>
     </div>
 
@@ -857,6 +897,15 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
+.msg-time {
+  display: block;
+  padding: 12px 0;
+  color: #999;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+}
+
 .msg {
   display: flex;
   gap: 8px;
@@ -903,16 +952,11 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-.name.is-host {
-  color: #cf1322;
-}
-
-.name.is-assistant {
-  color: #d48806;
-}
-
+/* 有角标时昵称保持中性灰（对齐观看截图） */
+.name.is-host,
+.name.is-assistant,
 .name.is-guest {
-  color: #722ed1;
+  color: #8c8c8c;
 }
 
 .badge {
@@ -920,11 +964,13 @@ onBeforeUnmount(() => {
   padding: 0 6px;
   border-radius: 4px;
   font-size: 10px;
+  line-height: 16px;
 }
 
 .badge.is-host {
-  background: #fff1f0;
-  color: #cf1322;
+  border-radius: 999px;
+  background: #e54d42;
+  color: #fff;
 }
 
 .badge.is-assistant {
@@ -939,12 +985,35 @@ onBeforeUnmount(() => {
 
 .msg-text {
   margin: 4px 0 0;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
   background: #f5f6f8;
   color: #333;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
+  word-break: break-word;
+}
+
+/* 同气泡内引用：仅竖条+浅灰小字，不做分离卡片底 */
+.msg-reply {
+  margin-bottom: 8px;
+  padding: 0 0 0 8px;
+  /* 气泡底 #f5f6f8：#bfbfbf 对比偏弱，加深竖条 */
+  border-left: 2px solid #8c8c8c;
+  color: #8c8c8c;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.msg-reply-body {
+  word-break: break-all;
+}
+
+.msg-body-text {
+  margin: 0;
+  color: #1a1a1a;
+  font-size: 14px;
+  line-height: 20px;
   word-break: break-word;
 }
 
@@ -1074,6 +1143,33 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   margin-top: 8px;
+}
+
+.composer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-msg {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+  color: #ad6800;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.custom-msg:hover:not(:disabled) {
+  border-color: #faad14;
+  color: #d48806;
+}
+
+.custom-msg:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .send {

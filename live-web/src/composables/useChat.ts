@@ -25,6 +25,130 @@ export interface ChatOptions {
   onUnauthenticatedChat?: () => void;
 }
 
+/** 非空对象才当回复体（空 {} / [] 表示无回复，对齐 demo verifyIsShowReply） */
+function asReplySource(v: unknown): Record<string, any> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  return Object.keys(v as object).length > 0 ? (v as Record<string, any>) : null;
+}
+
+/** 从对象上取昵称；含 chatServer camelCase nickName（demo context.nickName） */
+function pickReplyNickname(...objs: Array<Record<string, any> | null | undefined>): string {
+  for (const o of objs) {
+    if (!o) continue;
+    const n = o.nick_name ?? o.nickname ?? o.nickName ?? o.user_name ?? o.userName ?? o.name;
+    const s = n != null ? String(n).trim() : "";
+    if (s) return s;
+  }
+  return "";
+}
+
+/**
+ * get-list 偶发带 accept_name：「回复 昵称：正文」；仅作昵称兜底。
+ */
+function nicknameFromAcceptName(raw: Record<string, any>): string {
+  const accept = String(raw.accept_name || raw.acceptName || "").trim();
+  if (!accept || accept === "all") return "";
+  const m = /^回复\s*(.+?)[：:]/.exec(accept);
+  return m?.[1]?.trim() || "";
+}
+
+/**
+ * 从 context.replyMsg / reply_msg / 顶层同形字段抽出被回复昵称与正文。
+ * content 可能是字符串，或 { text_content }（get-list 样例）；纯图片 →「[图片]」。
+ * 昵称取不到时留空，禁止用角色文案「用户」顶替。
+ */
+function extractReplyQuote(
+  raw: Record<string, any>,
+  ctx: Record<string, any>,
+): ChatMessage["reply"] | undefined {
+  const src =
+    asReplySource(ctx.replyMsg) ||
+    asReplySource(ctx.reply_msg) ||
+    asReplySource(raw.replyMsg) ||
+    asReplySource(raw.reply_msg);
+  if (!src) return undefined;
+
+  const body =
+    src.content && typeof src.content === "object" && !Array.isArray(src.content)
+      ? (src.content as Record<string, any>)
+      : null;
+
+  let content = "";
+  if (typeof src.content === "string") {
+    content = src.content.trim();
+  } else if (body) {
+    content = String(
+      body.text_content || body.barrage_txt || body.barrageTxt || "",
+    ).trim();
+    if (!content) {
+      const imgs = body.image_urls || body.img_urls;
+      if (Array.isArray(imgs) && imgs.length > 0) content = "[图片]";
+      else if (body.type === "image") content = "[图片]";
+    }
+  }
+  if (!content) {
+    if (src.type === "image") content = "[图片]";
+    else {
+      const imgs = src.image_urls || src.img_urls;
+      if (Array.isArray(imgs) && imgs.length > 0) content = "[图片]";
+    }
+  }
+  // demo：须有 content 才展示回复块
+  if (!content) return undefined;
+
+  // 优先级：reply 本体 → content 嵌套 → accept_name「回复 昵称：」；勿读 role / 「用户」
+  const nickname =
+    pickReplyNickname(src, body, asReplySource(src.context)) ||
+    nicknameFromAcceptName(raw);
+
+  const replyMsgIdRaw = src.msg_id ?? src.msgId ?? src.id;
+  const replyMsgId =
+    replyMsgIdRaw != null && String(replyMsgIdRaw).trim()
+      ? String(replyMsgIdRaw).trim()
+      : undefined;
+
+  if (!nickname) {
+    console.debug("[chat] reply quote missing nickname", {
+      keys: Object.keys(src),
+      nick_name: src.nick_name,
+      nickname: src.nickname,
+      nickName: src.nickName,
+      replyMsgId,
+      contentKeys: body ? Object.keys(body) : typeof src.content,
+    });
+  }
+
+  return {
+    nickname,
+    content,
+    ...(replyMsgId ? { msgId: replyMsgId } : {}),
+  };
+}
+
+/** reply 缺昵称时，用列表里被回复消息的 sender_name 回填 */
+function fillReplyNicknameFromList(msg: ChatMessage, list: ChatMessage[]) {
+  const reply = msg.reply;
+  if (!reply || reply.nickname) return;
+  if (reply.msgId) {
+    const hit = list.find((m) => m.msgId && m.msgId === reply.msgId);
+    if (hit?.sender_name) {
+      reply.nickname = hit.sender_name;
+      return;
+    }
+  }
+  // 无 id 时：同正文最近一条（弱兜底，避免再显示空昵称）
+  const text = (reply.content || "").trim();
+  if (!text || text === "[图片]") return;
+  for (let i = list.length - 1; i >= 0; i--) {
+    const m = list[i];
+    if (m === msg) continue;
+    if ((m.msg || "").trim() === text && m.sender_name) {
+      reply.nickname = m.sender_name;
+      return;
+    }
+  }
+}
+
 /**
  * 历史：SDK 扁平项 或 open-api get-list 嵌套项（见微吼文档）。
  * 实时 chatMsg：{ context, data: { type, text_content, image_urls, nick_name, avatar } }
@@ -32,6 +156,7 @@ export interface ChatOptions {
  *
  * 昵称 / 头像 / 角色优先顶层与 context（get-list 必需字段），再兜底 data。
  * 纯图片消息无正文，勿因 !text 丢弃（对齐 demo config.js image_urls）。
+ * 回复引用：context.replyMsg / reply_msg（与顶层同形）；空 {} 不设 reply。
  */
 function normalizeChatItem(raw: Record<string, any>): ChatMessage | null {
   const ctx = raw.context || {};
@@ -78,6 +203,8 @@ function normalizeChatItem(raw: Record<string, any>): ChatMessage | null {
     role = 1;
   }
 
+  const reply = extractReplyQuote(raw, ctx);
+
   return {
     sender_id: String(
       raw.user_id ||
@@ -105,6 +232,7 @@ function normalizeChatItem(raw: Record<string, any>): ChatMessage | null {
     role_name: role,
     is_host: role === 1,
     timestamp: raw.create_timestamp ? Number(raw.create_timestamp) * 1000 : Date.now(),
+    ...(reply ? { reply } : {}),
   };
 }
 
@@ -249,6 +377,31 @@ export function useChat(options: ChatOptions) {
     }
   }
 
+  /**
+   * 联调官方 `chat.sendCustomEvent`（文档：{ type, data } → Promise）。
+   * 收包看 `[vhall-sdk] sendCustomEvent` / `[vhall-sdk] customEvent`。
+   */
+  async function sendCustomEventTest(): Promise<void> {
+    const sdk = getSdk();
+    if (!sdk?.chat?.sendCustomEvent) {
+      console.warn("[vhall-sdk] sendCustomEvent unavailable: SDK 未就绪或不支持");
+      return;
+    }
+    const payload = {
+      type: "zhibo_test",
+      data: {
+        name: "zhibo自定义消息测试",
+        at: Date.now(),
+      },
+    };
+    try {
+      const result = await sdk.chat.sendCustomEvent(payload);
+      console.log("[vhall-sdk] sendCustomEvent result", result);
+    } catch (e) {
+      console.warn("[vhall-sdk] sendCustomEvent failed", e);
+    }
+  }
+
   function sameChatBody(a: ChatMessage, b: ChatMessage): boolean {
     if (normalizeEmojiText(a.msg || "") !== normalizeEmojiText(b.msg || "")) return false;
     const aImgs = (a.imageUrls || []).join("\0");
@@ -257,6 +410,7 @@ export function useChat(options: ChatOptions) {
   }
 
   function pushChatMessage(msg: ChatMessage) {
+    fillReplyNicknameFromList(msg, chat.chatMessages);
     // 自己发的消息先乐观插入 local_ 占位（sender_id=guestId），随后服务端回声用真实 user_id 再来一次，
     // 两者 sender_id 不同，只能按内容匹配把占位替换成带真实 msgId 的回声，避免本地出现两条。
     const placeholderIdx = chat.chatMessages.findIndex(
@@ -341,7 +495,9 @@ export function useChat(options: ChatOptions) {
       const list: Record<string, any>[] = Array.isArray(raw) ? raw : raw.data || raw.list || [];
       const items = list.map(normalizeChatItem).filter((m): m is ChatMessage => m !== null);
       // 接口返回新→旧，列表展示旧→新
-      chat.chatMessages = items.reverse();
+      const ordered = items.reverse();
+      for (const m of ordered) fillReplyNicknameFromList(m, ordered);
+      chat.chatMessages = ordered;
       scrollChatToBottom();
     } catch (e) {
       // 偶发 CORS/Network（localhost→open-api）；列表已有内容时 warn 易误导成「历史没了」
@@ -408,6 +564,7 @@ export function useChat(options: ChatOptions) {
     requestChatFocus,
     completeVerify,
     sendChat,
+    sendCustomEventTest,
     handleChatMessage,
     handleChatDelete,
     loadChatHistory,

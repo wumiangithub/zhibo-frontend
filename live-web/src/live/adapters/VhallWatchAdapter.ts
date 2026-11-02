@@ -89,6 +89,13 @@ export class VhallWatchAdapter implements WatchAdapter {
       console.log(`[vhall-sdk] chatMsg @ ${new Date().toISOString()}`, msg);
       handlers.onChatMsg(msg);
     });
+    // 联调 chat.sendCustomEvent：官方文档回执 + 广播
+    this.sdk.$on("sendCustomEvent", (msg: unknown) => {
+      console.log(`[vhall-sdk] sendCustomEvent @ ${new Date().toISOString()}`, msg);
+    });
+    this.sdk.$on("customEvent", (msg: unknown) => {
+      console.log(`[vhall-sdk] customEvent @ ${new Date().toISOString()}`, msg);
+    });
     this.sdk.$on("chatDelete", handlers.onChatDelete);
     this.sdk.$on("disableChat", handlers.onDisableChat);
     this.sdk.$on("permitChat", handlers.onPermitChat);

@@ -4,6 +4,7 @@ import EmojiPanel from "@/components/EmojiPanel.vue";
 import { insertEmojiAtCursor } from "@/composables/useEmojiInsert";
 import { splitEmojiText } from "@/constants/emoji";
 import type { ChatController } from "@/composables/useChat";
+import { formatChatShowTime } from "@/utils/formatChatShowTime";
 import { vhallChatRoleBadge } from "@/utils/vhallChatRole";
 
 const props = withDefaults(
@@ -22,6 +23,7 @@ const props = withDefaults(
   },
 );
 const chat = props.chat;
+const isDev = import.meta.env.DEV;
 
 const emit = defineEmits<{ cart: []; like: []; listScroll: [e: Event] }>();
 
@@ -47,17 +49,26 @@ function roleBadge(msg: ChatMessage): string | undefined {
 }
 
 function nameClass(msg: ChatMessage): string {
-  if (msg.role_name === 1) return "text-red-400";
-  if (msg.role_name === 3) return "text-amber-400";
-  if (msg.role_name === 4) return "text-violet-400";
+  // 截图：发送者昵称一律浅灰；角色靠角标区分
+  if (msg.role_name === 3) return "text-amber-400/80";
+  if (msg.role_name === 4) return "text-violet-400/80";
   return "text-gray-400";
 }
 
 function badgeClass(msg: ChatMessage): string {
-  if (msg.role_name === 3) return "bg-amber-500/20 text-amber-400";
-  if (msg.role_name === 4) return "bg-violet-500/20 text-violet-400";
-  return "bg-red-500/20 text-red-400";
+  // 截图：主持人红色胶囊白字；其余角色保留浅底圆角
+  if (msg.role_name === 3) return "rounded px-1.5 py-0.5 bg-amber-500/20 text-amber-400";
+  if (msg.role_name === 4) return "rounded px-1.5 py-0.5 bg-violet-500/20 text-violet-400";
+  return "rounded-full bg-[#e54d42] px-1.5 py-0.5 text-white";
 }
+
+/** 对齐 demo：相对上一条同日同小时不显示；首条/跨小时显示 HH:mm */
+const messageShowTimes = computed(() => {
+  const list = chat.chatMessages;
+  return list.map((m, i) =>
+    formatChatShowTime(i > 0 ? list[i - 1]?.timestamp : null, m.timestamp),
+  );
+});
 /** 小屏输入框是否聚焦（失焦时短暂延迟，避免点发送/表情先塌布局） */
 const mobileInputFocused = ref(false);
 let mobileBlurTimer: ReturnType<typeof setTimeout> | null = null;
@@ -141,73 +152,98 @@ function sendMobileChat() {
       >
         {{ isReadonly ? "暂无聊天记录" : "暂无消息，快来聊两句吧" }}
       </div>
-      <div
+      <template
         v-for="(msg, idx) in chat.chatMessages"
         :key="msg.msgId || idx"
-        class="mb-3 flex gap-2"
       >
-        <div class="h-8 w-8 flex-shrink-0 overflow-hidden rounded-full bg-gray-700">
-          <img
-            v-if="avatarSrc(msg)"
-            :src="avatarSrc(msg)"
-            alt=""
-            class="h-full w-full object-cover"
-            @error="onAvatarError(msg.avatar)"
-          >
+        <div
+          v-if="messageShowTimes[idx]"
+          class="py-3 text-center text-[14px] leading-5 text-[#999]"
+        >
+          {{ messageShowTimes[idx] }}
         </div>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2">
-            <span
-              class="truncate text-xs"
-              :class="nameClass(msg)"
+        <div class="mb-3 flex gap-2">
+          <div class="h-8 w-8 flex-shrink-0 overflow-hidden rounded-full bg-gray-700">
+            <img
+              v-if="avatarSrc(msg)"
+              :src="avatarSrc(msg)"
+              alt=""
+              class="h-full w-full object-cover"
+              @error="onAvatarError(msg.avatar)"
             >
-              {{ msg.sender_name }}
-            </span>
-            <span
-              v-if="roleBadge(msg)"
-              class="flex-none rounded px-1.5 py-0.5 text-[10px]"
-              :class="badgeClass(msg)"
-            >
-              {{ roleBadge(msg) }}
-            </span>
           </div>
-          <div
-            v-if="msg.msg?.trim()"
-            class="mt-1 inline-block max-w-full break-words rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-200"
-          >
-            <template v-for="(seg, segIdx) in splitEmojiText(msg.msg)" :key="segIdx">
-              <img
-                v-if="seg.kind === 'emoji'"
-                :src="seg.src"
-                :alt="seg.name"
-                :title="seg.name"
-                class="inline-block h-5 w-5 align-text-bottom"
+          <div class="min-w-0 flex-1">
+            <!-- 截图：角标在左、昵称浅灰在右 -->
+            <div class="flex items-center gap-1.5">
+              <span
+                v-if="roleBadge(msg)"
+                class="flex-none text-[10px] leading-4"
+                :class="badgeClass(msg)"
               >
-              <span v-else>{{ seg.value }}</span>
-            </template>
-          </div>
-          <div
-            v-if="msg.imageUrls?.length"
-            class="mt-1 flex max-w-full flex-wrap gap-1.5"
-          >
-            <a
-              v-for="(src, imgIdx) in msg.imageUrls"
-              :key="`${msg.msgId || idx}-img-${imgIdx}`"
-              :href="src.startsWith('//') ? `https:${src}` : src"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="block overflow-hidden rounded-md bg-gray-800"
+                {{ roleBadge(msg) }}
+              </span>
+              <span
+                class="truncate text-xs leading-4"
+                :class="nameClass(msg)"
+              >
+                {{ msg.sender_name }}
+              </span>
+            </div>
+            <!-- 同一暗色气泡：上引用（竖条+浅灰小字）/ 下正文（更大更白），非分离卡片 -->
+            <div
+              v-if="msg.reply || msg.msg?.trim()"
+              class="mt-1 inline-block max-w-full rounded-[14px] bg-[#3a3a3a] px-3 py-2.5"
             >
-              <img
-                :src="src"
-                alt="聊天图片"
-                class="max-h-40 max-w-[180px] object-contain"
-                loading="lazy"
+              <div
+                v-if="msg.reply"
+                class="mb-2 flex items-stretch gap-2 text-[12px] leading-[18px] text-[#9a9a9a]"
               >
-            </a>
+                <!-- 独立竖条：浅灰/白灰，避免与气泡 #3a3a3a 同色看不见 -->
+                <span
+                  class="w-[2px] flex-none self-stretch bg-[#d9d9d9]"
+                  aria-hidden="true"
+                />
+                <span class="min-w-0 break-all">{{ msg.reply.nickname ? `${msg.reply.nickname} ${msg.reply.content}` : msg.reply.content }}</span>
+              </div>
+              <div
+                v-if="msg.msg?.trim()"
+                class="break-words text-[14px] leading-5 text-white"
+              >
+                <template v-for="(seg, segIdx) in splitEmojiText(msg.msg)" :key="segIdx">
+                  <img
+                    v-if="seg.kind === 'emoji'"
+                    :src="seg.src"
+                    :alt="seg.name"
+                    :title="seg.name"
+                    class="inline-block h-5 w-5 align-text-bottom"
+                  >
+                  <span v-else>{{ seg.value }}</span>
+                </template>
+              </div>
+            </div>
+            <div
+              v-if="msg.imageUrls?.length"
+              class="mt-1 flex max-w-full flex-wrap gap-1.5"
+            >
+              <a
+                v-for="(src, imgIdx) in msg.imageUrls"
+                :key="`${msg.msgId || idx}-img-${imgIdx}`"
+                :href="src.startsWith('//') ? `https:${src}` : src"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="block overflow-hidden rounded-md bg-gray-800"
+              >
+                <img
+                  :src="src"
+                  alt="聊天图片"
+                  class="max-h-40 max-w-[180px] object-contain"
+                  loading="lazy"
+                >
+              </a>
+            </div>
           </div>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- PC 输入栏（回放只读不展示） -->
@@ -249,6 +285,16 @@ function sendMobileChat() {
           @focus="chat.requestChatFocus(inputEl)"
           @keyup.enter="chat.sendChat"
         >
+        <button
+          v-if="isDev"
+          type="button"
+          class="flex-none rounded-md bg-gray-700 px-3 py-2 text-sm font-medium text-amber-300 hover:bg-gray-600 disabled:opacity-50"
+          title="联调 sendCustomEvent"
+          :disabled="chat.isChatMuted"
+          @click="chat.sendCustomEventTest()"
+        >
+          自定义消息
+        </button>
         <button
           class="flex-none rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
           :disabled="chat.isChatMuted || !chat.chatInput.trim()"
@@ -322,6 +368,18 @@ function sendMobileChat() {
           >
         </div>
 
+        <button
+          v-if="isDev && mobileComposerActive"
+          type="button"
+          class="flex h-9 flex-none items-center justify-center rounded-full bg-gray-800 px-2.5 text-[11px] font-medium text-amber-300 active:bg-gray-700 disabled:opacity-50"
+          aria-label="自定义消息"
+          title="联调 sendCustomEvent"
+          :disabled="chat.isChatMuted"
+          @mousedown.prevent
+          @click="chat.sendCustomEventTest()"
+        >
+          自定义
+        </button>
         <button
           v-if="mobileComposerActive"
           type="button"
