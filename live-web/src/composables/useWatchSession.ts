@@ -16,6 +16,7 @@ import { createWatchAdapter } from "@/live/createWatchAdapter";
 import type { WatchAdapter } from "@/live/WatchAdapter";
 import { formatSdkError } from "@/utils/sdk";
 import { getViewerId } from "@/utils/viewerAuth";
+import { isViewerLoginRequiredError } from "@/utils/viewerLogin";
 import { useToast } from "@/composables/useToast";
 
 export interface WatchSessionOptions {
@@ -30,6 +31,11 @@ export interface WatchSessionOptions {
    * 中控台不传，继续假验证弹窗。
    */
   onUnauthenticatedChat?: () => void;
+  /**
+   * summary / sdk-sign 判定需登录（含「请先登录」业务 400）时回调。
+   * 观看页：refresh 或清票跳 /login；中控台不传则仍展示 error。
+   */
+  onViewerAuthRequired?: () => void | Promise<void>;
 }
 
 function resolveId(id: MaybeRefOrGetter<string>): string {
@@ -347,6 +353,12 @@ export function useWatchSession(opts: WatchSessionOptions) {
         loading.value = false;
       }
     } catch (e) {
+      if (isViewerLoginRequiredError(e) && opts.onViewerAuthRequired) {
+        error.value = "";
+        loading.value = false;
+        await opts.onViewerAuthRequired();
+        return;
+      }
       sdkFailed.value = true;
       error.value = e instanceof Error ? e.message : "加载失败";
       loading.value = false;

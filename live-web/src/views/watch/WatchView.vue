@@ -25,6 +25,7 @@ import { useWatchCart } from "@/composables/useWatchCart";
 import { decodeAudienceInviteToken } from "@/utils/audienceInviteToken";
 import { pingViewerPresence } from "@/api/presence";
 import {
+  clearViewerSession,
   getViewerAccessToken,
   getViewerId,
   isViewerAuthQueryKey,
@@ -34,7 +35,7 @@ import {
   syncViewerIdFromUrl,
 } from "@/utils/viewerAuth";
 import { ensureWxJsSdk } from "@/utils/miniProgram";
-import { goViewerLogin } from "@/utils/viewerLogin";
+import { goViewerLogin, recoverViewerAuth } from "@/utils/viewerLogin";
 
 const route = useRoute();
 const router = useRouter();
@@ -102,12 +103,35 @@ const showNicknameForm = ref(
 );
 const nicknameSaving = ref(false);
 
+/** 防止 refresh 后仍鉴权失败时反复 recover↔load */
+let authRecovering = false;
+
+/** summary/sdk-sign「请先登录」或聊天未登录：先 refresh，否则清票跳 /login?redirect= */
+async function onViewerAuthRequired() {
+  if (authRecovering) {
+    // 换票后仍鉴权失败：不再死循环，强制清票去登录
+    clearViewerSession();
+    await goViewerLogin();
+    return;
+  }
+  authRecovering = true;
+  try {
+    const outcome = await recoverViewerAuth();
+    if (outcome === "refreshed") {
+      await enterWatch();
+    }
+  } finally {
+    authRecovering = false;
+  }
+}
+
 const session = useWatchSession({
   activityId: id,
   getNickname: () => getStoredNickname().trim(),
   onUnauthenticatedChat: () => {
-    void goViewerLogin();
+    void onViewerAuthRequired();
   },
+  onViewerAuthRequired: () => onViewerAuthRequired(),
 });
 
 const {
@@ -151,6 +175,15 @@ async function enterWatch() {
   const ok = await ensureAccess();
   if (!ok) return;
   await load();
+}
+
+/** 重试：无 token 直接登录；有 token 再走门禁+加载（失效票由 load/auth 回调清掉并跳登录） */
+async function onRetryEnter() {
+  if (!isViewerLoggedIn()) {
+    await goViewerLogin();
+    return;
+  }
+  await enterWatch();
 }
 
 async function onPasswordSubmit(password: string) {
@@ -396,7 +429,7 @@ onMounted(() => {
           <div class="flex gap-3">
             <button
               class="rounded-md border border-gray-600 bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
-              @click="enterWatch"
+              @click="onRetryEnter"
             >
               重试
             </button>

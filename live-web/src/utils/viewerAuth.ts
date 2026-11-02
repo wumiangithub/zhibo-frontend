@@ -183,3 +183,15 @@ function stripAccessTokenFromLocation(): void {
 export function isViewerLoggedIn(): boolean {
   return !!getViewerAccessToken();
 }
+
+/** 清本地观众会话（access / refresh / id / 脱敏手机号）。 */
+export function clearViewerSession(): void {
+  try {
+    localStorage.removeItem(ACCESS_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem(VIEWER_ID_KEY);
+    localStorage.removeItem(PHONE_KEY);
+  } catch {
+    /* ignore */
+  }
+}

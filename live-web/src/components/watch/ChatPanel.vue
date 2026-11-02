@@ -49,7 +49,8 @@ function roleBadge(msg: ChatMessage): string | undefined {
 }
 
 function nameClass(msg: ChatMessage): string {
-  // 截图：发送者昵称一律浅灰；角色靠角标区分
+  // 角色昵称色：主持红 / 助理黄 / 嘉宾紫 / 观众灰（与角标色系一致）
+  if (msg.role_name === 1) return "text-[#e54d42]/90";
   if (msg.role_name === 3) return "text-amber-400/80";
   if (msg.role_name === 4) return "text-violet-400/80";
   return "text-gray-400";
@@ -173,20 +174,20 @@ function sendMobileChat() {
             >
           </div>
           <div class="min-w-0 flex-1">
-            <!-- 截图：角标在左、昵称浅灰在右 -->
+            <!-- 昵称在前，角色角标紧跟其后 -->
             <div class="flex items-center gap-1.5">
+              <span
+                class="min-w-0 truncate text-xs leading-4"
+                :class="nameClass(msg)"
+              >
+                {{ msg.sender_name }}
+              </span>
               <span
                 v-if="roleBadge(msg)"
                 class="flex-none text-[10px] leading-4"
                 :class="badgeClass(msg)"
               >
                 {{ roleBadge(msg) }}
-              </span>
-              <span
-                class="truncate text-xs leading-4"
-                :class="nameClass(msg)"
-              >
-                {{ msg.sender_name }}
               </span>
             </div>
             <!-- 同一暗色气泡：上引用（竖条+浅灰小字）/ 下正文（更大更白），非分离卡片 -->

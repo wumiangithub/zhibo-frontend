@@ -372,14 +372,14 @@ onBeforeUnmount(() => {
             <div class="msg-body">
               <div class="msg-meta">
                 <span
+                  class="name"
+                  :class="nameToneClass(msg)"
+                >{{ msg.sender_name }}</span>
+                <span
                   v-if="roleBadge(msg)"
                   class="badge"
                   :class="badgeToneClass(msg)"
                 >{{ roleBadge(msg) }}</span>
-                <span
-                  class="name"
-                  :class="nameToneClass(msg)"
-                >{{ msg.sender_name }}</span>
               </div>
               <div
                 v-if="msg.reply || msg.msg?.trim()"
@@ -945,6 +945,7 @@ onBeforeUnmount(() => {
 }
 
 .name {
+  min-width: 0;
   overflow: hidden;
   color: #666;
   font-size: 12px;
@@ -952,11 +953,17 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-/* 有角标时昵称保持中性灰（对齐观看截图） */
-.name.is-host,
-.name.is-assistant,
+/* 角色昵称色与角标同系：主持红 / 助理黄 / 嘉宾紫；观众保持默认灰 */
+.name.is-host {
+  color: #e54d42;
+}
+
+.name.is-assistant {
+  color: #d48806;
+}
+
 .name.is-guest {
-  color: #8c8c8c;
+  color: #722ed1;
 }
 
 .badge {

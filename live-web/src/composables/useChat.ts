@@ -379,9 +379,11 @@ export function useChat(options: ChatOptions) {
 
   /**
    * 联调官方 `chat.sendCustomEvent`（文档：{ type, data } → Promise）。
-   * 收包看 `[vhall-sdk] sendCustomEvent` / `[vhall-sdk] customEvent`。
+   * data.name 取当前聊天输入框内容；收包看 `[vhall-sdk] sendCustomEvent` / `customEvent`。
    */
   async function sendCustomEventTest(): Promise<void> {
+    const text = chat.chatInput.trim();
+    if (!text || text.length > MAX_LEN) return;
     const sdk = getSdk();
     if (!sdk?.chat?.sendCustomEvent) {
       console.warn("[vhall-sdk] sendCustomEvent unavailable: SDK 未就绪或不支持");
@@ -390,7 +392,7 @@ export function useChat(options: ChatOptions) {
     const payload = {
       type: "zhibo_test",
       data: {
-        name: "zhibo自定义消息测试",
+        name: text,
         at: Date.now(),
       },
     };

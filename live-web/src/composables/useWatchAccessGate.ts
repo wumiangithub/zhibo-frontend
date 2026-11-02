@@ -5,7 +5,12 @@ import {
   type WatchAccessState,
 } from "@/api/watchAccess";
 import { setActivityAccessToken } from "@/utils/activityAccess";
-import { goViewerLogin } from "@/utils/viewerLogin";
+import { clearViewerSession } from "@/utils/viewerAuth";
+import {
+  goViewerLogin,
+  isViewerLoginRequiredError,
+  recoverViewerAuth,
+} from "@/utils/viewerLogin";
 
 /**
  * 观看页 / 回放页共用：先查 access，再决定弹密码、跳登录或拦截。
@@ -40,6 +45,18 @@ export function useWatchAccessGate(activityId: () => string) {
     resetBlocked();
   }
 
+  async function applyAccessResult(res: { accessState: WatchAccessState }): Promise<boolean> {
+    accessState.value = res.accessState;
+    if (res.accessState === "ok") return true;
+    if (res.accessState === "need_password") {
+      passwordOpen.value = true;
+      return false;
+    }
+    if (res.accessState === "need_login") return false;
+    applyBlocked(res.accessState);
+    return false;
+  }
+
   /**
    * @returns true 已放行，可继续拉 sdk / records
    */
@@ -51,22 +68,49 @@ export function useWatchAccessGate(activityId: () => string) {
     accessState.value = "";
     try {
       const id = activityId();
-      const res = await getWatchAccess(id);
-      accessState.value = res.accessState;
-      if (res.accessState === "ok") {
-        return true;
-      }
-      if (res.accessState === "need_password") {
-        passwordOpen.value = true;
-        return false;
-      }
+      let res = await getWatchAccess(id);
+      let ok = await applyAccessResult(res);
+      if (ok) return true;
+      if (res.accessState !== "need_login") return false;
+
+      // JWT 缺失/无效：先 refresh；失败则清票跳登录
+      const outcome = await recoverViewerAuth();
+      if (outcome !== "refreshed") return false;
+      res = await getWatchAccess(id);
+      ok = await applyAccessResult(res);
+      if (ok) return true;
       if (res.accessState === "need_login") {
+        clearViewerSession();
         await goViewerLogin();
-        return false;
       }
-      applyBlocked(res.accessState);
       return false;
     } catch (e) {
+      if (isViewerLoginRequiredError(e)) {
+        const outcome = await recoverViewerAuth();
+        if (outcome === "refreshed") {
+          try {
+            const res = await getWatchAccess(activityId());
+            const passed = await applyAccessResult(res);
+            if (passed) return true;
+            if (res.accessState === "need_login") {
+              clearViewerSession();
+              await goViewerLogin();
+            }
+            return false;
+          } catch (e2) {
+            if (isViewerLoginRequiredError(e2)) {
+              clearViewerSession();
+              await goViewerLogin();
+              return false;
+            }
+            blockedTitle.value = "无法进入";
+            blockedMessage.value =
+              e2 instanceof Error ? e2.message : "门禁校验失败";
+            return false;
+          }
+        }
+        return false;
+      }
       blockedTitle.value = "无法进入";
       blockedMessage.value = e instanceof Error ? e.message : "门禁校验失败";
       return false;
