@@ -2,17 +2,15 @@
 import { onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { enrollCourse } from "@/api/courseEnroll";
-import { useToast } from "@/composables/useToast";
 import {
   getViewerAccessToken,
   syncViewerAccessTokenFromUrl,
   syncViewerIdFromUrl,
 } from "@/utils/viewerAuth";
 import { decodeCourseShareToken } from "@/utils/courseShareToken";
-import { navigateToViewerLogin } from "@/utils/miniProgram";
+import { goViewerLogin } from "@/utils/viewerLogin";
 
 const route = useRoute();
-const { toast } = useToast();
 const courseId = String(route.params.id ?? "").trim().toLowerCase();
 
 const routeQuery = route.query as Record<string, unknown>;
@@ -82,8 +80,7 @@ async function tryEnroll() {
 }
 
 async function onLogin() {
-  const ok = await navigateToViewerLogin();
-  if (!ok) toast("请先登录");
+  await goViewerLogin();
 }
 
 onMounted(() => {

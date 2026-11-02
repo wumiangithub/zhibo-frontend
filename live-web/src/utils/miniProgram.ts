@@ -1,10 +1,11 @@
-import { loadScript } from "@/utils/sdk";
-
 /** 小程序登录页（与 zhibo-wxmini `pages/login/login` / app.json 一致）。 */
 const VIEWER_LOGIN_URL = "/pages/login/login";
 
-/** 微信 JS-SDK（含 `wx.miniProgram`，web-view 内跳转小程序页）。 */
-const WX_JS_SDK_URL = "https://res.wx.qq.com/open/js/jweixin-1.3.2.js";
+/**
+ * 微信 JS-SDK（含 `wx.miniProgram`）。
+ * 对齐 admin-web TOS：放 `public/jweixin-1.3.2.js`，同源 script 注入，不走外网 CDN。
+ */
+const WX_JS_SDK_SRC = "/jweixin-1.3.2.js";
 
 type MiniProgramApi = {
   navigateTo?: (opts: { url: string }) => void;
@@ -30,24 +31,54 @@ function getMiniProgram(): MiniProgramApi | null {
 }
 
 /** 单次加载承诺：并发调用共用；失败后清空以便重试（对齐 admin-web loadTosSDK）。 */
-let ensureWxJsSdkPromise: Promise<void> | null = null;
+let ensureWxJsSdkPromise: Promise<WxGlobal | null> | null = null;
 
 /**
  * 确保微信 JS-SDK 已注入（`window.wx`）。
- * 已有 `wx.miniProgram` 则直接 resolve；脚本用 `loadScript` 去重（script 标签 / loading 标记）。
+ * 已有 `window.wx` / 同 src script 不重复插入；非微信环境加载后也可能无 `miniProgram`。
  */
-export function ensureWxJsSdk(): Promise<void> {
-  if (getMiniProgram()) return Promise.resolve();
+export function ensureWxJsSdk(): Promise<WxGlobal | null> {
+  const existing = getWx();
+  if (existing) return Promise.resolve(existing);
   if (ensureWxJsSdkPromise) return ensureWxJsSdkPromise;
 
-  ensureWxJsSdkPromise = loadScript(WX_JS_SDK_URL)
-    .then(() => {
-      /* 脚本 onload；非微信环境可能仍无 wx，由调用方判断 */
-    })
-    .catch((err) => {
+  ensureWxJsSdkPromise = new Promise<WxGlobal | null>((resolve, reject) => {
+    const finish = () => resolve(getWx());
+    const fail = () => {
       ensureWxJsSdkPromise = null;
-      throw err;
-    });
+      reject(new Error("Failed to load WeChat JS-SDK"));
+    };
+
+    const tagged = document.querySelector<HTMLScriptElement>(
+      `script[src="${WX_JS_SDK_SRC}"]`,
+    );
+    if (tagged) {
+      if (tagged.dataset.loaded === "1" || getWx()) {
+        finish();
+        return;
+      }
+      if (tagged.dataset.loading === "1") {
+        tagged.addEventListener("load", finish, { once: true });
+        tagged.addEventListener("error", fail, { once: true });
+        return;
+      }
+      tagged.addEventListener("load", finish, { once: true });
+      tagged.addEventListener("error", fail, { once: true });
+      if (getWx()) finish();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = WX_JS_SDK_SRC;
+    script.dataset.loading = "1";
+    script.onload = () => {
+      delete script.dataset.loading;
+      script.dataset.loaded = "1";
+      finish();
+    };
+    script.onerror = fail;
+    document.head.appendChild(script);
+  });
 
   return ensureWxJsSdkPromise;
 }

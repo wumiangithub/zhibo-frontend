@@ -171,7 +171,10 @@ function sendMobileChat() {
               {{ roleBadge(msg) }}
             </span>
           </div>
-          <div class="mt-1 inline-block max-w-full break-words rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-200">
+          <div
+            v-if="msg.msg?.trim()"
+            class="mt-1 inline-block max-w-full break-words rounded-lg bg-gray-800 px-3 py-2 text-sm text-gray-200"
+          >
             <template v-for="(seg, segIdx) in splitEmojiText(msg.msg)" :key="segIdx">
               <img
                 v-if="seg.kind === 'emoji'"
@@ -182,6 +185,26 @@ function sendMobileChat() {
               >
               <span v-else>{{ seg.value }}</span>
             </template>
+          </div>
+          <div
+            v-if="msg.imageUrls?.length"
+            class="mt-1 flex max-w-full flex-wrap gap-1.5"
+          >
+            <a
+              v-for="(src, imgIdx) in msg.imageUrls"
+              :key="`${msg.msgId || idx}-img-${imgIdx}`"
+              :href="src.startsWith('//') ? `https:${src}` : src"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="block overflow-hidden rounded-md bg-gray-800"
+            >
+              <img
+                :src="src"
+                alt="聊天图片"
+                class="max-h-40 max-w-[180px] object-contain"
+                loading="lazy"
+              >
+            </a>
           </div>
         </div>
       </div>

@@ -28,11 +28,13 @@ import {
   getViewerAccessToken,
   getViewerId,
   isViewerAuthQueryKey,
+  isViewerLoggedIn,
   readNicknameFromSearch,
   syncViewerAccessTokenFromUrl,
   syncViewerIdFromUrl,
 } from "@/utils/viewerAuth";
-import { ensureWxJsSdk, navigateToViewerLogin } from "@/utils/miniProgram";
+import { ensureWxJsSdk } from "@/utils/miniProgram";
+import { goViewerLogin } from "@/utils/viewerLogin";
 
 const route = useRoute();
 const router = useRouter();
@@ -94,17 +96,17 @@ function tryAttributeInvite() {
   });
 }
 
-/** 小程序已带 viewerId+nickname 时跳过随意昵称表单 */
-const showNicknameForm = ref(syncedViewerId == null && !getStoredNickname());
+/** 已登录且无展示昵称时才填；未登录先走 /login，不挡在昵称表单 */
+const showNicknameForm = ref(
+  !!getViewerAccessToken() && syncedViewerId == null && !getStoredNickname(),
+);
 const nicknameSaving = ref(false);
 
 const session = useWatchSession({
   activityId: id,
   getNickname: () => getStoredNickname().trim(),
   onUnauthenticatedChat: () => {
-    void navigateToViewerLogin().then((ok) => {
-      if (!ok) toast("请先登录后再参与聊天");
-    });
+    void goViewerLogin();
   },
 });
 
@@ -142,6 +144,10 @@ const {
 } = gate;
 
 async function enterWatch() {
+  if (!isViewerLoggedIn()) {
+    await goViewerLogin();
+    return;
+  }
   const ok = await ensureAccess();
   if (!ok) return;
   await load();
@@ -264,6 +270,10 @@ function changeNickname() {
 onMounted(() => {
   // 预热微信 JS-SDK，聊天跳登录时不必等首屏脚本
   void ensureWxJsSdk().catch(() => {});
+  if (!isViewerLoggedIn()) {
+    void goViewerLogin();
+    return;
+  }
   captureInviteFromQuery();
   tryAttributeInvite();
   pingViewerPresence("live");

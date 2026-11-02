@@ -5,13 +5,14 @@ import {
   type WatchAccessState,
 } from "@/api/watchAccess";
 import { setActivityAccessToken } from "@/utils/activityAccess";
-import { navigateToViewerLogin } from "@/utils/miniProgram";
+import { goViewerLogin } from "@/utils/viewerLogin";
 
 /**
  * 观看页 / 回放页共用：先查 access，再决定弹密码、跳登录或拦截。
  */
 export function useWatchAccessGate(activityId: () => string) {
-  const checking = ref(true);
+  /** 仅 ensureAccess 进行中为 true；勿默认 true，否则未进房就卡住「校验观看权限…」 */
+  const checking = ref(false);
   const accessState = ref<WatchAccessState | "">("");
   const passwordOpen = ref(false);
   const passwordSubmitting = ref(false);
@@ -60,11 +61,7 @@ export function useWatchAccessGate(activityId: () => string) {
         return false;
       }
       if (res.accessState === "need_login") {
-        const ok = await navigateToViewerLogin();
-        if (!ok) {
-          blockedTitle.value = "请先登录";
-          blockedMessage.value = "本场仅指定用户可观看，请先登录后再试";
-        }
+        await goViewerLogin();
         return false;
       }
       applyBlocked(res.accessState);

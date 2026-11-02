@@ -1,6 +1,7 @@
 import { nextTick, reactive } from "vue";
 import { deleteComment, reportComment } from "@/api/comments";
 import { normalizeEmojiText } from "@/constants/emoji";
+import { collectVhallChatImageUrls } from "@/utils/vhallChatImage";
 import { parseVhallChatRole } from "@/utils/vhallChatRole";
 
 const VERIFY_KEY = "zhibo.chatVerified";
@@ -26,22 +27,36 @@ export interface ChatOptions {
 
 /**
  * 历史：SDK 扁平项 或 open-api get-list 嵌套项（见微吼文档）。
- * 实时 chatMsg：{ context, data: { type, text_content, nick_name, avatar } }
+ * 实时 chatMsg：{ context, data: { type, text_content, image_urls, nick_name, avatar } }
+ * chatServer 归一化：{ type, content: { type, text_content, image_urls } }
  *
  * 昵称 / 头像 / 角色优先顶层与 context（get-list 必需字段），再兜底 data。
+ * 纯图片消息无正文，勿因 !text 丢弃（对齐 demo config.js image_urls）。
  */
 function normalizeChatItem(raw: Record<string, any>): ChatMessage | null {
   const ctx = raw.context || {};
-  const payload = raw.data || {};
-  if (payload.type && payload.type !== "text" && payload.type !== "image") return null;
+  const nestedContent =
+    raw.content && typeof raw.content === "object" ? raw.content : null;
+  const payload = raw.data || nestedContent || {};
+  const msgType = payload.type || raw.type;
+  if (msgType && msgType !== "text" && msgType !== "image") return null;
   if (raw.event && raw.event !== "msg") return null;
 
-  const text =
-    raw.content ||
+  const textRaw =
+    (typeof raw.content === "string" ? raw.content : "") ||
     payload.text_content ||
     payload.barrage_txt ||
     payload.barrageTxt ||
     "";
+  const text = String(textRaw);
+  const imageUrls = collectVhallChatImageUrls(
+    payload.image_urls,
+    payload.img_urls,
+    raw.image_urls,
+    raw.img_urls,
+    nestedContent?.image_urls,
+    nestedContent?.img_urls,
+  );
   const name =
     raw.nickname ||
     raw.nick_name ||
@@ -50,13 +65,14 @@ function normalizeChatItem(raw: Record<string, any>): ChatMessage | null {
     payload.nickname ||
     payload.nick_name ||
     "";
-  if (!text || !name) return null;
+  if (!name) return null;
+  if (!text.trim() && imageUrls.length === 0) return null;
 
   const avatarRaw =
     raw.avatar || ctx.avatar || payload.avatar || "";
   const avatar = typeof avatarRaw === "string" ? avatarRaw.trim() : "";
 
-  let role = parseVhallChatRole(raw.role_name ?? ctx.role_name);
+  let role = parseVhallChatRole(raw.role_name ?? raw.roleName ?? ctx.role_name);
   // 旧扁平历史偶发 user_role=host，无数字 role_name
   if (role == null && (raw.user_role || ctx.user_role) === "host") {
     role = 1;
@@ -66,21 +82,25 @@ function normalizeChatItem(raw: Record<string, any>): ChatMessage | null {
     sender_id: String(
       raw.user_id ||
         raw.sender_id ||
+        raw.sendId ||
         raw.third_user_id ||
         ctx.third_account_id ||
         ctx.user_id ||
         "",
     ),
     sender_name: String(name).trim(),
-    msg: String(text),
+    msg: text,
+    imageUrls: imageUrls.length ? imageUrls : undefined,
     msgId:
       raw.id != null
         ? String(raw.id)
-        : raw.msg_id != null
-          ? String(raw.msg_id)
-          : payload.msg_id != null
-            ? String(payload.msg_id)
-            : undefined,
+        : raw.msgId != null
+          ? String(raw.msgId)
+          : raw.msg_id != null
+            ? String(raw.msg_id)
+            : payload.msg_id != null
+              ? String(payload.msg_id)
+              : undefined,
     avatar: avatar || undefined,
     role_name: role,
     is_host: role === 1,
@@ -95,22 +115,17 @@ function formatCommentTime(ts: number): string {
 }
 
 /**
- * 上报本站评论。
- * viewerId 只在「本人发言」时带：每条 chatMsg 各端都会上报（幂等），
- * 若把当前登录观众 id 绑到他人消息上，用户管理「评论次数」会算错。
+ * 上报本站评论（须观众 JWT；viewerId 由后端从 Authorization 解析）。
+ * 只报本人发言：发聊天必须登录，勿把当前 JWT 绑到他人 chatMsg。
  */
-function persistComment(options: ChatOptions, msg: ChatMessage, own = false) {
+function persistComment(options: ChatOptions, msg: ChatMessage) {
   const activityId = options.getActivityId?.()?.trim() ?? "";
-  if (!activityId || !msg.msg?.trim()) return;
-  const guestId = msg.sender_id?.trim() || options.getSender().id || "";
-  const selfId = options.getSender().id?.trim() || "";
-  const isOwn = own || (!!selfId && msg.sender_id?.trim() === selfId);
-  const viewerId = isOwn ? (options.getViewerId?.() ?? null) : null;
-  if (!guestId && viewerId == null) return;
+  if (!activityId) return;
+  if (options.getViewerId?.() == null) return;
+  const text = msg.msg?.trim() || (msg.imageUrls?.length ? "[图片]" : "");
+  if (!text) return;
   void reportComment(activityId, {
-    content: msg.msg.slice(0, 500),
-    guestId: guestId || undefined,
-    viewerId: viewerId ?? undefined,
+    content: text.slice(0, 500),
     nickname: msg.sender_name || undefined,
     roleName: msg.role_name ?? undefined,
     providerMsgId:
@@ -234,6 +249,13 @@ export function useChat(options: ChatOptions) {
     }
   }
 
+  function sameChatBody(a: ChatMessage, b: ChatMessage): boolean {
+    if (normalizeEmojiText(a.msg || "") !== normalizeEmojiText(b.msg || "")) return false;
+    const aImgs = (a.imageUrls || []).join("\0");
+    const bImgs = (b.imageUrls || []).join("\0");
+    return aImgs === bImgs;
+  }
+
   function pushChatMessage(msg: ChatMessage) {
     // 自己发的消息先乐观插入 local_ 占位（sender_id=guestId），随后服务端回声用真实 user_id 再来一次，
     // 两者 sender_id 不同，只能按内容匹配把占位替换成带真实 msgId 的回声，避免本地出现两条。
@@ -241,13 +263,13 @@ export function useChat(options: ChatOptions) {
       (m) =>
         typeof m.msgId === "string" &&
         m.msgId.startsWith("local_") &&
-        normalizeEmojiText(m.msg) === normalizeEmojiText(msg.msg) &&
+        sameChatBody(m, msg) &&
         Math.abs(m.timestamp - Date.now()) < 15000,
     );
     if (placeholderIdx !== -1) {
       chat.chatMessages.splice(placeholderIdx, 1, msg);
-      // 本地发送回声：一定是本人，带上 viewerId 供评论次数聚合
-      persistComment(options, msg, true);
+      // 本地发送回声：只上报本人
+      persistComment(options, msg);
       return;
     }
     // 他人消息或无占位命中时的常规去重：近 5 秒内相同发送者 + 内容视为同一条
@@ -256,13 +278,17 @@ export function useChat(options: ChatOptions) {
       .some(
         (m) =>
           m.sender_id === msg.sender_id &&
-          normalizeEmojiText(m.msg) === normalizeEmojiText(msg.msg) &&
+          sameChatBody(m, msg) &&
           Math.abs(m.timestamp - Date.now()) < 5000,
       );
     if (isDuplicate) return;
     chat.chatMessages.push(msg);
     trimList();
-    persistComment(options, msg);
+    // 他人 chatMsg 不上报（viewerId 来自当前 JWT，不能绑到别人）
+    const selfId = options.getSender().id?.trim() || "";
+    if (selfId && msg.sender_id?.trim() === selfId) {
+      persistComment(options, msg);
+    }
   }
 
   function handleChatMessage(data: VhallChatMsgMessage) {
@@ -284,7 +310,7 @@ export function useChat(options: ChatOptions) {
     if (msgId) {
       chat.chatMessages = chat.chatMessages.filter((m) => m.msgId !== msgId);
       const activityId = options.getActivityId?.()?.trim() ?? "";
-      if (activityId && !msgId.startsWith("local_")) {
+      if (activityId && !msgId.startsWith("local_") && options.getViewerId?.() != null) {
         void deleteComment(activityId, { providerMsgId: msgId.slice(0, 64) }).catch((e) => {
           console.warn("评论软删上报失败", e);
         });

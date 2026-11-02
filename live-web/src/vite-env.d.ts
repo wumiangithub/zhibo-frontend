@@ -24,8 +24,11 @@ interface VhallSdkOptions {
 interface ChatMessage {
   sender_id: string;
   sender_name: string;
+  /** 文本正文；纯图片消息可为空串 */
   msg: string;
   msgId?: string;
+  /** 聊天附带图片（微吼 data.image_urls / img_urls，已规范化） */
+  imageUrls?: string[];
   /** 发送者头像 URL；空则 UI 用占位 */
   avatar?: string;
   /**

@@ -365,7 +365,10 @@ onBeforeUnmount(() => {
                 :class="badgeToneClass(msg)"
               >{{ roleBadge(msg) }}</span>
             </div>
-            <p class="msg-text">
+            <p
+              v-if="msg.msg?.trim()"
+              class="msg-text"
+            >
               <template
                 v-for="(seg, segIdx) in splitEmojiText(msg.msg)"
                 :key="segIdx"
@@ -380,6 +383,26 @@ onBeforeUnmount(() => {
                 <span v-else>{{ seg.value }}</span>
               </template>
             </p>
+            <div
+              v-if="msg.imageUrls?.length"
+              class="msg-images"
+            >
+              <a
+                v-for="(src, imgIdx) in msg.imageUrls"
+                :key="`${msg.msgId || idx}-img-${imgIdx}`"
+                :href="src.startsWith('//') ? `https:${src}` : src"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="msg-image-link"
+              >
+                <img
+                  :src="src"
+                  alt="聊天图片"
+                  class="msg-image"
+                  loading="lazy"
+                >
+              </a>
+            </div>
           </div>
         </article>
       </template>
@@ -923,6 +946,27 @@ onBeforeUnmount(() => {
   font-size: 13px;
   line-height: 1.5;
   word-break: break-word;
+}
+
+.msg-images {
+  margin: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.msg-image-link {
+  display: block;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #f0f0f0;
+}
+
+.msg-image {
+  display: block;
+  max-width: 160px;
+  max-height: 160px;
+  object-fit: contain;
 }
 
 .emoji {

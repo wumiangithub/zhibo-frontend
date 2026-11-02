@@ -1,6 +1,8 @@
 /** 与小程序 utils/auth.js 同键，便于 H5 登录或 web-view 注入共用。 */
 const ACCESS_KEY = "viewerAccessToken";
+const REFRESH_KEY = "viewerRefreshToken";
 const VIEWER_ID_KEY = "viewerId";
+const PHONE_KEY = "viewerPhoneMasked";
 
 /** 观众 JWT；无则空串。 */
 export function getViewerAccessToken(): string {
@@ -17,6 +19,24 @@ export function setViewerAccessToken(token: string): void {
   if (!t) return;
   try {
     localStorage.setItem(ACCESS_KEY, t);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getViewerRefreshToken(): string {
+  try {
+    return localStorage.getItem(REFRESH_KEY)?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+export function setViewerRefreshToken(token: string): void {
+  const t = token.trim();
+  if (!t) return;
+  try {
+    localStorage.setItem(REFRESH_KEY, t);
   } catch {
     /* ignore */
   }
@@ -40,6 +60,32 @@ export function setViewerId(viewerId: number): void {
     localStorage.setItem(VIEWER_ID_KEY, String(viewerId));
   } catch {
     /* ignore */
+  }
+}
+
+/** 登录 / 刷新成功后写入本地会话（与小程序 saveSession 对齐）。 */
+export function saveViewerSession(data: {
+  accessToken?: string;
+  refreshToken?: string;
+  user?: { id?: number; phoneMasked?: string; nickname?: string } | null;
+}): void {
+  if (!data) return;
+  if (data.accessToken) setViewerAccessToken(data.accessToken);
+  if (data.refreshToken) setViewerRefreshToken(data.refreshToken);
+  const user = data.user;
+  if (!user || typeof user !== "object") return;
+  if (user.id != null) {
+    const id = Number(user.id);
+    if (Number.isInteger(id) && id > 0) setViewerId(id);
+  }
+  if (Object.prototype.hasOwnProperty.call(user, "phoneMasked")) {
+    try {
+      const masked = user.phoneMasked?.trim();
+      if (masked) localStorage.setItem(PHONE_KEY, masked);
+      else localStorage.removeItem(PHONE_KEY);
+    } catch {
+      /* ignore */
+    }
   }
 }
 

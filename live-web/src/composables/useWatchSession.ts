@@ -74,7 +74,10 @@ export function useWatchSession(opts: WatchSessionOptions) {
       id: sign.value?.sdk?.account || (getViewerId() != null ? String(getViewerId()) : ""),
       name: opts.getNickname() || sign.value?.nickname || "我",
     }),
-    onIncoming: (msg) => barrage.spawnDanmaku(msg.msg),
+    onIncoming: (msg) => {
+      const text = msg.msg?.trim();
+      if (text) barrage.spawnDanmaku(text);
+    },
     getActivityId: () => resolveId(opts.activityId),
     getViewerId: () => getViewerId(),
     onUnauthenticatedChat: opts.onUnauthenticatedChat,
