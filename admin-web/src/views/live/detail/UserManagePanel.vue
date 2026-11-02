@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, reactive, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, reactive, watch } from "vue";
 import {
   ElButton,
   ElDialog,
@@ -28,7 +28,9 @@ import {
   downloadAudienceImportTemplate,
   exportAudiences,
   formatDurationSec,
+  estimateAudiencesByTags,
   importAudiences,
+  importAudiencesByTags,
   listAudienceImports,
   listAudiences,
   updateAudienceEntitlement,
@@ -41,6 +43,7 @@ import {
 import type { ActivityId } from "@/api/activity";
 import { listViewerTags, type ViewerTagItem } from "@/api/viewerTag";
 import UiButton from "@/components/ui/UiButton.vue";
+import ViewerTagPickerDialog from "@/views/live/components/ViewerTagPickerDialog.vue";
 
 const props = defineProps<{ activityId: ActivityId }>();
 
@@ -266,12 +269,96 @@ watch(isFullscreen, (on) => {
   void relayoutTable();
 });
 
+const TAG_IMPORT_MAX = 5;
+const tagImportMode = ref<"byTag">("byTag");
+const tagImportSelected = ref<ViewerTagItem[]>([]);
+const tagPickerVisible = ref(false);
+const tagImportSaving = ref(false);
+/** 各标签包含人数直接相加（可含重叠） */
+const tagImportMemberSum = computed(() =>
+  tagImportSelected.value.reduce((sum, t) => sum + (t.userCount ?? 0), 0),
+);
+/** 预计导入人数：所选标签「满足其一」去重后的观众数 */
+const tagImportEstimateCount = ref(0);
+let tagImportEstimateSeq = 0;
+
+async function refreshTagImportEstimate() {
+  const seq = ++tagImportEstimateSeq;
+  const ids = tagImportSelected.value.map((t) => t.id);
+  if (!ids.length) {
+    tagImportEstimateCount.value = 0;
+    return;
+  }
+  try {
+    const res = await estimateAudiencesByTags(props.activityId, ids);
+    if (seq !== tagImportEstimateSeq) return;
+    tagImportEstimateCount.value = res.total ?? 0;
+  } catch {
+    if (seq !== tagImportEstimateSeq) return;
+    tagImportEstimateCount.value = 0;
+  }
+}
+
+watch(
+  tagImportSelected,
+  () => {
+    void refreshTagImportEstimate();
+  },
+  { deep: true },
+);
+
 function resetAddForm() {
   addTab.value = "single";
   addMethod.value = "phone";
   addPhone.value = "";
   addPhoneCode.value = "+86";
   addViewerId.value = "";
+  tagImportMode.value = "byTag";
+  tagImportSelected.value = [];
+  tagPickerVisible.value = false;
+  tagImportEstimateCount.value = 0;
+}
+
+function openTagPicker() {
+  tagPickerVisible.value = true;
+}
+
+function onTagPickerConfirm(items: ViewerTagItem[]) {
+  tagImportSelected.value = items.slice(0, TAG_IMPORT_MAX);
+}
+
+function removeTagImportItem(id: number) {
+  tagImportSelected.value = tagImportSelected.value.filter((t) => t.id !== id);
+}
+
+async function submitTagImport() {
+  if (!tagImportSelected.value.length) {
+    ElMessage.warning("请选择标签");
+    return;
+  }
+  if (tagImportSelected.value.length > TAG_IMPORT_MAX) {
+    ElMessage.warning(`最多选择 ${TAG_IMPORT_MAX} 个标签`);
+    return;
+  }
+  tagImportSaving.value = true;
+  try {
+    const result = await importAudiencesByTags(
+      props.activityId,
+      tagImportSelected.value.map((t) => t.id),
+    );
+    if (result.total === 0) {
+      ElMessage.warning("未找到符合条件的用户");
+    } else {
+      ElMessage.success(
+        `导入完成：新增 ${result.created}，更新 ${result.updated}，跳过 ${result.skipped}`,
+      );
+    }
+    await fetchList();
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "导入失败");
+  } finally {
+    tagImportSaving.value = false;
+  }
 }
 
 function openAdd() {
@@ -844,7 +931,7 @@ onUnmounted(() => {
     <ElDialog
       v-model="addVisible"
       title="添加用户"
-      :width="addTab === 'bulk' ? '760px' : '560px'"
+      :width="addTab === 'bulk' ? '860px' : '660px'"
       append-to-body
       destroy-on-close
       class="add-audience-dialog"
@@ -1003,7 +1090,66 @@ onUnmounted(() => {
           label="标签导入"
           name="tag"
         >
-          <p class="add-tab-placeholder">标签导入即将支持</p>
+          <ElForm
+            label-width="96px"
+            class="tag-import-form"
+          >
+            <ElFormItem label=" ">
+              <ElRadioGroup v-model="tagImportMode">
+                <ElRadio value="byTag">按标签筛选用户</ElRadio>
+              </ElRadioGroup>
+            </ElFormItem>
+            <ElFormItem
+              label="选择标签"
+              required
+            >
+              <div class="tag-import-pick">
+                <button
+                  type="button"
+                  class="tag-pick-btn"
+                  @click="openTagPicker"
+                >
+                  + 选择用户标签
+                </button>
+                <span class="tag-pick-hint">最多选择 {{ TAG_IMPORT_MAX }} 个</span>
+              </div>
+              <p class="tag-import-tip">
+                选择标签后，符合条件的用户将直接添加至用户列表，状态权益为有效
+              </p>
+              <div
+                v-if="tagImportSelected.length"
+                class="tag-import-selected"
+              >
+                <div class="tag-import-chips">
+                  <span
+                    v-for="t in tagImportSelected"
+                    :key="t.id"
+                    class="tag-import-chip"
+                  >
+                    {{ t.name }}
+                    <button
+                      type="button"
+                      class="tag-chip-remove"
+                      aria-label="移除"
+                      @click="removeTagImportItem(t.id)"
+                    >
+                      ×
+                    </button>
+                  </span>
+                </div>
+                <span class="tag-import-count">
+                  {{ tagImportSelected.length }} / {{ TAG_IMPORT_MAX }}
+                </span>
+              </div>
+              <p
+                v-if="tagImportSelected.length"
+                class="tag-import-estimate"
+              >
+                各标签包含人数合计 {{ tagImportMemberSum }} 人，去重后预计导入
+                {{ tagImportEstimateCount }} 人，用户需稍作等待后方可享受权益。
+              </p>
+            </ElFormItem>
+          </ElForm>
         </ElTabPane>
       </ElTabs>
       <template #footer>
@@ -1017,6 +1163,15 @@ onUnmounted(() => {
             确定
           </ElButton>
         </template>
+        <template v-else-if="addTab === 'tag'">
+          <ElButton
+            type="primary"
+            :loading="tagImportSaving"
+            @click="submitTagImport"
+          >
+            确认导入
+          </ElButton>
+        </template>
         <ElButton
           v-else
           @click="addVisible = false"
@@ -1025,6 +1180,13 @@ onUnmounted(() => {
         </ElButton>
       </template>
     </ElDialog>
+
+    <ViewerTagPickerDialog
+      v-model="tagPickerVisible"
+      :selected-tags="tagImportSelected"
+      :max="TAG_IMPORT_MAX"
+      @confirm="onTagPickerConfirm"
+    />
     </div>
   </div>
 </template>
@@ -1193,14 +1355,108 @@ onUnmounted(() => {
   flex: none;
   justify-content: flex-end;
 }
-.add-tab-placeholder {
-  margin: 24px 0 8px;
-  color: var(--el-text-color-secondary, #909399);
-  font-size: 13px;
-  text-align: center;
-}
 .add-tabs :deep(.el-tabs__header) {
   margin-bottom: 20px;
+}
+.tag-import-form :deep(.el-form-item:first-child .el-form-item__label) {
+  opacity: 0;
+}
+/* ElFormItem content 默认横向 flex，避免 tip / 已选区 / 预计文案挤同一行 */
+.tag-import-form :deep(.el-form-item__content) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.tag-import-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.tag-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px dashed var(--color-primary, #2f54eb);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--color-primary, #2f54eb);
+  font-size: 13px;
+  cursor: pointer;
+}
+.tag-pick-btn:hover {
+  background: var(--color-primary-bg, #f0f5ff);
+}
+.tag-pick-hint {
+  font-size: 12px;
+  color: var(--color-text-placeholder, #999);
+}
+.tag-import-tip {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-placeholder, #999);
+}
+.tag-import-selected {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: #f5f5f5;
+}
+.tag-import-chips {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.tag-import-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  height: 24px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid var(--color-border, #e4e7ed);
+  color: var(--color-text, #333);
+  font-size: 12px;
+}
+.tag-chip-remove {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-placeholder, #999);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  font-size: 14px;
+}
+.tag-chip-remove:hover {
+  color: var(--color-text-secondary, #666);
+}
+.tag-import-count {
+  flex: none;
+  line-height: 24px;
+  font-size: 13px;
+  color: var(--color-text-secondary, #666);
+  white-space: nowrap;
+}
+.tag-import-estimate {
+  display: block;
+  width: 100%;
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text, #333);
 }
 .bulk-toolbar {
   display: flex;

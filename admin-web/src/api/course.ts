@@ -466,10 +466,45 @@ export function updateCourseUserExpire(rowId: number, expireTime: string) {
   });
 }
 
-/** phone 与 viewerId 二选一；created=false 表示本课已有该学员 */
+export interface CourseUserImportByTagsResult {
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export interface CourseUserImportByTagsEstimate {
+  /** 所选标签「满足其一」去重后的观众数 */
+  total: number;
+}
+
+/** 标签导入预计人数（去重，不写入） */
+export function estimateCourseUsersByTags(courseId: string, tagIds: number[]) {
+  return post<CourseUserImportByTagsEstimate>(
+    `/courses/users/import-by-tags/estimate/${encodeURIComponent(courseId)}`,
+    { tagIds },
+  );
+}
+
+/** 标签导入：所选标签「满足其一」的观众 upsert 本课学员；expireTime 选填（yyyy-MM-dd） */
+export function importCourseUsersByTags(
+  courseId: string,
+  tagIds: number[],
+  expireTime?: string,
+) {
+  const body: { tagIds: number[]; expireTime?: string } = { tagIds };
+  const expire = expireTime?.trim();
+  if (expire) body.expireTime = expire;
+  return post<CourseUserImportByTagsResult>(
+    `/courses/users/import-by-tags/${encodeURIComponent(courseId)}`,
+    body,
+  );
+}
+
+/** phone 与 viewerId 二选一；created=false 表示本课已有该学员；expireTime 选填仅新建生效 */
 export function createCourseUser(
   courseId: string,
-  body: { phone: string } | { viewerId: number },
+  body: ({ phone: string } | { viewerId: number }) & { expireTime?: string },
 ) {
   return post<{ id: number; viewerId: number; created: boolean }>(
     `/courses/users/create/${encodeURIComponent(courseId)}`,
@@ -496,9 +531,15 @@ export interface CourseUserImportHistoryItem {
   failCount: number;
 }
 
-export async function importCourseUsers(courseId: string, file: File) {
+export async function importCourseUsers(
+  courseId: string,
+  file: File,
+  expireTime?: string,
+) {
   const form = new FormData();
   form.append("file", file);
+  const expire = expireTime?.trim();
+  if (expire) form.append("expireTime", expire);
   const token = getAccessToken();
   const resp = await axios.post(
     `/api/v1/courses/users/import/${encodeURIComponent(courseId)}`,

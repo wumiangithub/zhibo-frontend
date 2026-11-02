@@ -19,6 +19,7 @@ import {
   type ViewerTagGroupItem,
 } from "@/api/viewerTag";
 import { ApiError } from "@/api/http";
+import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -33,6 +34,14 @@ const isDetail = computed(() => route.name === "user-tags-detail");
 const isEdit = computed(() => route.name === "user-tags-edit");
 const isCreate = computed(() => !isDetail.value && !isEdit.value);
 const readonly = computed(() => isDetail.value);
+
+const crumbs = computed<AppBreadcrumbItem[]>(() => [
+  { label: "用户", to: "/user/list" },
+  { label: "标签管理", to: "/user/tags" },
+  {
+    label: isDetail.value ? "标签详情" : isEdit.value ? "编辑标签" : "新建标签",
+  },
+]);
 
 const name = ref("");
 const type = ref<number>(ViewerTagType.MANUAL);
@@ -136,6 +145,7 @@ async function onSave() {
 
 <template>
   <div class="tag-form">
+    <AppBreadcrumb :items="crumbs" />
     <div class="form-card">
       <div class="form-row">
         <label

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { InfoFilled } from "@element-plus/icons-vue";
 import {
   ElButton,
+  ElDatePicker,
   ElDialog,
   ElForm,
   ElFormItem,
@@ -23,10 +24,14 @@ import {
   createCourseUser,
   downloadCourseUserImportFailures,
   downloadCourseUserImportTemplate,
+  estimateCourseUsersByTags,
   importCourseUsers,
+  importCourseUsersByTags,
   listCourseUserImports,
   type CourseUserImportHistoryItem,
 } from "@/api/course";
+import type { ViewerTagItem } from "@/api/viewerTag";
+import ViewerTagPickerDialog from "@/views/live/components/ViewerTagPickerDialog.vue";
 
 const props = defineProps<{
   courseId: string;
@@ -44,10 +49,23 @@ const addPhone = ref("");
 const addPhoneCode = ref("+86");
 const addViewerId = ref("");
 const addSaving = ref(false);
+/** 选填自定义到期（yyyy-MM-dd）；空则后端按课程售卖算 */
+const customExpireDate = ref("");
 const csvInput = ref<HTMLInputElement | null>(null);
 const importHistory = ref<CourseUserImportHistoryItem[]>([]);
 const importHistoryLoading = ref(false);
 const bulkImporting = ref(false);
+
+const TAG_IMPORT_MAX = 5;
+const tagImportMode = ref<"byTag">("byTag");
+const tagImportSelected = ref<ViewerTagItem[]>([]);
+const tagPickerVisible = ref(false);
+const tagImportSaving = ref(false);
+const tagImportMemberSum = computed(() =>
+  tagImportSelected.value.reduce((sum, t) => sum + (t.userCount ?? 0), 0),
+);
+const tagImportEstimateCount = ref(0);
+let tagImportEstimateSeq = 0;
 
 const PHONE_CODE_OPTIONS = [{ label: "+86 中国", value: "+86" }] as const;
 const UPLOAD_NOTICE =
@@ -73,12 +91,42 @@ watch([visible, addTab], ([isVisible, tab]) => {
   }
 });
 
+async function refreshTagImportEstimate() {
+  const seq = ++tagImportEstimateSeq;
+  const ids = tagImportSelected.value.map((t) => t.id);
+  if (!ids.length) {
+    tagImportEstimateCount.value = 0;
+    return;
+  }
+  try {
+    const res = await estimateCourseUsersByTags(props.courseId, ids);
+    if (seq !== tagImportEstimateSeq) return;
+    tagImportEstimateCount.value = res.total ?? 0;
+  } catch {
+    if (seq !== tagImportEstimateSeq) return;
+    tagImportEstimateCount.value = 0;
+  }
+}
+
+watch(
+  tagImportSelected,
+  () => {
+    void refreshTagImportEstimate();
+  },
+  { deep: true },
+);
+
 function resetForm() {
   addTab.value = "single";
   addMethod.value = "phone";
   addPhone.value = "";
   addPhoneCode.value = "+86";
   addViewerId.value = "";
+  customExpireDate.value = "";
+  tagImportMode.value = "byTag";
+  tagImportSelected.value = [];
+  tagPickerVisible.value = false;
+  tagImportEstimateCount.value = 0;
 }
 
 function onAddMethodChange() {
@@ -86,10 +134,53 @@ function onAddMethodChange() {
   addViewerId.value = "";
 }
 
+function openTagPicker() {
+  tagPickerVisible.value = true;
+}
+
+function onTagPickerConfirm(items: ViewerTagItem[]) {
+  tagImportSelected.value = items.slice(0, TAG_IMPORT_MAX);
+}
+
+function removeTagImportItem(id: number) {
+  tagImportSelected.value = tagImportSelected.value.filter((t) => t.id !== id);
+}
+
+async function submitTagImport() {
+  if (!tagImportSelected.value.length) {
+    ElMessage.warning("请选择标签");
+    return;
+  }
+  if (tagImportSelected.value.length > TAG_IMPORT_MAX) {
+    ElMessage.warning(`最多选择 ${TAG_IMPORT_MAX} 个标签`);
+    return;
+  }
+  tagImportSaving.value = true;
+  try {
+    const result = await importCourseUsersByTags(
+      props.courseId,
+      tagImportSelected.value.map((t) => t.id),
+      customExpireDate.value || undefined,
+    );
+    if (result.total === 0) {
+      ElMessage.warning("未找到符合条件的用户");
+    } else {
+      ElMessage.success(
+        `导入完成：新增 ${result.created}，更新 ${result.updated}，跳过 ${result.skipped}`,
+      );
+    }
+    emit("refreshed");
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : "导入失败");
+  } finally {
+    tagImportSaving.value = false;
+  }
+}
+
 async function submitAdd() {
   if (addTab.value !== "single") return;
 
-  let body: { phone: string } | { viewerId: number };
+  let body: ({ phone: string } | { viewerId: number }) & { expireTime?: string };
   if (addMethod.value === "phone") {
     const phone = addPhone.value.trim().replace(/\D/g, "");
     if (!phone) {
@@ -109,6 +200,8 @@ async function submitAdd() {
     }
     body = { viewerId: Number(raw) };
   }
+  const expire = customExpireDate.value?.trim();
+  if (expire) body.expireTime = expire;
 
   addSaving.value = true;
   try {
@@ -156,7 +249,11 @@ async function onCsvPicked(e: Event) {
   }
   bulkImporting.value = true;
   try {
-    const result = await importCourseUsers(props.courseId, file);
+    const result = await importCourseUsers(
+      props.courseId,
+      file,
+      customExpireDate.value || undefined,
+    );
     ElMessage.success(
       `导入完成：新增 ${result.created}，更新 ${result.updated}，跳过 ${result.skipped}，失败 ${result.failed}`,
     );
@@ -190,7 +287,7 @@ async function onDownloadFailures(row: CourseUserImportHistoryItem) {
   <ElDialog
     v-model="visible"
     title="添加学员"
-    :width="addTab === 'bulk' ? '760px' : '560px'"
+    :width="addTab === 'bulk' ? '860px' : '660px'"
     append-to-body
     destroy-on-close
     class="add-course-user-dialog"
@@ -204,7 +301,7 @@ async function onDownloadFailures(row: CourseUserImportHistoryItem) {
         name="single"
       >
         <ElForm
-          label-width="96px"
+          label-width="128px"
           @submit.prevent="submitAdd"
         >
           <ElFormItem
@@ -252,12 +349,35 @@ async function onDownloadFailures(row: CourseUserImportHistoryItem) {
               maxlength="20"
             />
           </ElFormItem>
+          <ElFormItem label="自定义到期时间">
+            <ElDatePicker
+              v-model="customExpireDate"
+              type="date"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              placeholder="请选择日期"
+              class="expire-picker"
+              clearable
+            />
+          </ElFormItem>
         </ElForm>
       </ElTabPane>
       <ElTabPane
         label="批量导入"
         name="bulk"
       >
+        <div class="expire-field">
+          <span class="expire-label">自定义到期时间</span>
+          <ElDatePicker
+            v-model="customExpireDate"
+            type="date"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            placeholder="请选择日期"
+            class="expire-picker"
+            clearable
+          />
+        </div>
         <div class="bulk-toolbar">
           <input
             ref="csvInput"
@@ -349,7 +469,77 @@ async function onDownloadFailures(row: CourseUserImportHistoryItem) {
         label="标签导入"
         name="tag"
       >
-        <p class="add-tab-placeholder">标签导入即将支持</p>
+        <ElForm
+          label-width="128px"
+          class="tag-import-form"
+        >
+          <ElFormItem label=" ">
+            <ElRadioGroup v-model="tagImportMode">
+              <ElRadio value="byTag">按标签筛选用户</ElRadio>
+            </ElRadioGroup>
+          </ElFormItem>
+          <ElFormItem
+            label="选择标签"
+            required
+          >
+            <div class="tag-import-pick">
+              <button
+                type="button"
+                class="tag-pick-btn"
+                @click="openTagPicker"
+              >
+                + 选择用户标签
+              </button>
+              <span class="tag-pick-hint">最多选择 {{ TAG_IMPORT_MAX }} 个</span>
+            </div>
+            <p class="tag-import-tip">
+              选择标签后，符合条件的用户将直接添加至用户列表，状态权益为有效
+            </p>
+            <div
+              v-if="tagImportSelected.length"
+              class="tag-import-selected"
+            >
+              <div class="tag-import-chips">
+                <span
+                  v-for="t in tagImportSelected"
+                  :key="t.id"
+                  class="tag-import-chip"
+                >
+                  {{ t.name }}
+                  <button
+                    type="button"
+                    class="tag-chip-remove"
+                    aria-label="移除"
+                    @click="removeTagImportItem(t.id)"
+                  >
+                    ×
+                  </button>
+                </span>
+              </div>
+              <span class="tag-import-count">
+                {{ tagImportSelected.length }} / {{ TAG_IMPORT_MAX }}
+              </span>
+            </div>
+            <p
+              v-if="tagImportSelected.length"
+              class="tag-import-estimate"
+            >
+              各标签包含人数合计 {{ tagImportMemberSum }} 人，去重后预计导入
+              {{ tagImportEstimateCount }} 人，用户需稍作等待后方可享受权益。
+            </p>
+          </ElFormItem>
+          <ElFormItem label="自定义到期时间">
+            <ElDatePicker
+              v-model="customExpireDate"
+              type="date"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              placeholder="请选择日期"
+              class="expire-picker"
+              clearable
+            />
+          </ElFormItem>
+        </ElForm>
       </ElTabPane>
     </ElTabs>
     <template #footer>
@@ -363,6 +553,15 @@ async function onDownloadFailures(row: CourseUserImportHistoryItem) {
           确定
         </ElButton>
       </template>
+      <template v-else-if="addTab === 'tag'">
+        <ElButton
+          type="primary"
+          :loading="tagImportSaving"
+          @click="submitTagImport"
+        >
+          确认导入
+        </ElButton>
+      </template>
       <ElButton
         v-else
         @click="visible = false"
@@ -371,17 +570,142 @@ async function onDownloadFailures(row: CourseUserImportHistoryItem) {
       </ElButton>
     </template>
   </ElDialog>
+
+  <ViewerTagPickerDialog
+    v-model="tagPickerVisible"
+    :selected-tags="tagImportSelected"
+    :max="TAG_IMPORT_MAX"
+    @confirm="onTagPickerConfirm"
+  />
 </template>
 
 <style scoped>
-.add-tabs {
-  min-height: 220px;
+.add-tabs :deep(.el-tabs__header) {
+  margin-bottom: 20px;
 }
-.bulk-toolbar {
+.add-tabs :deep(.el-form-item__label) {
+  white-space: nowrap;
+}
+.tag-import-form :deep(.el-form-item:first-child .el-form-item__label) {
+  opacity: 0;
+}
+.tag-import-form :deep(.el-form-item__content) {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.tag-import-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.tag-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px dashed var(--color-primary, #2f54eb);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--color-primary, #2f54eb);
+  font-size: 13px;
+  cursor: pointer;
+}
+.tag-pick-btn:hover {
+  background: var(--color-primary-bg, #f0f5ff);
+}
+.tag-pick-hint {
+  font-size: 12px;
+  color: var(--color-text-placeholder, #999);
+}
+.tag-import-tip {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-placeholder, #999);
+}
+.tag-import-selected {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: #f5f5f5;
+}
+.tag-import-chips {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.tag-import-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  height: 24px;
+  border-radius: 4px;
+  background: #fff;
+  border: 1px solid var(--color-border, #e4e7ed);
+  color: var(--color-text, #333);
+  font-size: 12px;
+}
+.tag-chip-remove {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-placeholder, #999);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  font-size: 14px;
+}
+.tag-chip-remove:hover {
+  color: var(--color-text-secondary, #666);
+}
+.tag-import-count {
+  flex: none;
+  line-height: 24px;
+  font-size: 13px;
+  color: var(--color-text-secondary, #666);
+  white-space: nowrap;
+}
+.tag-import-estimate {
+  display: block;
+  width: 100%;
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text, #333);
+}
+.expire-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.expire-label {
+  flex: none;
+  font-size: 14px;
+  color: var(--el-text-color-regular, #606266);
+  white-space: nowrap;
+}
+.expire-picker {
+  width: 220px;
+}
+.bulk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-bottom: 16px;
 }
 .csv-input {
   display: none;
@@ -389,39 +713,36 @@ async function onDownloadFailures(row: CourseUserImportHistoryItem) {
 .link-btn {
   border: 0;
   background: transparent;
-  color: #409eff;
+  color: var(--color-primary, #2f54eb);
   cursor: pointer;
   padding: 0;
   font-size: 13px;
 }
 .link-btn:hover {
-  color: #66b1ff;
+  opacity: 0.85;
 }
 .upload-notice {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin-left: auto;
   font-size: 13px;
-  color: #909399;
+  color: var(--el-text-color-regular, #606266);
 }
 .info-icon {
-  color: #909399;
+  font-size: 14px;
+  color: #c0c4cc;
   cursor: help;
 }
-.upload-notice-tip {
-  max-width: 280px;
-  line-height: 1.5;
-}
 .success-count {
-  color: #67c23a;
+  color: #22c55e;
 }
 .fail-count {
   color: #f56c6c;
 }
-.add-tab-placeholder {
-  margin: 40px 0;
-  text-align: center;
-  color: #909399;
-  font-size: 13px;
+.upload-notice-tip {
+  max-width: 320px;
+  line-height: 1.6;
+  font-size: 12px;
 }
 </style>

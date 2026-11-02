@@ -163,6 +163,33 @@ export function listAudienceImports(activityId: ActivityId) {
   return get<AudienceImportHistoryList>(`/activities/audiences/imports/list/${activityId}`);
 }
 
+export interface AudienceImportByTagsResult {
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
+export interface AudienceImportByTagsEstimate {
+  /** 所选标签「满足其一」去重后的观众数 */
+  total: number;
+}
+
+/** 标签导入预计人数（去重，不写入） */
+export function estimateAudiencesByTags(activityId: ActivityId, tagIds: number[]) {
+  return post<AudienceImportByTagsEstimate>(
+    `/activities/audiences/import-by-tags/estimate/${activityId}`,
+    { tagIds },
+  );
+}
+
+/** 标签导入：所选标签「满足其一」的观众 upsert 本场名单 */
+export function importAudiencesByTags(activityId: ActivityId, tagIds: number[]) {
+  return post<AudienceImportByTagsResult>(`/activities/audiences/import-by-tags/${activityId}`, {
+    tagIds,
+  });
+}
+
 async function downloadAuthorizedBlob(
   url: string,
   filename: string,
