@@ -1,10 +1,12 @@
+import axios from "axios";
+import { getAccessToken } from "@/utils/authSession";
 import { del, get, post, put } from "./http";
 
 export type ShelfStatus = "pending" | "on" | "off" | "banned";
 export type RiskStatus = "pending" | "passed" | "rejected";
 export type CourseSortKey = "entitledUserCount" | "totalUserCount" | "salesCount" | "updatedTime";
 export type CourseSellType = "free" | "encrypted" | "specified";
-export type CourseAccessValidityType = "long" | "days";
+export type CourseAccessValidityType = "long" | "days" | "fixed";
 
 export const COURSE_SELL_TYPE_LABEL: Record<CourseSellType, string> = {
   free: "免费",
@@ -93,6 +95,8 @@ export interface CourseDetail extends CourseListItem {
   sellAlone?: boolean;
   accessValidityType?: CourseAccessValidityType;
   accessValidityDays?: number;
+  /** type=fixed，yyyy-MM-dd HH:mm:ss */
+  accessValidityFixedTime?: string;
   /** 仅 encrypted 时回显明文 */
   password?: string;
 }
@@ -149,6 +153,8 @@ export interface UpdateCourseSalesPayload {
   password?: string;
   accessValidityType?: CourseAccessValidityType;
   accessValidityDays?: number;
+  /** type=fixed，yyyy-MM-dd HH:mm:ss */
+  accessValidityFixedTime?: string;
 }
 
 export function updateCourseSales(id: string, payload: UpdateCourseSalesPayload) {
@@ -384,5 +390,206 @@ export function reorderCourseCatalog(
   return post<null>(
     `/courses/catalog/reorder/${encodeURIComponent(courseId)}`,
     payload,
+  );
+}
+
+/** 课程用户列表权益计算态（D100） */
+export type CourseUserEntitlementState = "valid" | "expired" | "invalid";
+export type CourseUserAcquireWay = "purchase" | "import";
+
+export interface CourseUserListItem {
+  id: number;
+  viewerId: number;
+  nickname?: string;
+  avatar?: string;
+  phoneMasked?: string;
+  tagIds?: number[];
+  tagLabels?: string[];
+  chapterCompletionRate: number;
+  entitlementStatus: number;
+  entitlementState: CourseUserEntitlementState;
+  entitlementStateLabel: string;
+  acquireWay: CourseUserAcquireWay;
+  acquireWayLabel: string;
+  /** 权益首次获取 / 邀请加入 / 导入时间，均为 created_time */
+  firstAcquireTime?: string;
+  employeeInviterId?: number;
+  inviterDisplayName?: string;
+  inviteTime?: string;
+  importerId?: number;
+  importerName?: string;
+  importTime?: string;
+  expireTime?: string;
+  expireDisplay: string;
+}
+
+export interface CourseUserListResult {
+  page: number;
+  pageSize: number;
+  total: number;
+  accessValidityType: CourseAccessValidityType;
+  list: CourseUserListItem[];
+}
+
+export type CourseUserKeywordType = "nickname" | "id" | "phone";
+
+export type CourseUserListQuery = {
+  page?: number;
+  pageSize?: number;
+  keywordType?: CourseUserKeywordType;
+  keyword?: string;
+  entitlementState?: CourseUserEntitlementState;
+};
+
+export function listCourseUsers(courseId: string, params: CourseUserListQuery = {}) {
+  return get<CourseUserListResult>(`/courses/users/list/${encodeURIComponent(courseId)}`, {
+    params: {
+      page: params.page ?? 1,
+      pageSize: params.pageSize ?? 20,
+      keywordType: params.keywordType || undefined,
+      keyword: params.keyword?.trim() || undefined,
+      entitlementState: params.entitlementState,
+    },
+  });
+}
+
+export function updateCourseUserEntitlement(rowId: number, entitlementStatus: 0 | 1) {
+  return put<{ id: number; entitlementStatus: number }>(
+    `/courses/users/entitlement/${rowId}`,
+    { entitlementStatus },
+  );
+}
+
+export function updateCourseUserExpire(rowId: number, expireTime: string) {
+  return put<{ id: number; expireTime: string }>(`/courses/users/expire/${rowId}`, {
+    expireTime,
+  });
+}
+
+/** phone 与 viewerId 二选一；created=false 表示本课已有该学员 */
+export function createCourseUser(
+  courseId: string,
+  body: { phone: string } | { viewerId: number },
+) {
+  return post<{ id: number; viewerId: number; created: boolean }>(
+    `/courses/users/create/${encodeURIComponent(courseId)}`,
+    body,
+  );
+}
+
+export interface CourseUserImportResult {
+  importId?: number;
+  total: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  errors?: { row: number; phone?: string; reason?: string }[];
+}
+
+export interface CourseUserImportHistoryItem {
+  id: number;
+  importTime?: string;
+  importerId?: number;
+  importerName?: string;
+  successCount: number;
+  failCount: number;
+}
+
+export async function importCourseUsers(courseId: string, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const token = getAccessToken();
+  const resp = await axios.post(
+    `/api/v1/courses/users/import/${encodeURIComponent(courseId)}`,
+    form,
+    {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      timeout: 60000,
+    },
+  );
+  const body = resp.data as { code: number; msg: string; data: CourseUserImportResult };
+  if (body?.code !== 0) {
+    throw new Error(body?.msg || "导入失败");
+  }
+  return body.data;
+}
+
+export function listCourseUserImports(courseId: string) {
+  return get<{ list: CourseUserImportHistoryItem[] }>(
+    `/courses/users/imports/list/${encodeURIComponent(courseId)}`,
+  );
+}
+
+async function downloadAuthorizedBlob(
+  url: string,
+  filename: string,
+  params?: Record<string, unknown>,
+) {
+  const token = getAccessToken();
+  try {
+    const resp = await axios.get(url, {
+      responseType: "blob",
+      params,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      timeout: 60000,
+    });
+    await saveBlob(resp.data as Blob, filename);
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.data instanceof Blob) {
+      throw new Error(await blobErrorMessage(e.response.data));
+    }
+    throw e;
+  }
+}
+
+async function saveBlob(blob: Blob, filename: string) {
+  if (blob.type && blob.type.includes("application/json")) {
+    throw new Error(await blobErrorMessage(blob));
+  }
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(objectUrl);
+}
+
+async function blobErrorMessage(blob: Blob): Promise<string> {
+  const text = await blob.text();
+  try {
+    const body = JSON.parse(text) as { msg?: string };
+    if (body?.msg) return body.msg;
+  } catch {
+    // not json
+  }
+  return "下载失败";
+}
+
+export async function downloadCourseUserImportTemplate() {
+  await downloadAuthorizedBlob(
+    "/api/v1/courses/users/import-template",
+    "course-user-import.csv",
+  );
+}
+
+export async function downloadCourseUserImportFailures(importId: number) {
+  await downloadAuthorizedBlob(
+    `/api/v1/courses/users/imports/failures/${importId}`,
+    "course-user-import-failures.csv",
+  );
+}
+
+export async function exportCourseUsers(courseId: string, params: CourseUserListQuery = {}) {
+  await downloadAuthorizedBlob(
+    `/api/v1/courses/users/export/${encodeURIComponent(courseId)}`,
+    "course-user-export.csv",
+    {
+      keywordType: params.keywordType || undefined,
+      keyword: params.keyword?.trim() || undefined,
+      entitlementState: params.entitlementState,
+    },
   );
 }

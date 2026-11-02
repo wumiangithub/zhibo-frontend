@@ -25,10 +25,11 @@ import DeleteCourseDialog from "./components/DeleteCourseDialog.vue";
 import CourseBasicInfoTab from "./detail/CourseBasicInfoTab.vue";
 import CourseCatalogTab from "./detail/CourseCatalogTab.vue";
 import CourseSalesSettingsTab from "./detail/CourseSalesSettingsTab.vue";
+import CourseUsersTab from "./detail/CourseUsersTab.vue";
 
-type TabKey = "basic" | "catalog" | "sales";
+type TabKey = "basic" | "catalog" | "sales" | "users";
 
-const TAB_KEYS: TabKey[] = ["basic", "catalog", "sales"];
+const TAB_KEYS: TabKey[] = ["basic", "catalog", "sales", "users"];
 
 const route = useRoute();
 const router = useRouter();
@@ -51,6 +52,7 @@ const sideNav = [
   { key: "basic" as const, label: "基本信息" },
   { key: "catalog" as const, label: "课程目录" },
   { key: "sales" as const, label: "售卖设置" },
+  { key: "users" as const, label: "用户列表" },
 ];
 
 const crumbs: AppBreadcrumbItem[] = [
@@ -320,6 +322,10 @@ watch(id, fetchDetail);
             :course-id="id"
             :detail="detail"
             @refreshed="onTabRefreshed"
+          />
+          <CourseUsersTab
+            v-else-if="activeTab === 'users'"
+            :course-id="id"
           />
         </div>
       </div>
