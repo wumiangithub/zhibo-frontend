@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { EditPen, VideoPlay } from "@element-plus/icons-vue";
-import type { MaterialListItem, MaterialType } from "@/api/materials";
+import type { MaterialCenterType, MaterialListItem } from "@/api/materials";
 import { getMaterialFileIcon } from "./materialFileIcons";
 import { getTosPreviewUrl } from "@/utils/fileInfo";
 import { formatImageMetaDisplay } from "./materialUploadFormat";
 
 const props = defineProps<{
   row: MaterialListItem;
-  materialType: MaterialType;
+  materialType: MaterialCenterType;
 }>();
 
 const emit = defineEmits<{
@@ -16,13 +16,13 @@ const emit = defineEmits<{
   "thumb-click": [row: MaterialListItem];
 }>();
 
-/** 图片：宽*高 (比例)；视频：有 meta 原样，旧数据 --；文档：无 meta 不显示副行 */
+/** 图片：宽*高 (比例)；视频：有 meta 原样，旧数据 --；文档/文章：无 meta 不显示副行 */
 const subText = computed(() => {
   if (props.materialType === "image") {
     return formatImageMetaDisplay(props.row.meta);
   }
   const meta = props.row.meta?.trim();
-  if (props.materialType === "document") {
+  if (props.materialType === "document" || props.materialType === "article") {
     return meta || "";
   }
   return meta || "--";
@@ -31,6 +31,9 @@ const subText = computed(() => {
 function thumbSrc(row: MaterialListItem) {
   if (props.materialType === "document") {
     return getMaterialFileIcon(row.name);
+  }
+  if (props.materialType === "article") {
+    return getMaterialFileIcon("article");
   }
   const base = row.thumbUrl || row.url;
   if (!base) return "";

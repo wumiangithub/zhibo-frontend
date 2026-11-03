@@ -25,7 +25,7 @@ const enrolled = ref(false);
 const needLogin = ref(false);
 
 function captureShareFromQuery() {
-  // 只信 query `c`；kind/courseId/inviterId hint 一律忽略
+  // 只信 query `c`；kind/inviterId hint 一律忽略
   const raw = String(route.query.c ?? "").trim();
   const decoded = decodeCourseShareToken(raw);
   if (!decoded) return null;

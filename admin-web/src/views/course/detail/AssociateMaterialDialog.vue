@@ -91,7 +91,9 @@ function auditTagType(status?: MaterialAuditStatus): "success" | "danger" | "war
 
 function thumbSrc(row: MaterialListItem) {
   if (props.materialType === "document" || props.materialType === "article") {
-    return getMaterialFileIcon(row.name || (props.materialType === "article" ? "a.txt" : "a.pdf"));
+    return getMaterialFileIcon(
+      props.materialType === "article" ? "article" : row.name || "a.pdf",
+    );
   }
   const base = row.thumbUrl || row.url;
   if (!base) return "";

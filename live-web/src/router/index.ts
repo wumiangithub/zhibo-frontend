@@ -29,6 +29,11 @@ const router = createRouter({
       component: () => import("@/views/course/CourseWatchView.vue"),
     },
     {
+      path: "/course/:courseId/lesson/:lessonNodeId",
+      name: "course-lesson",
+      component: () => import("@/views/course/CourseLessonView.vue"),
+    },
+    {
       path: "/console/:id",
       name: "console",
       component: () => import("@/views/console/ConsoleView.vue"),

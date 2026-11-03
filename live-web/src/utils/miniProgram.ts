@@ -1,6 +1,9 @@
 /** 小程序登录页（与 zhibo-wxmini `pages/login/login` / app.json 一致）。 */
 const VIEWER_LOGIN_URL = "/pages/login/login";
 
+/** 小程序打开远端文档（downloadFile + openDocument）。 */
+const OPEN_DOCUMENT_URL = "/pages/file/open";
+
 /**
  * 微信 JS-SDK（含 `wx.miniProgram`）。
  * 对齐 admin-web TOS：放 `public/jweixin-1.3.2.js`，同源 script 注入，不走外网 CDN。
@@ -83,11 +86,22 @@ export function ensureWxJsSdk(): Promise<WxGlobal | null> {
   return ensureWxJsSdkPromise;
 }
 
-/**
- * 从 web-view H5 跳小程序登录页（`navigateTo`）。
- * 成功发起跳转返回 true；SDK 加载失败 / 非小程序环境返回 false，由调用方 toast。
- */
-export async function navigateToViewerLogin(): Promise<boolean> {
+/** 粗判是否在小程序 web-view（不必等 JS-SDK）。 */
+export function isLikelyMiniProgramWebView(): boolean {
+  try {
+    const w = window as unknown as {
+      __wxjs_environment?: string;
+      wx?: { miniProgram?: { navigateTo?: unknown } };
+    };
+    if (w.__wxjs_environment === "miniprogram") return true;
+    if (typeof w.wx?.miniProgram?.navigateTo === "function") return true;
+    return /miniProgram/i.test(navigator.userAgent || "");
+  } catch {
+    return false;
+  }
+}
+
+async function navigateMiniProgram(url: string): Promise<boolean> {
   try {
     await ensureWxJsSdk();
   } catch (e) {
@@ -99,10 +113,37 @@ export async function navigateToViewerLogin(): Promise<boolean> {
   if (!mp || typeof mp.navigateTo !== "function") return false;
 
   try {
-    mp.navigateTo({ url: VIEWER_LOGIN_URL });
+    mp.navigateTo({ url });
     return true;
   } catch (e) {
-    console.warn("跳转小程序登录失败", e);
+    console.warn("小程序 navigateTo 失败", e);
     return false;
   }
+}
+
+/**
+ * 从 web-view H5 跳小程序登录页（`navigateTo`）。
+ * 成功发起跳转返回 true；SDK 加载失败 / 非小程序环境返回 false，由调用方 toast。
+ */
+export async function navigateToViewerLogin(): Promise<boolean> {
+  return navigateMiniProgram(VIEWER_LOGIN_URL);
+}
+
+/**
+ * 小程序内打开/保存文档（downloadFile + openDocument）。
+ * H5 iframe / a[download] 在 web-view 里不可靠，预览与下载都走此页。
+ */
+export async function navigateToOpenDocument(opts: {
+  url: string;
+  name?: string;
+  mode?: "preview" | "download";
+}): Promise<boolean> {
+  const fileUrl = (opts.url || "").trim();
+  if (!fileUrl) return false;
+  const q = [
+    `url=${encodeURIComponent(fileUrl)}`,
+    `name=${encodeURIComponent((opts.name || "文档").trim() || "文档")}`,
+    `mode=${encodeURIComponent(opts.mode || "preview")}`,
+  ].join("&");
+  return navigateMiniProgram(`${OPEN_DOCUMENT_URL}?${q}`);
 }

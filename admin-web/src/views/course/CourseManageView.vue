@@ -469,7 +469,7 @@ onMounted(fetchList);
                 管理
               </RouterLink>
               <RouterLink
-                :to="`/course/${row.id}/data`"
+                :to="{ path: `/course/${row.id}`, query: { tab: 'data' } }"
                 class="op-link"
               >
                 数据

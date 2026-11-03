@@ -10,6 +10,7 @@ import {
   updateArticle,
 } from "@/api/materials";
 import { ApiError } from "@/api/http";
+import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 import ArticleEditor from "./ArticleEditor.vue";
 import { isArticleContentEmpty } from "./articleContent";
 
@@ -21,6 +22,15 @@ const articleId = computed(() => {
   return typeof raw === "string" && raw && raw !== "new" ? raw : "";
 });
 const editing = computed(() => !!articleId.value);
+
+const crumbs = computed<AppBreadcrumbItem[]>(() => [
+  { label: "设置", to: "/settings/materials" },
+  {
+    label: "素材中心",
+    to: { path: "/settings/materials", query: { type: "article" } },
+  },
+  { label: editing.value ? "编辑文章" : "新建文章" },
+]);
 
 const title = ref("");
 const author = ref("");
@@ -109,7 +119,7 @@ async function onConfirm() {
 
 <template>
   <div class="article-create">
-    <h1 class="page-title">{{ editing ? "编辑文章" : "新建文章" }}</h1>
+    <AppBreadcrumb :items="crumbs" />
     <section class="card">
       <p
         v-if="auditLocked"
@@ -146,33 +156,27 @@ async function onConfirm() {
           <ArticleEditor v-model="content" />
         </div>
       </div>
-      <footer class="footer">
-        <ElButton @click="goBack">取消</ElButton>
-        <ElButton
-          :type="canSubmit ? 'primary' : 'default'"
-          :disabled="!canSubmit"
-          :loading="submitting"
-          @click="onConfirm"
-        >
-          确认
-        </ElButton>
-      </footer>
     </section>
+    <footer class="footer">
+      <ElButton @click="goBack">取消</ElButton>
+      <ElButton
+        :type="canSubmit ? 'primary' : 'default'"
+        :disabled="!canSubmit"
+        :loading="submitting"
+        @click="onConfirm"
+      >
+        确认
+      </ElButton>
+    </footer>
   </div>
 </template>
 
 <style scoped>
 .article-create {
+  position: relative;
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - 132px);
-}
-
-.page-title {
-  margin: 0 0 12px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--color-text);
+  padding-bottom: 80px;
 }
 
 .lock-tip {
@@ -189,19 +193,15 @@ async function onConfirm() {
 
 .card {
   display: flex;
-  flex: 1;
   flex-direction: column;
-  min-height: 0;
   background: var(--color-bg-card);
   border-radius: 4px;
 }
 
 .form {
   display: flex;
-  flex: 1;
   flex-direction: column;
-  min-height: 0;
-  padding: 28px 48px 16px;
+  padding: 28px 48px 24px;
 }
 
 .field {
@@ -212,9 +212,7 @@ async function onConfirm() {
 }
 
 .field-editor {
-  flex: 1;
   align-items: stretch;
-  min-height: 0;
   margin-bottom: 0;
 }
 
@@ -246,16 +244,23 @@ async function onConfirm() {
 .field-editor .article-editor {
   display: flex;
   flex-direction: column;
-  height: 100%;
   min-height: 420px;
 }
 
+/* 与新建直播 LiveCreateView .live-create__footer 同一套贴底悬浮 */
 .footer {
+  position: fixed;
+  left: 176px;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  height: 64px;
   display: flex;
-  flex: none;
+  align-items: center;
   justify-content: center;
   gap: 16px;
-  padding: 16px;
-  border-top: 1px solid var(--color-border-light);
+  padding: 0 32px;
+  background: #fff;
+  border-top: 1px solid #f0f0f0;
 }
 </style>

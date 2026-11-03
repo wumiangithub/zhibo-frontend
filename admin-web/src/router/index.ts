@@ -90,8 +90,10 @@ const router = createRouter({
         },
         {
           path: "course/:id/data",
-          name: "course-data",
-          component: () => import("@/views/course/CoursePlaceholderView.vue"),
+          redirect: (to) => ({
+            path: `/course/${String(to.params.id)}`,
+            query: { tab: "data" },
+          }),
         },
         {
           path: "course/:id",

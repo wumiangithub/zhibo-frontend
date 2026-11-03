@@ -36,10 +36,13 @@ import {
 } from "@/utils/viewerAuth";
 import { ensureWxJsSdk } from "@/utils/miniProgram";
 import { goViewerLogin, recoverViewerAuth } from "@/utils/viewerLogin";
+import { reportLessonProgress } from "@/api/learning";
 
 const route = useRoute();
 const router = useRouter();
 const id = String(route.params.id);
+const courseContextId = String(route.query.courseId ?? "").trim().toLowerCase();
+const courseLessonNodeId = Number(route.query.lessonNodeId);
 const { toast } = useToast();
 const {
   cartOpen,
@@ -310,6 +313,16 @@ onMounted(() => {
   captureInviteFromQuery();
   tryAttributeInvite();
   pingViewerPresence("live");
+  if (
+    courseContextId &&
+    Number.isFinite(courseLessonNodeId) &&
+    courseLessonNodeId > 0
+  ) {
+    void reportLessonProgress(courseContextId, {
+      lessonNodeId: courseLessonNodeId,
+      event: "open",
+    }).catch(() => {});
+  }
   if (!showNicknameForm.value) void enterWatch();
 });
 </script>

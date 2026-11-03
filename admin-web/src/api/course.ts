@@ -634,3 +634,169 @@ export async function exportCourseUsers(courseId: string, params: CourseUserList
     },
   );
 }
+
+/** 数据分析 · 小节概况（D101） */
+export type CourseAnalyticsLessonSortBy =
+  | "participateCount"
+  | "participateRate"
+  | "completeCount"
+  | "completeRate";
+
+export interface CourseAnalyticsLessonItem {
+  lessonNodeId: number;
+  title: string;
+  contentKind?: number;
+  participateCount: number;
+  participateRate: number;
+  completeCount: number;
+  completeRate: number;
+}
+
+export interface CourseAnalyticsLessonListResult {
+  total: number;
+  page: number;
+  pageSize: number;
+  validStudentCount: number;
+  list: CourseAnalyticsLessonItem[];
+}
+
+export interface CourseAnalyticsLessonQuery {
+  page?: number;
+  pageSize?: number;
+  sortBy?: CourseAnalyticsLessonSortBy | "";
+  sortOrder?: "asc" | "desc" | "";
+}
+
+export function listCourseAnalyticsLessons(
+  courseId: string,
+  params: CourseAnalyticsLessonQuery = {},
+) {
+  return get<CourseAnalyticsLessonListResult>(
+    `/courses/analytics/lessons/${encodeURIComponent(courseId)}`,
+    {
+      params: {
+        page: params.page ?? 1,
+        pageSize: params.pageSize ?? 10,
+        sortBy: params.sortBy || undefined,
+        sortOrder: params.sortOrder || undefined,
+      },
+    },
+  );
+}
+
+export async function exportCourseAnalyticsLessons(
+  courseId: string,
+  params: Pick<CourseAnalyticsLessonQuery, "sortBy" | "sortOrder"> = {},
+) {
+  await downloadAuthorizedBlob(
+    `/api/v1/courses/analytics/lessons/export/${encodeURIComponent(courseId)}`,
+    "course-analytics-lessons.csv",
+    {
+      sortBy: params.sortBy || undefined,
+      sortOrder: params.sortOrder || undefined,
+    },
+  );
+}
+
+/** 数据分析 · 用户详情（D101） */
+export type CourseAnalyticsParticipateStatus = 0 | 1 | 2;
+export type CourseAnalyticsEntitlementDisplay = "valid" | "expired" | "invalid";
+
+export interface CourseAnalyticsUserItem {
+  viewerId: number;
+  nickname: string;
+  avatarUrl?: string;
+  participateStatus: CourseAnalyticsParticipateStatus;
+  completedLessonCount: number;
+  lessonCompletionRate: number;
+  learnDurationSec: number;
+  entitlementDisplay: CourseAnalyticsEntitlementDisplay;
+}
+
+export interface CourseAnalyticsUserListResult {
+  total: number;
+  page: number;
+  pageSize: number;
+  list: CourseAnalyticsUserItem[];
+}
+
+export function listCourseAnalyticsUsers(
+  courseId: string,
+  params: { page?: number; pageSize?: number; keywordType?: string; keyword?: string } = {},
+) {
+  return get<CourseAnalyticsUserListResult>(
+    `/courses/analytics/users/${encodeURIComponent(courseId)}`,
+    {
+      params: {
+        page: params.page ?? 1,
+        pageSize: params.pageSize ?? 10,
+        keywordType: params.keywordType || undefined,
+        keyword: params.keyword?.trim() || undefined,
+      },
+    },
+  );
+}
+
+export async function exportCourseAnalyticsUsers(
+  courseId: string,
+  params: { keywordType?: string; keyword?: string } = {},
+) {
+  await downloadAuthorizedBlob(
+    `/api/v1/courses/analytics/users/export/${encodeURIComponent(courseId)}`,
+    "course-analytics-users.csv",
+    {
+      keywordType: params.keywordType || undefined,
+      keyword: params.keyword?.trim() || undefined,
+    },
+  );
+}
+
+export interface CourseAnalyticsUserLessonItem {
+  lessonNodeId: number;
+  title: string;
+  contentKind?: number;
+  participateStatus: CourseAnalyticsParticipateStatus;
+  learnDurationSec: number;
+  progressBarSec?: number | null;
+}
+
+export interface CourseAnalyticsUserLessonListResult {
+  viewerId: number;
+  nickname: string;
+  avatarUrl?: string;
+  completedLessonCount: number;
+  lessonCompletionRate: number;
+  totalLessonCount: number;
+  total: number;
+  page: number;
+  pageSize: number;
+  list: CourseAnalyticsUserLessonItem[];
+}
+
+export function listCourseAnalyticsUserLessons(
+  courseId: string,
+  params: { viewerId: number; page?: number; pageSize?: number },
+) {
+  return get<CourseAnalyticsUserLessonListResult>(
+    `/courses/analytics/users/lessons/${encodeURIComponent(courseId)}`,
+    {
+      params: {
+        viewerId: params.viewerId,
+        page: params.page ?? 1,
+        pageSize: params.pageSize ?? 10,
+      },
+    },
+  );
+}
+
+export const COURSE_ANALYTICS_PARTICIPATE_LABEL: Record<number, string> = {
+  0: "未开始",
+  1: "进行中",
+  2: "已完成",
+};
+
+export const COURSE_ANALYTICS_ENTITLEMENT_LABEL: Record<string, string> = {
+  valid: "有效",
+  expired: "已到期",
+  invalid: "已失效",
+};

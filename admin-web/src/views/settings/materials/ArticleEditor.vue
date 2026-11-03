@@ -163,6 +163,11 @@ onBeforeUnmount(() => {
   min-height: calc(100dvh - 420px);
 }
 
+/* 关掉 wang 自带字数，避免和自定义 .article-editor__count 叠成乱码 */
+.article-editor__input :deep(.w-e-max-length-info) {
+  display: none;
+}
+
 .article-editor__input :deep(.w-e-text-container [data-slate-editor]) {
   min-height: calc(100dvh - 460px);
   padding-bottom: 28px;

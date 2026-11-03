@@ -204,6 +204,9 @@ function openAuditRecords(row: MaterialListItem) {
     // 文档与列表一致：文件类型图标，勿把 xlsx 等当封面图
     auditDrawerCoverIcon.value = getMaterialFileIcon(row.name);
     auditDrawerCover.value = "";
+  } else if (materialType.value === "article") {
+    auditDrawerCoverIcon.value = getMaterialFileIcon("article");
+    auditDrawerCover.value = "";
   } else {
     // 图/视频：源 URL；TOS 截帧/缩放由 AuditTimelineDrawer 统一处理
     auditDrawerCoverIcon.value = "";
@@ -538,15 +541,9 @@ async function onEditName(row: MaterialListItem) {
               min-width="220"
             >
               <template #default="{ row }">
-                <span
-                  v-if="materialType === 'article'"
-                  class="article-title"
-                  :title="(row as MaterialListItem).name"
-                >{{ (row as MaterialListItem).name }}</span>
                 <MaterialAssetCell
-                  v-else
                   :row="(row as MaterialListItem)"
-                  :material-type="asFileMaterialType(materialType)"
+                  :material-type="materialType"
                   @edit-name="onEditName"
                   @thumb-click="onThumbClick"
                 />
@@ -983,15 +980,6 @@ async function onEditName(row: MaterialListItem) {
 
 .op-more:hover {
   color: var(--color-primary);
-}
-
-.article-title {
-  display: block;
-  overflow: hidden;
-  font-size: 13px;
-  color: var(--color-primary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .pager {

@@ -3,6 +3,7 @@
 import icon3d from "@/assets/images/folderIco/3d.svg";
 import aeIcon from "@/assets/images/folderIco/ae.svg";
 import aiIcon from "@/assets/images/folderIco/ai.svg";
+import articleIcon from "@/assets/images/folderIco/article.svg";
 import audioIcon from "@/assets/images/folderIco/audio.svg";
 import docIcon from "@/assets/images/folderIco/doc.svg";
 import folderIcon from "@/assets/images/folderIco/folder.svg";
@@ -43,11 +44,15 @@ const EXT_ICON: Record<string, string> = {
   prproj: prIcon,
   text: textIcon,
   folder: folderIcon,
+  /** 富文本文章素材（非文件扩展名；调用 getMaterialFileIcon("article")） */
+  article: articleIcon,
 };
 
-/** 按文件名扩展名取图标 URL；未知类型回落 folder */
+/** 按文件名扩展名取图标 URL；也支持裸名键（如 `article`）；未知回落 folder */
 export function getMaterialFileIcon(filename: string): string {
-  const i = filename.lastIndexOf(".");
-  const ext = i >= 0 ? filename.slice(i + 1).toLowerCase() : "";
+  const key = filename.trim().toLowerCase();
+  if (EXT_ICON[key]) return EXT_ICON[key];
+  const i = key.lastIndexOf(".");
+  const ext = i >= 0 ? key.slice(i + 1) : "";
   return EXT_ICON[ext] ?? folderIcon;
 }

@@ -24,12 +24,13 @@ import { buildCourseShareUrl } from "@/utils/courseLinks";
 import DeleteCourseDialog from "./components/DeleteCourseDialog.vue";
 import CourseBasicInfoTab from "./detail/CourseBasicInfoTab.vue";
 import CourseCatalogTab from "./detail/CourseCatalogTab.vue";
+import CourseDataTab from "./detail/CourseDataTab.vue";
 import CourseSalesSettingsTab from "./detail/CourseSalesSettingsTab.vue";
 import CourseUsersTab from "./detail/CourseUsersTab.vue";
 
-type TabKey = "basic" | "catalog" | "sales" | "users";
+type TabKey = "basic" | "catalog" | "sales" | "users" | "data";
 
-const TAB_KEYS: TabKey[] = ["basic", "catalog", "sales", "users"];
+const TAB_KEYS: TabKey[] = ["basic", "catalog", "sales", "users", "data"];
 
 const route = useRoute();
 const router = useRouter();
@@ -53,7 +54,10 @@ const sideNav = [
   { key: "catalog" as const, label: "课程目录" },
   { key: "sales" as const, label: "售卖设置" },
   { key: "users" as const, label: "用户列表" },
+  { key: "data" as const, label: "数据分析" },
 ];
+
+const validityText = computed(() => detail.value?.validityLabel?.trim() || "长期有效");
 
 const crumbs: AppBreadcrumbItem[] = [
   { label: "课程", to: "/course" },
@@ -233,6 +237,8 @@ watch(id, fetchDetail);
                 />
                 {{ shelfLabel }}
               </span>
+              <span class="meta-sep">|</span>
+              <span>{{ validityText }}</span>
             </div>
           </div>
         </div>
@@ -325,6 +331,10 @@ watch(id, fetchDetail);
           />
           <CourseUsersTab
             v-else-if="activeTab === 'users'"
+            :course-id="id"
+          />
+          <CourseDataTab
+            v-else-if="activeTab === 'data'"
             :course-id="id"
           />
         </div>

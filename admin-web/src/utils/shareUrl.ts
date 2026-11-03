@@ -2,7 +2,7 @@
  * 分享链接统一拼装：`{base}?c={token}&…hints`
  *
  * - `c`：权威混淆载荷（XOR+校验和+Base64URL），解析端**只信**它
- * - hints：与 `c` 明文同名字段的人读提示（如 `kind`/`inviterId`/`courseId`），**不含 sig**；
+ * - hints：与 `c` 明文同名字段的人读提示（如 `kind`/`inviterId`），**不含 sig**；
  *   其中 `kind` = 邀请类型：`1` 员工 / `2` 观众（废弃）；直播与课程共用该枚举
  *   业务与鉴权必须忽略 hints，禁止只靠明文 query 归因/enroll
  *

@@ -26,7 +26,7 @@ const props = withDefaults(
     titleFallback?: string;
     /**
      * 链接下方说明（勿含明文密钥）。
-     * 例：「参数 c 含：courseId、inviterId（员工），已混淆」
+     * 例：「参数 c 含：kind、inviterId（员工），已混淆」
      */
     payloadHint?: string;
   }>(),

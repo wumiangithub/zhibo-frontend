@@ -1,27 +1,16 @@
 import { ApiError } from "@/api/http";
 import { refreshViewerSession } from "@/api/viewerAuth";
 import router from "@/router";
-import { navigateToViewerLogin as navigateToMiniProgramLogin } from "@/utils/miniProgram";
+import {
+  isLikelyMiniProgramWebView,
+  navigateToViewerLogin as navigateToMiniProgramLogin,
+} from "@/utils/miniProgram";
 import {
   clearViewerSession,
   getViewerAccessToken,
   getViewerRefreshToken,
   saveViewerSession,
 } from "@/utils/viewerAuth";
-
-function isLikelyMiniProgramWebView(): boolean {
-  try {
-    const w = window as unknown as {
-      __wxjs_environment?: string;
-      wx?: { miniProgram?: { navigateTo?: unknown } };
-    };
-    if (w.__wxjs_environment === "miniprogram") return true;
-    if (typeof w.wx?.miniProgram?.navigateTo === "function") return true;
-    return /miniProgram/i.test(navigator.userAgent || "");
-  } catch {
-    return false;
-  }
-}
 
 /**
  * 跳观众登录：小程序 web-view 内走小程序登录页；纯 H5 立刻走本站 `/login`。
