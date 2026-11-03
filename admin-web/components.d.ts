@@ -28,6 +28,7 @@ declare module 'vue' {
     ImagePreview: typeof import('./src/components/ImagePreview.vue')['default']
     InviteHostDialog: typeof import('./src/components/live/InviteHostDialog.vue')['default']
     MaterialCoverPicker: typeof import('./src/components/MaterialCoverPicker.vue')['default']
+    RichTextEditor: typeof import('./src/components/rich-text/RichTextEditor.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     ShareDialog: typeof import('./src/components/share/ShareDialog.vue')['default']

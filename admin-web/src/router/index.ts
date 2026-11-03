@@ -111,9 +111,28 @@ const router = createRouter({
           component: () => import("@/views/settings/materials/ArticleCreateView.vue"),
         },
         {
-          path: "settings/materials/articles/:id",
+          path: "settings/materials/articles/view/:id",
+          name: "settings-article-view",
+          component: () => import("@/views/settings/materials/ArticleCreateView.vue"),
+        },
+        {
+          path: "settings/materials/articles/edit/:id",
           name: "settings-article-edit",
           component: () => import("@/views/settings/materials/ArticleCreateView.vue"),
+        },
+        {
+          path: "settings/materials/articles/:id/view",
+          redirect: (to) => ({
+            name: "settings-article-view",
+            params: { id: to.params.id },
+          }),
+        },
+        {
+          path: "settings/materials/articles/:id",
+          redirect: (to) => ({
+            name: "settings-article-edit",
+            params: { id: to.params.id },
+          }),
         },
         {
           path: "settings/employees",

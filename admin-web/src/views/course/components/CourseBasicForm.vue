@@ -4,7 +4,8 @@ import { ElInput, ElMessage, ElOption, ElSelect } from "element-plus";
 import { listEmployees, type EmployeeItem } from "@/api/activity";
 import MaterialCoverPicker from "@/components/MaterialCoverPicker.vue";
 import FormRow from "@/views/live/components/FormRow.vue";
-import RichTextEditor from "@/views/live/components/RichTextEditor.vue";
+import RichTextEditor from "@/components/rich-text/RichTextEditor.vue";
+import { TosObjectKeyPrefix } from "@/utils/tosUpload";
 import CoursewareSection from "@/views/live/sections/CoursewareSection.vue";
 import AutoListSection from "@/views/live/sections/AutoListSection.vue";
 import {
@@ -199,6 +200,7 @@ onMounted(() => {
               :height="'340px'"
               :max-length="10000"
               :placeholder="COURSE_DETAIL_PLACEHOLDER"
+              :upload-object-key-prefix="TosObjectKeyPrefix.COURSE_DETAIL"
               @update:model-value="onDetailHtml"
             />
           </div>

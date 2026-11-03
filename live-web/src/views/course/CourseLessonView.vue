@@ -18,6 +18,7 @@ import {
 } from "@/utils/documentPreview";
 import { getMaterialFileIcon } from "@/utils/materialFileIcons";
 import {
+  ensureWxJsSdk,
   isLikelyMiniProgramWebView,
   navigateToOpenDocument,
 } from "@/utils/miniProgram";
@@ -83,17 +84,15 @@ async function openDocPreview() {
   const url = materialAccessUrl();
   if (!url) return;
 
-  // 小程序 web-view：iframe 会当下载；改走 downloadFile + openDocument
+  // 小程序 web-view：禁止 iframe；必须走小程序 downloadFile + openDocument
   if (isLikelyMiniProgramWebView()) {
     const ok = await navigateToOpenDocument({
       url,
       name: docFileName.value,
       mode: "preview",
     });
-    if (ok) {
-      void report("scroll_bottom");
-      return;
-    }
+    if (ok) void report("scroll_bottom");
+    return;
   }
 
   if (!docPreview.value?.cdnReady) return;
@@ -116,17 +115,17 @@ async function downloadMaterial(fallbackName: string) {
   if (!raw) return;
   const name = materialFileName(fallbackName);
 
+  // 小程序 web-view：禁止 a[download]；走小程序能力
   if (isLikelyMiniProgramWebView()) {
-    const url = materialAccessUrl() || raw;
-    const ok = await navigateToOpenDocument({
-      url,
+    await navigateToOpenDocument({
+      url: materialAccessUrl() || raw,
       name,
       mode: "download",
     });
-    if (ok) return;
+    return;
   }
 
-  // 纯 H5：原生桶 attachment 适合下载
+  // 独立浏览器 H5：原生桶 attachment
   const a = document.createElement("a");
   a.href = raw;
   a.download = name;
@@ -290,6 +289,10 @@ function onVideoEnded(e: Event) {
 }
 
 onMounted(() => {
+  // web-view 内尽早注入 jweixin，便于文档/图片跳转小程序页
+  if (isLikelyMiniProgramWebView()) {
+    void ensureWxJsSdk().catch(() => undefined);
+  }
   void load();
 });
 

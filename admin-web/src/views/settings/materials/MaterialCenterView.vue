@@ -248,6 +248,10 @@ function onMoreCommand(cmd: string, row: MaterialListItem) {
     void downloadRow(row);
     return;
   }
+  if (cmd === "view") {
+    openArticleView(row);
+    return;
+  }
   if (cmd === "edit") {
     openArticleEdit(row);
     return;
@@ -401,6 +405,10 @@ async function downloadRow(row: MaterialListItem) {
   } catch {
     ElMessage.error("下载失败");
   }
+}
+
+function openArticleView(row: MaterialListItem) {
+  void router.push({ name: "settings-article-view", params: { id: row.id } });
 }
 
 function openArticleEdit(row: MaterialListItem) {
@@ -682,6 +690,12 @@ async function onEditName(row: MaterialListItem) {
                           command="download"
                         >
                           下载
+                        </ElDropdownItem>
+                        <ElDropdownItem
+                          v-if="materialType === 'article'"
+                          command="view"
+                        >
+                          查看
                         </ElDropdownItem>
                         <ElDropdownItem
                           v-if="materialType === 'article'"

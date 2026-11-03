@@ -131,6 +131,13 @@ function canManage(g: MaterialGroup) {
   overflow: hidden;
 }
 
+/* Guard against ancestor flex:1 leaks (e.g. form .field :deep(.el-input)) */
+.group-panel > .el-input {
+  flex: 0 0 auto;
+  align-self: stretch;
+  height: auto;
+}
+
 .group-list {
   flex: 1;
   min-height: 0;
