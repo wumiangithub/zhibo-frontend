@@ -135,7 +135,7 @@ async function loadFilterTags() {
   }
 }
 
-function onSortChange(payload: { prop: string; order: string | null }) {
+function onSortChange(payload: { prop: string | null; order: string | null }) {
   const map: Record<string, string> = {
     createdTime: "createdTime",
     lastVisitTime: "lastVisitTime",
@@ -147,7 +147,7 @@ function onSortChange(payload: { prop: string; order: string | null }) {
     completedCourseCount: "completedCourseCount",
     firstPayTime: "firstPayTime",
   };
-  const key = map[payload.prop];
+  const key = payload.prop ? map[payload.prop] : undefined;
   if (!key || !payload.order) {
     sort.value = undefined;
     order.value = undefined;
@@ -432,11 +432,11 @@ onMounted(() => {
               <div class="user-meta">
                 <span class="user-name">{{ row.nickname }}</span>
                 <div
-                  v-if="viewerBanBadges(row).length"
+                  v-if="viewerBanBadges(row as ViewerListItem).length"
                   class="ban-line"
                 >
                   <span
-                    v-for="badge in viewerBanBadges(row)"
+                    v-for="badge in viewerBanBadges(row as ViewerListItem)"
                     :key="badge"
                     class="banned"
                   >{{ badge }}</span>
@@ -592,14 +592,14 @@ onMounted(() => {
             <button
               type="button"
               class="link-btn"
-              @click="void openTagDialog(row)"
+              @click="void openTagDialog(row as ViewerListItem)"
             >
               贴标签
             </button>
             <button
               type="button"
               class="link-btn"
-              @click="openBlacklistDialog(row)"
+              @click="openBlacklistDialog(row as ViewerListItem)"
             >
               黑名单设置
             </button>

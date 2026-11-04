@@ -87,6 +87,7 @@ const {
   isEnded,
   isReplay,
   isAudioLive,
+  sdkFailed,
   sdkReady,
   load,
   enterLiveFromPreview,

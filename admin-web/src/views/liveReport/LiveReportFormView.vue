@@ -23,10 +23,7 @@ import { useMaterialsStore } from "@/stores/materials";
 import { handleUpload } from "@/utils/upload";
 import { TosObjectKeyPrefix } from "@/utils/tosUpload";
 import { downloadFiles } from "@/utils/downloadFile";
-import {
-  formatUploadSize,
-  resolveMaterialAccessUrl,
-} from "@/views/settings/materials/materialUploadFormat";
+import { resolveMaterialAccessUrl } from "@/views/settings/materials/materialUploadFormat";
 import { randomUuid } from "@/utils/uuid";
 import { getMaterialFileIcon } from "@/views/settings/materials/materialFileIcons";
 import { previewDocument } from "@/utils/documentPreview";
@@ -438,13 +435,6 @@ async function onFiles(e: Event) {
 
 function dismissPending(uid: string) {
   pendingUploads.value = pendingUploads.value.filter((x) => x.uid !== uid);
-}
-
-/** 对齐 MaterialUploadFileTable.statusText：等待 / 上传中百分比 / 失败。 */
-function pendingStatusText(item: PendingUpload) {
-  if (item.status === "waiting") return "等待上传";
-  if (item.status === "error") return "上传失败";
-  return `${item.percent.toFixed(1)}%`;
 }
 
 function addTime() {

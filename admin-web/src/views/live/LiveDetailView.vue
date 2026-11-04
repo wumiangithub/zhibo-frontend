@@ -186,7 +186,9 @@ function goConsole() {
 }
 
 onMounted(fetchDetail);
-watch(id, fetchDetail);
+watch(id, () => {
+  void fetchDetail();
+});
 </script>
 
 <template>

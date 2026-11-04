@@ -105,7 +105,7 @@ export function useChatHistory(getActivityId: () => string) {
     requestChatFocus: noop,
     completeVerify: noop,
     sendChat: noop,
-    sendCustomEventTest: noop,
+    sendCustomEventTest: () => Promise.resolve(),
     handleChatMessage: noop,
     handleChatDelete: noop,
     loadChatHistory: loadFirstPage,

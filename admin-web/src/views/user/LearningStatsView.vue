@@ -201,8 +201,8 @@ function onExport() {
   exportLearningCourseRows(courseSelected.value);
 }
 
-function onSummarySortChange(payload: { prop: string; order: string | null }) {
-  if (!payload.order) {
+function onSummarySortChange(payload: { prop: string | null; order: string | null }) {
+  if (!payload.prop || !payload.order) {
     summarySort.value = undefined;
     summaryOrder.value = undefined;
   } else {

@@ -141,6 +141,7 @@ const {
   loading,
   error,
   data,
+  sign,
   showLiveStartPopup,
   countdown,
   barrage,
@@ -262,7 +263,7 @@ const devPresenceBusy = ref(false);
 const devPresenceOnline = ref(false);
 
 async function simulatePresence(type: "Join" | "Leave") {
-  const email = (data.value?.sdk?.email || "").trim();
+  const email = (sign.value?.sdk?.email || "").trim();
   if (!email) {
     toast("还没有观众身份，请先进入直播间");
     return;

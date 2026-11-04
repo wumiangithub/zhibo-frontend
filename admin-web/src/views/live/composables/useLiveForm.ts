@@ -20,10 +20,11 @@ export function resolveDefaultOwner(user: AuthUser | null | undefined): {
   knownOwners: EmployeeItem[];
 } {
   if (user?.id == null) return { ownerIds: [], knownOwners: [] };
-  const id = String(user.id);
-  const userName = (user.userName || user.userAccount || id).trim() || id;
+  const id = user.id;
+  const label = String(id);
+  const userName = (user.userName || user.userAccount || label).trim() || label;
   const avatar = user.avatar?.trim() || undefined;
-  return { ownerIds: [id], knownOwners: [{ id, userName, avatar }] };
+  return { ownerIds: [label], knownOwners: [{ id, userName, avatar }] };
 }
 
 export type LiveMode = "video" | "interactive" | "recorded" | "voice";

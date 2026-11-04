@@ -12,6 +12,7 @@ import {
   ElTableColumn,
   ElTag,
 } from "element-plus";
+import type { TableInstance } from "element-plus";
 import { Search } from "@element-plus/icons-vue";
 import {
   MATERIAL_AUDIT_LABEL,
@@ -50,7 +51,7 @@ const page = ref(1);
 const pageSize = ref(10);
 const selected = ref<MaterialListItem[]>([]);
 const usedMaterialIds = ref<Set<string>>(new Set());
-const tableRef = ref<InstanceType<typeof ElTable> | null>(null);
+const tableRef = ref<TableInstance | null>(null);
 
 const typeLabel = computed(
   () => CENTER_TYPE_TABS.find((t) => t.key === props.materialType)?.label ?? "素材",
@@ -109,11 +110,11 @@ function auditPassed(row: MaterialListItem) {
 }
 
 function selectable(row: MaterialListItem) {
-  return auditPassed(row) && !isUsed(row);
+  return auditPassed(row as MaterialListItem) && !isUsed(row as MaterialListItem);
 }
 
 function rowClassName({ row }: { row: MaterialListItem }) {
-  return selectable(row) ? "" : "is-row-disabled";
+  return selectable(row as MaterialListItem) ? "" : "is-row-disabled";
 }
 
 async function loadUsed() {
@@ -293,15 +294,15 @@ watch(list, () => {
         <template #default="{ row }">
           <div
             class="name-cell"
-            :class="{ 'is-disabled': !selectable(row) }"
+            :class="{ 'is-disabled': !selectable(row as MaterialListItem) }"
           >
             <div
               class="thumb"
               :class="{ 'is-icon': materialType === 'document' || materialType === 'article' }"
             >
               <img
-                v-if="thumbSrc(row)"
-                :src="thumbSrc(row)"
+                v-if="thumbSrc(row as MaterialListItem)"
+                :src="thumbSrc(row as MaterialListItem)"
                 alt=""
               >
               <span v-else>封面</span>
@@ -314,13 +315,13 @@ watch(list, () => {
                 {{ row.name }}
               </p>
               <p
-                v-if="isUsed(row)"
+                v-if="isUsed(row as MaterialListItem)"
                 class="hint hint--used"
               >
                 已关联本课程
               </p>
               <p
-                v-else-if="!auditPassed(row)"
+                v-else-if="!auditPassed(row as MaterialListItem)"
                 class="hint hint--audit"
               >
                 审核未通过，不可关联

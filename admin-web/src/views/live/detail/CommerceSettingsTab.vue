@@ -136,7 +136,7 @@ async function removeProduct(spuId: string) {
   if (saving.value) return;
   const row = products.value.find((p) => p.spuId === spuId);
   if (!row) return;
-  const name = displayName(row);
+  const name = displayName(row as ActivityProduct);
   try {
     await ElMessageBox.confirm(
       `确认将【${name}】移出本场直播吗？移出后观众将无法看到该商品。`,
@@ -196,7 +196,7 @@ defineExpose({
         min-width="160"
         show-overflow-tooltip
       >
-        <template #default="{ row }">{{ displayName(row) }}</template>
+        <template #default="{ row }">{{ displayName(row as ActivityProduct) }}</template>
       </ElTableColumn>
       <ElTableColumn
         label="商品别名"

@@ -18,24 +18,32 @@ import {
   hqStatusLabel,
   ORG_DEPT_ALL,
   setLiveEnabled,
-  type DeptTreeNode,
+  type OrgDeptSelectId,
   type OrgEmployeeItem,
   type RoleListItem,
 } from "@/api/org";
 
-const ALL_NODE: DeptTreeNode = {
+interface OrgTreeNode {
+  id: OrgDeptSelectId;
+  name: string;
+  code: string;
+  parentId: number;
+  children: OrgTreeNode[];
+}
+
+const ALL_NODE: OrgTreeNode = {
   id: ORG_DEPT_ALL,
   name: "全部",
   code: "",
-  parentId: "0",
+  parentId: 0,
   children: [],
 };
 
 const treeLoading = ref(false);
-const treeData = ref<DeptTreeNode[]>([]);
+const treeData = ref<OrgTreeNode[]>([]);
 const treeRef = ref<InstanceType<typeof ElTree>>();
 /** 默认「全部」 */
-const selectedDeptId = ref(ORG_DEPT_ALL);
+const selectedDeptId = ref<OrgDeptSelectId>(ORG_DEPT_ALL);
 
 const nameKeyword = ref("");
 const selectedRoleId = ref<number | undefined>(undefined);
@@ -76,7 +84,7 @@ async function loadTree() {
   }
 }
 
-function onDeptClick(data: DeptTreeNode) {
+function onDeptClick(data: OrgTreeNode) {
   selectedDeptId.value = data.id;
   page.value = 1;
   void loadList();
@@ -236,9 +244,9 @@ function onPageSizeChange(size: number) {
           <ElTableColumn label="操作" min-width="220" fixed="right">
             <template #default="{ row }">
               <button type="button" class="link-btn" @click="onAssignRole">
-                {{ hasRole(row) ? "更换角色" : "赋予角色" }}
+                {{ hasRole(row as OrgEmployeeItem) ? "更换角色" : "赋予角色" }}
               </button>
-              <button type="button" class="link-btn" @click="onToggleLive(row)">
+              <button type="button" class="link-btn" @click="onToggleLive(row as OrgEmployeeItem)">
                 {{ row.liveEnabled ? "禁用" : "启用" }}
               </button>
             </template>

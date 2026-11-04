@@ -9,6 +9,7 @@ import {
   ElTable,
   ElTableColumn,
 } from "element-plus";
+import type { TableInstance } from "element-plus";
 import { Search } from "@element-plus/icons-vue";
 import {
   listActivities,
@@ -39,7 +40,7 @@ const page = ref(1);
 const pageSize = ref(10);
 const selected = ref<ActivityListItem[]>([]);
 const usedLiveIds = ref<Set<string>>(new Set());
-const tableRef = ref<InstanceType<typeof ElTable> | null>(null);
+const tableRef = ref<TableInstance | null>(null);
 
 const selectedIds = computed(() => new Set(selected.value.map((r) => String(r.id))));
 
@@ -64,7 +65,7 @@ function isUsed(row: ActivityListItem) {
 }
 
 function selectable(row: ActivityListItem) {
-  return !isUsed(row);
+  return !isUsed(row as ActivityListItem);
 }
 
 async function loadUsed() {
@@ -223,7 +224,7 @@ watch(list, () => {
                 {{ sellTagText(row) || "--" }}
               </p>
               <p
-                v-if="isUsed(row)"
+                v-if="isUsed(row as ActivityListItem)"
                 class="used"
               >
                 已关联本课程

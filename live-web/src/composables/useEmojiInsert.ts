@@ -5,7 +5,7 @@ import { nextTick } from "vue";
  * 面板收起后把光标放回令牌之后，方便继续打字。
  */
 export function insertEmojiAtCursor(
-  el: HTMLInputElement | null,
+  el: HTMLInputElement | HTMLTextAreaElement | null,
   current: string,
   name: string,
   max: number,

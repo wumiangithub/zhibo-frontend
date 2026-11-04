@@ -212,14 +212,14 @@ async function fetchProgress() {
   }
 }
 
-function onLessonSortChange(payload: { prop: string; order: string | null }) {
+function onLessonSortChange(payload: { prop: string | null; order: string | null }) {
   const map: Record<string, CourseAnalyticsLessonSortBy> = {
     participateCount: "participateCount",
     participateRate: "participateRate",
     completeCount: "completeCount",
     completeRate: "completeRate",
   };
-  const key = map[payload.prop];
+  const key = payload.prop ? map[payload.prop] : undefined;
   if (!key || !payload.order) {
     sortBy.value = "";
     sortOrder.value = "";
@@ -529,7 +529,7 @@ watch(
           <button
             type="button"
             class="op-link"
-            @click="openProgress(row)"
+            @click="openProgress(row as CourseAnalyticsUserItem)"
           >
             进度详情
           </button>

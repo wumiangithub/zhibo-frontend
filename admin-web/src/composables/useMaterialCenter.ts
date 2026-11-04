@@ -201,6 +201,10 @@ export function useMaterialCenter(options: UseMaterialCenterOptions = {}) {
     items: CreateMaterialItem[],
   ): Promise<MaterialListItem[]> {
     if (!items.length) return [];
+    if (materialType.value === "article") {
+      ElMessage.error("文章不走批量登记");
+      return [];
+    }
     try {
       const data = await createMaterials({
         type: materialType.value,

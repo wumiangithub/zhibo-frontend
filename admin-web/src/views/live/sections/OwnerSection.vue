@@ -19,12 +19,23 @@ const selected = ref<EmployeeItem[]>([]);
 /** 头像加载失败时降级为占位图标 */
 const brokenAvatar = ref<Record<string, boolean>>({});
 
+function idKey(id: string | number | null | undefined) {
+  if (id == null || id === "") return "";
+  return String(id);
+}
+
+function toEmployeeId(raw: string | number): number {
+  return typeof raw === "number" ? raw : Number(raw);
+}
+
 function mergeEmployee(a?: EmployeeItem, b?: EmployeeItem): EmployeeItem | undefined {
   if (!a && !b) return undefined;
-  const id = a?.id || b?.id || "";
+  const raw = a?.id ?? b?.id;
+  if (raw == null) return undefined;
+  const fallback = idKey(raw);
   return {
-    id,
-    userName: (a?.userName || b?.userName || id).trim() || id,
+    id: toEmployeeId(raw),
+    userName: (a?.userName || b?.userName || fallback).trim() || fallback,
     avatar: a?.avatar?.trim() || b?.avatar?.trim() || undefined,
     departmentName:
       a?.departmentName?.trim() || b?.departmentName?.trim() || undefined,
@@ -42,17 +53,18 @@ async function loadEmployees(keyword?: string) {
     const list = data.list ?? [];
     // 已选 / known（含新建默认的当前用户）不在列表时仍注入选项，保证下拉与标签能显示姓名/头像
     const map = new Map<string, EmployeeItem>();
-    for (const o of list) map.set(o.id, o);
+    for (const o of list) map.set(idKey(o.id), o);
     for (const o of props.known ?? []) {
-      map.set(o.id, mergeEmployee(map.get(o.id), o)!);
+      map.set(idKey(o.id), mergeEmployee(map.get(idKey(o.id)), o)!);
     }
     for (const o of selected.value) {
-      map.set(o.id, mergeEmployee(map.get(o.id), o)!);
+      map.set(idKey(o.id), mergeEmployee(map.get(idKey(o.id)), o)!);
     }
     for (const id of form.ownerIds) {
-      if (!map.has(id)) {
-        const known = (props.known ?? []).find((k) => k.id === id);
-        map.set(id, known ?? { id, userName: id });
+      const key = idKey(id);
+      if (!map.has(key)) {
+        const known = (props.known ?? []).find((k) => idKey(k.id) === key);
+        map.set(key, known ?? { id: toEmployeeId(key), userName: key });
       }
     }
     options.value = [...map.values()];
@@ -67,14 +79,17 @@ async function loadEmployees(keyword?: string) {
 
 function syncSelected(ids: string[]) {
   const map = new Map<string, EmployeeItem>();
-  for (const o of options.value) map.set(o.id, o);
+  for (const o of options.value) map.set(idKey(o.id), o);
   for (const o of selected.value) {
-    map.set(o.id, mergeEmployee(map.get(o.id), o)!);
+    map.set(idKey(o.id), mergeEmployee(map.get(idKey(o.id)), o)!);
   }
   for (const o of props.known ?? []) {
-    map.set(o.id, mergeEmployee(map.get(o.id), o)!);
+    map.set(idKey(o.id), mergeEmployee(map.get(idKey(o.id)), o)!);
   }
-  selected.value = ids.map((id) => map.get(id) ?? { id, userName: id });
+  selected.value = ids.map((id) => {
+    const key = idKey(id);
+    return map.get(key) ?? { id: toEmployeeId(key), userName: key };
+  });
 }
 
 function sameIds(a: string[], b: string[]) {
@@ -93,19 +108,20 @@ function onChange(ids: string[]) {
   markDirty();
 }
 
-function removeOwner(id: string) {
-  form.ownerIds = form.ownerIds.filter((x) => x !== id);
-  selected.value = selected.value.filter((x) => x.id !== id);
+function removeOwner(id: string | number) {
+  const key = idKey(id);
+  form.ownerIds = form.ownerIds.filter((x) => idKey(x) !== key);
+  selected.value = selected.value.filter((x) => idKey(x.id) !== key);
   markDirty();
 }
 
-function onAvatarError(id: string) {
-  brokenAvatar.value = { ...brokenAvatar.value, [id]: true };
+function onAvatarError(id: string | number) {
+  brokenAvatar.value = { ...brokenAvatar.value, [idKey(id)]: true };
 }
 
 function avatarOf(emp: EmployeeItem) {
   const url = emp.avatar?.trim();
-  if (!url || brokenAvatar.value[emp.id]) return "";
+  if (!url || brokenAvatar.value[idKey(emp.id)]) return "";
   return url;
 }
 

@@ -184,7 +184,9 @@ function onMoreCommand(cmd: string) {
 }
 
 onMounted(fetchDetail);
-watch(id, fetchDetail);
+watch(id, () => {
+  void fetchDetail();
+});
 </script>
 
 <template>

@@ -279,7 +279,7 @@ onMounted(() => {
                 class="avatar avatar-ph"
               />
               <div class="user-meta">
-                <span class="user-name">{{ displayName(row) }}</span>
+                <span class="user-name">{{ displayName(row as SalerOrderItem) }}</span>
                 <span
                   v-if="row.weComFriend"
                   class="wecom-tag"
@@ -350,7 +350,7 @@ onMounted(() => {
           width="120"
         >
           <template #default="{ row }">
-            {{ displayMoney(row) }}
+            {{ displayMoney(row as SalerOrderItem) }}
           </template>
         </ElTableColumn>
         <ElTableColumn

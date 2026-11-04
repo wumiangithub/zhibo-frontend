@@ -27,7 +27,7 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
 
   let roomId = "";
   let disposed = false;
-  let roomIdTimer: ReturnType<typeof window.setTimeout> | undefined;
+  let roomIdTimer: number | undefined;
   /** live_over / state 3/4/5：强制 0，忽略迟到 onlinePopulation（含主讲减 1 后仍可能非 0） */
   let liveEnded = false;
 
@@ -36,7 +36,7 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
    * 每次点击立刻打 num:1 会被微吼限流/丢弃，刷新后总数偏少。
    */
   let pendingLikeIncrement = 0;
-  let postPraiseTimer: ReturnType<typeof window.setTimeout> | undefined;
+  let postPraiseTimer: number | undefined;
   const PRAISE_FLUSH_MS = 2000;
 
   async function loadRoomId() {

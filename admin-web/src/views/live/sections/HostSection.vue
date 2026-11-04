@@ -142,8 +142,8 @@ function clearHost() {
   markDirty();
 }
 
-function onAvatarError(id: string) {
-  brokenAvatar.value = { ...brokenAvatar.value, [id]: true };
+function onAvatarError(id: string | number) {
+  brokenAvatar.value = { ...brokenAvatar.value, [String(id)]: true };
 }
 
 function avatarOf(emp: EmployeeItem) {

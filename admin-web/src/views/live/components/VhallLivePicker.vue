@@ -54,6 +54,10 @@ const playbackList = ref<VhallPlaybackItem[]>([]);
 const pickedPlaybackId = ref<number | null>(null);
 const pendingLive = ref<VhallLiveItem | null>(null);
 
+function onPickPlayback(value: string | number | boolean | undefined) {
+  if (typeof value === "number") pickedPlaybackId.value = value;
+}
+
 const STATE_OPTIONS = (Object.entries(STATE_LABEL) as [string, string][]).map(
   ([value, label]) => ({ value: Number(value), label }),
 );
@@ -338,8 +342,9 @@ watch(
         @click="pickedPlaybackId = pb.id"
       >
         <ElRadio
-          v-model="pickedPlaybackId"
+          :model-value="pickedPlaybackId ?? undefined"
           :value="pb.id"
+          @update:model-value="onPickPlayback"
           @click.stop
         />
         <div class="pb-body">

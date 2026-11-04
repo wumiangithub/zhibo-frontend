@@ -220,7 +220,7 @@ defineExpose({ refresh: fetchList });
             <button
               type="button"
               class="link-btn"
-              @click="openViewTags(row)"
+              @click="openViewTags(row as ViewerTagGroupPageItem)"
             >
               查看标签
             </button>
@@ -230,7 +230,7 @@ defineExpose({ refresh: fetchList });
               class="link-btn"
               :class="{ disabled: row.isDefault }"
               :disabled="row.isDefault"
-              @click="openEdit(row)"
+              @click="openEdit(row as ViewerTagGroupPageItem)"
             >
               编辑
             </button>
@@ -240,7 +240,7 @@ defineExpose({ refresh: fetchList });
               class="link-btn"
               :class="{ disabled: row.isDefault }"
               :disabled="row.isDefault"
-              @click="onDelete(row)"
+              @click="onDelete(row as ViewerTagGroupPageItem)"
             >
               删除
             </button>

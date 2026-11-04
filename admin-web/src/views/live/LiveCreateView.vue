@@ -40,8 +40,8 @@ function buildPayload(): CreateActivityPayload {
     ultraLowLatency: form.ultraLowLatency,
     autoList: form.autoList,
     hostIds: form.hostIds.slice(0, 1).map((id) => Number(id)),
+    reportId: form.reportId.trim(),
   };
-  payload.reportId = form.reportId.trim();
   const intro = form.intro.trim();
   if (intro) payload.introduction = intro;
   if (form.endDate && form.endTime) {
@@ -57,7 +57,7 @@ function buildPayload(): CreateActivityPayload {
   }
   if (form.detailCover) payload.coverUrl = form.detailCover;
   if (form.detailHtml?.trim()) payload.detailHtml = form.detailHtml;
-  if (form.ownerIds.length) payload.ownerIds = [...form.ownerIds];
+  if (form.ownerIds.length) payload.ownerIds = form.ownerIds.map((id) => Number(id));
   if (form.products.length) {
     payload.products = form.products.map((p) => ({
       spuId: String(p.spuId),

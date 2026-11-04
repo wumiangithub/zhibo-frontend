@@ -161,10 +161,10 @@ async function onDelete(row: LiveReport) {
 }
 
 function onMoreCommand(command: string, row: LiveReport) {
-  if (command === "audit" && canAudit(row)) {
+  if (command === "audit" && canAudit(row as LiveReport)) {
     void router.push(`/live-reports/audit/${row.id}`);
   } else if (command === "delete") {
-    void onDelete(row);
+    void onDelete(row as LiveReport);
   }
 }
 
@@ -339,11 +339,11 @@ onMounted(fetchList);
         >
           <template #default="{ row }">
             <ElTooltip
-              v-if="fmtTimes(row) !== '--'"
-              :content="fmtTimes(row)"
+              v-if="fmtTimes(row as LiveReport) !== '--'"
+              :content="fmtTimes(row as LiveReport)"
               placement="top"
             >
-              <span class="ellipsis time-ellipsis">{{ fmtTimes(row) }}</span>
+              <span class="ellipsis time-ellipsis">{{ fmtTimes(row as LiveReport) }}</span>
             </ElTooltip>
             <span v-else>--</span>
           </template>
@@ -357,7 +357,7 @@ onMounted(fetchList);
               class="risk-tag"
               :class="statusClass(row.status)"
             >
-              {{ REPORT_STATUS_LABEL[row.status] }}
+              {{ REPORT_STATUS_LABEL[(row as LiveReport).status] }}
             </span>
           </template>
         </ElTableColumn>
@@ -377,13 +377,13 @@ onMounted(fetchList);
               <button
                 type="button"
                 class="op-link"
-                @click="openAuditRecords(row)"
+                @click="openAuditRecords(row as LiveReport)"
               >
                 审核记录
               </button>
               <ElDropdown
                 trigger="click"
-                @command="(cmd: string) => onMoreCommand(cmd, row)"
+                @command="(cmd: string) => onMoreCommand(cmd, row as LiveReport)"
               >
                 <button
                   type="button"
@@ -395,7 +395,7 @@ onMounted(fetchList);
                   <ElDropdownMenu>
                     <ElDropdownItem
                       command="audit"
-                      :disabled="!canAudit(row)"
+                      :disabled="!canAudit(row as LiveReport)"
                     >
                       去审核
                     </ElDropdownItem>

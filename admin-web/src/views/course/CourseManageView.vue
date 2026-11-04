@@ -145,8 +145,8 @@ const SORT_PROPS: Record<string, CourseSortKey> = {
   updatedTime: "updatedTime",
 };
 
-function onSortChange(payload: { prop: string; order: string | null }) {
-  const key = SORT_PROPS[payload.prop];
+function onSortChange(payload: { prop: string | null; order: string | null }) {
+  const key = payload.prop ? SORT_PROPS[payload.prop] : undefined;
   if (key && payload.order) {
     query.sort = key;
     query.order = payload.order === "ascending" ? "asc" : "desc";
@@ -382,7 +382,7 @@ onMounted(fetchList);
                 class="dot"
                 :class="shelfDotClass(row.shelfStatus)"
               />
-              {{ SHELF_STATUS_LABEL[row.shelfStatus] }}
+              {{ SHELF_STATUS_LABEL[(row as CourseListItem).shelfStatus] }}
             </span>
           </template>
         </ElTableColumn>
@@ -400,11 +400,11 @@ onMounted(fetchList);
         >
           <template #default="{ row }">
             <ElTooltip
-              v-if="ownersText(row) !== '--'"
-              :content="ownersText(row)"
+              v-if="ownersText(row as CourseListItem) !== '--'"
+              :content="ownersText(row as CourseListItem)"
               placement="top"
             >
-              <span class="ellipsis">{{ ownersText(row) }}</span>
+              <span class="ellipsis">{{ ownersText(row as CourseListItem) }}</span>
             </ElTooltip>
             <span v-else>--</span>
           </template>
@@ -451,7 +451,7 @@ onMounted(fetchList);
               class="risk-tag"
               :class="riskClass(row.riskStatus)"
             >
-              {{ RISK_STATUS_LABEL[row.riskStatus] }}
+              {{ RISK_STATUS_LABEL[(row as CourseListItem).riskStatus] }}
             </span>
           </template>
         </ElTableColumn>
@@ -477,13 +477,13 @@ onMounted(fetchList);
               <button
                 type="button"
                 class="op-link"
-                @click="openAuditRecords(row)"
+                @click="openAuditRecords(row as CourseListItem)"
               >
                 审核记录
               </button>
               <ElDropdown
                 trigger="click"
-                @command="(cmd: string) => onMoreCommand(cmd, row)"
+                @command="(cmd: string) => onMoreCommand(cmd, row as CourseListItem)"
               >
                 <button
                   type="button"

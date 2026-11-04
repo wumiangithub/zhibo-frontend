@@ -237,27 +237,15 @@ async function onAccountClick() {
       </button>
 
       <nav class="top-nav flex min-w-0 flex-1 items-center gap-1 overflow-x-auto text-[14px]">
-        <template
+        <RouterLink
           v-for="item in topNav"
           :key="item.key"
+          :to="item.to"
+          class="top-nav-item"
+          :class="{ 'is-active': activeTop === item.key }"
         >
-          <RouterLink
-            v-if="'to' in item && item.to"
-            :to="item.to"
-            class="top-nav-item"
-            :class="{ 'is-active': activeTop === item.key }"
-          >
-            {{ item.label }}
-          </RouterLink>
-          <button
-            v-else
-            type="button"
-            class="top-nav-item"
-            @click="onShellClick(item.label)"
-          >
-            {{ item.label }}
-          </button>
-        </template>
+          {{ item.label }}
+        </RouterLink>
       </nav>
 
       <div class="ml-3 flex flex-none items-center gap-2">

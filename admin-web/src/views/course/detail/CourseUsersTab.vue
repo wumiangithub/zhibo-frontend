@@ -448,7 +448,7 @@ onMounted(() => {
             <button
               type="button"
               class="link-btn"
-              @click="toggleEntitlement(row)"
+              @click="toggleEntitlement(row as CourseUserListItem)"
             >
               {{ row.entitlementStatus === 1 ? "取消观看权限" : "开启观看权限" }}
             </button>
@@ -464,7 +464,7 @@ onMounted(() => {
               </button>
               <template #dropdown>
                 <ElDropdownMenu>
-                  <ElDropdownItem @click="openDelayDialog(row)">
+                  <ElDropdownItem @click="openDelayDialog(row as CourseUserListItem)">
                     延迟用户时间
                   </ElDropdownItem>
                 </ElDropdownMenu>

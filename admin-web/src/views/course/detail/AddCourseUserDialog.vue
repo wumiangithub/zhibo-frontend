@@ -457,7 +457,7 @@ async function onDownloadFailures(row: CourseUserImportHistoryItem) {
               <button
                 type="button"
                 class="link-btn"
-                @click="onDownloadFailures(row)"
+                @click="onDownloadFailures(row as CourseUserImportHistoryItem)"
               >
                 下载失败明细
               </button>

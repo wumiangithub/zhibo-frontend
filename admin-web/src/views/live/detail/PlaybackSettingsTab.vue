@@ -356,7 +356,7 @@ defineExpose({
               <a
                 class="dl-link"
                 :class="{ 'is-busy': downloadingId === row.id }"
-                @click.prevent="onDownload(row)"
+                @click.prevent="onDownload(row as ActivityRecordItem)"
               >{{ downloadingId === row.id ? "获取中…" : "下载" }}</a>
             </template>
           </ElTableColumn>

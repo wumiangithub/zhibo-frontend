@@ -173,7 +173,7 @@ function resetFilter() {
   void fetchList();
 }
 
-function onSortChange(payload: { prop: string; order: string | null }) {
+function onSortChange(payload: { prop: string | null; order: string | null }) {
   if (payload.prop === "startTime" && payload.order) {
     query.sort = "startTime";
     query.order = payload.order === "ascending" ? "asc" : "desc";
@@ -427,9 +427,9 @@ onMounted(fetchList);
             <span class="status-dot">
               <i
                 class="dot"
-                :class="shelfDotClass(shelfOf(row))"
+                :class="shelfDotClass(shelfOf(row as ActivityListItem))"
               />
-              {{ SHELF_STATUS_LABEL[shelfOf(row)] }}
+              {{ SHELF_STATUS_LABEL[shelfOf(row as ActivityListItem)] }}
             </span>
           </template>
         </ElTableColumn>
@@ -449,11 +449,11 @@ onMounted(fetchList);
         >
           <template #default="{ row }">
             <ElTooltip
-              v-if="ownersText(row) !== '--'"
-              :content="ownersText(row)"
+              v-if="ownersText(row as ActivityListItem) !== '--'"
+              :content="ownersText(row as ActivityListItem)"
               placement="top"
             >
-              <span class="ellipsis">{{ ownersText(row) }}</span>
+              <span class="ellipsis">{{ ownersText(row as ActivityListItem) }}</span>
             </ElTooltip>
             <span v-else>--</span>
           </template>
@@ -485,11 +485,11 @@ onMounted(fetchList);
         >
           <template #default="{ row }">
             <ElTooltip
-              v-if="productsText(row) !== '--'"
-              :content="productsText(row)"
+              v-if="productsText(row as ActivityListItem) !== '--'"
+              :content="productsText(row as ActivityListItem)"
               placement="top"
             >
-              <span class="ellipsis">{{ productsText(row) }}</span>
+              <span class="ellipsis">{{ productsText(row as ActivityListItem) }}</span>
             </ElTooltip>
             <span v-else>--</span>
           </template>
@@ -501,9 +501,9 @@ onMounted(fetchList);
           <template #default="{ row }">
             <span
               class="risk-tag"
-              :class="riskClass(riskOf(row))"
+              :class="riskClass(riskOf(row as ActivityListItem))"
             >
-              {{ RISK_STATUS_LABEL[riskOf(row)] }}
+              {{ RISK_STATUS_LABEL[riskOf(row as ActivityListItem)] }}
             </span>
           </template>
         </ElTableColumn>
@@ -518,7 +518,7 @@ onMounted(fetchList);
                 type="button"
                 class="op-link"
                 :disabled="!row.canBroadcast"
-                @click="goLive(row)"
+                @click="goLive(row as ActivityListItem)"
               >
                 开播
               </button>
@@ -537,13 +537,13 @@ onMounted(fetchList);
               <button
                 type="button"
                 class="op-link"
-                @click="openAuditRecords(row)"
+                @click="openAuditRecords(row as ActivityListItem)"
               >
                 审核记录
               </button>
               <ElDropdown
                 trigger="click"
-                @command="(cmd: string) => onMoreCommand(cmd, row)"
+                @command="(cmd: string) => onMoreCommand(cmd, row as ActivityListItem)"
               >
                 <button
                   type="button"
@@ -556,13 +556,13 @@ onMounted(fetchList);
                     <ElDropdownItem command="share">分享</ElDropdownItem>
                     <ElDropdownItem command="audit">去审核</ElDropdownItem>
                     <ElDropdownItem
-                      v-if="shelfOf(row) === 'pending' || shelfOf(row) === 'off'"
+                      v-if="shelfOf(row as ActivityListItem) === 'pending' || shelfOf(row as ActivityListItem) === 'off'"
                       command="on"
                     >
                       上架
                     </ElDropdownItem>
                     <ElDropdownItem
-                      v-if="shelfOf(row) === 'on'"
+                      v-if="shelfOf(row as ActivityListItem) === 'on'"
                       command="off"
                     >
                       下架

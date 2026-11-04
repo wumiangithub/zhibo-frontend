@@ -203,7 +203,7 @@ async function loadFilterTags() {
   }
 }
 
-function onSortChange(payload: { prop: string; order: string | null }) {
+function onSortChange(payload: { prop: string | null; order: string | null }) {
   const map: Record<string, string> = {
     totalWatchDurationSec: "totalWatchDuration",
     liveWatchDurationSec: "liveWatchDuration",
@@ -211,7 +211,7 @@ function onSortChange(payload: { prop: string; order: string | null }) {
     commentCount: "commentCount",
     dealAmount: "dealAmount",
   };
-  const key = map[payload.prop];
+  const key = payload.prop ? map[payload.prop] : undefined;
   if (!key || !payload.order) {
     sort.value = undefined;
     order.value = undefined;
@@ -907,7 +907,7 @@ onUnmounted(() => {
             <button
               type="button"
               class="link-btn"
-              @click="toggleEntitlement(row)"
+              @click="toggleEntitlement(row as AudienceListItem)"
             >
               {{ row.entitlementStatus === 1 ? "取消观看权限" : "开启观看权限" }}
             </button>
@@ -1078,7 +1078,7 @@ onUnmounted(() => {
                 <button
                   type="button"
                   class="link-btn"
-                  @click="onDownloadFailures(row)"
+                  @click="onDownloadFailures(row as AudienceImportHistoryItem)"
                 >
                   下载失败明细
                 </button>

@@ -282,7 +282,7 @@ onMounted(() => {
               <button
                 type="button"
                 class="link-btn"
-                @click="onDetail(row)"
+                @click="onDetail(row as ViewerTagItem)"
               >
                 详情
               </button>
@@ -290,7 +290,7 @@ onMounted(() => {
               <button
                 type="button"
                 class="link-btn"
-                @click="onEdit(row)"
+                @click="onEdit(row as ViewerTagItem)"
               >
                 编辑
               </button>
@@ -298,7 +298,7 @@ onMounted(() => {
               <button
                 type="button"
                 class="link-btn"
-                @click="onDelete(row)"
+                @click="onDelete(row as ViewerTagItem)"
               >
                 删除
               </button>
