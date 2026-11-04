@@ -1,5 +1,6 @@
 import axios, { type AxiosRequestConfig } from "axios";
 import { axiosErrorMessage } from "@/utils/axiosErrorMessage";
+import { apiV1 } from "./apiBase";
 
 export interface ApiResult<T> {
   code: number;
@@ -17,7 +18,7 @@ export class ApiError extends Error {
 }
 
 const instance = axios.create({
-  baseURL: "/api/v1",
+  baseURL: apiV1(),
   timeout: 15000,
 });
 

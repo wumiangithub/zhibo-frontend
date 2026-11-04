@@ -1,3 +1,4 @@
+import { apiV1 } from "./apiBase";
 import { get, post, put } from "./http";
 import type { ActivityId } from "./activity";
 import axios from "axios";
@@ -143,7 +144,7 @@ export async function importAudiences(activityId: ActivityId, file: File) {
   form.append("file", file);
   const token = getAccessToken();
   const resp = await axios.post(
-    `/api/v1/activities/audiences/import/${activityId}`,
+    apiV1(`/activities/audiences/import/${activityId}`),
     form,
     {
       headers: {
@@ -236,19 +237,19 @@ async function blobErrorMessage(blob: Blob): Promise<string> {
 }
 
 export async function downloadAudienceImportTemplate() {
-  await downloadAuthorizedBlob("/api/v1/activities/audiences/import-template", "audience-import.csv");
+  await downloadAuthorizedBlob(apiV1("/activities/audiences/import-template"), "audience-import.csv");
 }
 
 export async function downloadAudienceImportFailures(importId: number) {
   await downloadAuthorizedBlob(
-    `/api/v1/activities/audiences/imports/failures/${importId}`,
+    apiV1(`/activities/audiences/imports/failures/${importId}`),
     "audience-import-failures.csv",
   );
 }
 
 export async function exportAudiences(activityId: ActivityId, params: AudienceListQuery = {}) {
   await downloadAuthorizedBlob(
-    `/api/v1/activities/audiences/export/${activityId}`,
+    apiV1(`/activities/audiences/export/${activityId}`),
     "audience-export.csv",
     audienceFilterParams(params),
   );

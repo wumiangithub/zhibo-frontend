@@ -2,6 +2,7 @@ import axios, { type AxiosError, type AxiosRequestConfig, type InternalAxiosRequ
 import { clearSession, getAccessToken, getRefreshToken } from "@/utils/authSession";
 import { AuthRefreshError, refreshAccessToken } from "@/utils/authRefresh";
 import { axiosErrorMessage } from "@/utils/axiosErrorMessage";
+import { apiV1 } from "./apiBase";
 
 export interface ApiResult<T> {
   code: number;
@@ -25,7 +26,7 @@ export type AuthRequestConfig = AxiosRequestConfig & {
 };
 
 const instance = axios.create({
-  baseURL: "/api/v1",
+  baseURL: apiV1(),
   timeout: 15000,
 });
 

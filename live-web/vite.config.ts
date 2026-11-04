@@ -9,6 +9,13 @@ function listenPort(raw: string | undefined, fallback: number): number {
   return fallback;
 }
 
+/** 同机为 /api 或 /live-client；写成域名时浏览器直连，开发代理仍用 /api。 */
+function apiProxyPrefix(raw: string | undefined): string {
+  const base = (raw ?? "").trim().replace(/\/+$/, "");
+  if (!base || base === "/" || /^https?:\/\//i.test(base)) return "/api";
+  return base.startsWith("/") ? base : `/${base}`;
+}
+
 export default defineConfig(({ mode }) => {
   const viteEnv = loadEnv(mode, process.cwd());
   const fileEnv = loadEnv(mode, process.cwd(), "");
@@ -28,7 +35,7 @@ export default defineConfig(({ mode }) => {
       port: listenPort(fileEnv.LIVE_WEB_PORT, 5174),
       proxy: {
         // 观看 / 进出 / 中控台名单一律 live-service
-        "/api": {
+        [apiProxyPrefix(viteEnv.VITE_APP_BASE_API)]: {
           target: `http://127.0.0.1:${listenPort(fileEnv.LIVE_SERVER_PORT, 8082)}`,
           changeOrigin: true,
         },

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getAccessToken } from "@/utils/authSession";
+import { apiV1 } from "./apiBase";
 import { del, get, post, put } from "./http";
 
 export type ShelfStatus = "pending" | "on" | "off" | "banned";
@@ -542,7 +543,7 @@ export async function importCourseUsers(
   if (expire) form.append("expireTime", expire);
   const token = getAccessToken();
   const resp = await axios.post(
-    `/api/v1/courses/users/import/${encodeURIComponent(courseId)}`,
+    apiV1(`/courses/users/import/${encodeURIComponent(courseId)}`),
     form,
     {
       headers: {
@@ -611,21 +612,21 @@ async function blobErrorMessage(blob: Blob): Promise<string> {
 
 export async function downloadCourseUserImportTemplate() {
   await downloadAuthorizedBlob(
-    "/api/v1/courses/users/import-template",
+    apiV1("/courses/users/import-template"),
     "course-user-import.csv",
   );
 }
 
 export async function downloadCourseUserImportFailures(importId: number) {
   await downloadAuthorizedBlob(
-    `/api/v1/courses/users/imports/failures/${importId}`,
+    apiV1(`/courses/users/imports/failures/${importId}`),
     "course-user-import-failures.csv",
   );
 }
 
 export async function exportCourseUsers(courseId: string, params: CourseUserListQuery = {}) {
   await downloadAuthorizedBlob(
-    `/api/v1/courses/users/export/${encodeURIComponent(courseId)}`,
+    apiV1(`/courses/users/export/${encodeURIComponent(courseId)}`),
     "course-user-export.csv",
     {
       keywordType: params.keywordType || undefined,
@@ -689,7 +690,7 @@ export async function exportCourseAnalyticsLessons(
   params: Pick<CourseAnalyticsLessonQuery, "sortBy" | "sortOrder"> = {},
 ) {
   await downloadAuthorizedBlob(
-    `/api/v1/courses/analytics/lessons/export/${encodeURIComponent(courseId)}`,
+    apiV1(`/courses/analytics/lessons/export/${encodeURIComponent(courseId)}`),
     "course-analytics-lessons.csv",
     {
       sortBy: params.sortBy || undefined,
@@ -742,7 +743,7 @@ export async function exportCourseAnalyticsUsers(
   params: { keywordType?: string; keyword?: string } = {},
 ) {
   await downloadAuthorizedBlob(
-    `/api/v1/courses/analytics/users/export/${encodeURIComponent(courseId)}`,
+    apiV1(`/courses/analytics/users/export/${encodeURIComponent(courseId)}`),
     "course-analytics-users.csv",
     {
       keywordType: params.keywordType || undefined,

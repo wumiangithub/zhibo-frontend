@@ -1,3 +1,4 @@
+import { apiV1 } from "./apiBase";
 import { get, post } from "./http";
 import { activityAccessHeader } from "@/utils/activityAccess";
 import { getViewerAccessToken, isViewerLoggedIn } from "@/utils/viewerAuth";
@@ -63,7 +64,7 @@ export function heartbeatReplayWatchKeepalive(activityId: string, socketId: stri
   const token = getViewerAccessToken();
   if (!token || !socketId) return;
   try {
-    void fetch(`/api/v1/watch/replay/heartbeat/${activityId}`, {
+    void fetch(apiV1(`/watch/replay/heartbeat/${activityId}`), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

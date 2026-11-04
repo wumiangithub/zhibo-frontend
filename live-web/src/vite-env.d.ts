@@ -1,6 +1,11 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  /**
+   * 接口前缀。同机为路径（/ 或 /live-client）；分机为域名。
+   * 代码再拼 /api/v1。未设时按无前缀处理。
+   */
+  readonly VITE_APP_BASE_API?: string;
   /** 订单中心根地址（无尾斜杠）；开发代理目标 / 构建直连 */
   readonly VITE_ORDER_CENTER_BASE_URL?: string;
 }

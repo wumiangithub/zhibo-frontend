@@ -12,6 +12,13 @@ function listenPort(raw: string | undefined, fallback: number): number {
   return fallback
 }
 
+/** 同机为 /api 或 /live-admin；写成域名时浏览器直连，开发代理仍用 /api。 */
+function apiProxyPrefix(raw: string | undefined): string {
+  const base = (raw ?? "").trim().replace(/\/+$/, "")
+  if (!base || base === "/" || /^https?:\/\//i.test(base)) return "/api"
+  return base.startsWith("/") ? base : `/${base}`
+}
+
 export default defineConfig(({ mode }) => {
   const viteEnv = loadEnv(mode, process.cwd())
   const fileEnv = loadEnv(mode, process.cwd(), "")
@@ -46,7 +53,7 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       allowedHosts: ["wx.qktz.com.cn", "localhost"],
       proxy: {
-        "/api": {
+        [apiProxyPrefix(viteEnv.VITE_APP_BASE_API)]: {
           target: `http://127.0.0.1:${listenPort(fileEnv.ADMIN_SERVER_PORT, 8081)}`,
           changeOrigin: true,
         },

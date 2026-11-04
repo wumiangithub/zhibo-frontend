@@ -1,4 +1,5 @@
 import axios from "axios";
+import { apiV1 } from "@/api/apiBase";
 import {
   getAccessToken,
   getRefreshToken,
@@ -54,7 +55,7 @@ async function doRefresh(): Promise<string> {
   let resp;
   try {
     resp = await axios.post(
-      "/api/v1/auth/refresh",
+      apiV1("/auth/refresh"),
       { accessToken, refreshToken },
       { timeout: 15000 },
     );
