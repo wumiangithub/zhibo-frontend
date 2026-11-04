@@ -17,10 +17,6 @@ import { isArticleContentEmpty } from "./articleContent";
 
 const route = useRoute();
 const router = useRouter();
-const editorRef = ref<InstanceType<typeof RichTextEditor> | null>(null);
-const showExample = true;
-const showPreview = true;
-
 const articleId = computed(() => {
   const raw = route.params.id;
   return typeof raw === "string" && raw && raw !== "new" ? raw : "";
@@ -187,36 +183,19 @@ const ARTICLE_PLACEHOLDER = [
         <div class="field field-editor">
           <label class="field-label"><i>*</i>文章详情</label>
           <div class="field-editor-col">
-            <div class="field-editor-wrap">
-              <RichTextEditor
-                ref="editorRef"
-                v-model="content"
-                :height="'420px'"
-                :max-length="100000"
-                :placeholder="ARTICLE_PLACEHOLDER"
-                :upload-object-key-prefix="TosObjectKeyPrefix.MATERIAL_ARTICLE"
-                example-dialog-title="文章详情示例"
-                :preview-title="title"
-                :preview-author="author"
-              />
-            </div>
-            <div
-              v-if="showExample || showPreview"
-              class="field-editor-actions"
-            >
-              <ElButton
-                v-if="showPreview"
-                @click="editorRef?.openPreview()"
-              >
-                预览
-              </ElButton>
-              <a
-                v-if="showExample"
-                class="field-editor-example"
-                href="javascript:;"
-                @click.prevent="editorRef?.openExample()"
-              >查看示例</a>
-            </div>
+            <RichTextEditor
+              v-model="content"
+              :height="'420px'"
+              :max-length="100000"
+              :placeholder="ARTICLE_PLACEHOLDER"
+              :upload-object-key-prefix="TosObjectKeyPrefix.MATERIAL_ARTICLE"
+              example-dialog-title="文章详情示例"
+              :preview-title="title"
+              :preview-author="author"
+              show-preview
+              show-example
+              show-content-viewport
+            />
           </div>
         </div>
       </div>
@@ -361,42 +340,6 @@ const ARTICLE_PLACEHOLDER = [
   flex: 1;
   min-width: 0;
   width: 100%;
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.field-editor-actions {
-  display: flex;
-  align-items: center;
-  flex: none;
-  flex-shrink: 0;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.field-editor-example {
-  color: var(--color-primary);
-  font-size: 13px;
-  line-height: 32px;
-  white-space: nowrap;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.field-editor-example:hover {
-  opacity: 0.8;
-}
-
-/* 宽帽只在父级；不 flex-grow，按钮紧挨编辑器右侧 */
-.field-editor-wrap {
-  box-sizing: border-box;
-  flex: 0 1 640px;
-  width: 640px;
-  max-width: 640px;
-  min-width: 0;
 }
 
 /* 与新建直播 LiveCreateView .live-create__footer 同一套贴底悬浮 */

@@ -1,8 +1,6 @@
 import { encodeCourseShareToken } from "./courseShareToken";
+import { liveWebOrigin } from "./liveWebOrigin";
 import { buildShareUrl } from "./shareUrl";
-
-/** 学员课程页根地址（live-web）。换域名或端口只改这里。 */
-const COURSE_WATCH_ORIGIN = "http://localhost:5174";
 
 /**
  * 课程分享长链接。
@@ -11,7 +9,7 @@ const COURSE_WATCH_ORIGIN = "http://localhost:5174";
  */
 export function buildCourseShareUrl(courseId: string, employeeInviterId?: number): string {
   const id = courseId.trim();
-  const base = `${COURSE_WATCH_ORIGIN}/course/${id}`;
+  const base = `${liveWebOrigin()}/course/${id}`;
   if (!employeeInviterId || employeeInviterId <= 0) return base;
   return buildShareUrl(base, encodeCourseShareToken(employeeInviterId), {
     kind: 1,

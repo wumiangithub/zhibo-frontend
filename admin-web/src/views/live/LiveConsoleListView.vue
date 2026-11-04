@@ -10,6 +10,7 @@ import UiButton from "@/components/ui/UiButton.vue";
 import UiInput from "@/components/ui/UiInput.vue";
 import { useToast } from "@/composables/useToast";
 import { getAccessToken } from "@/utils/authSession";
+import { buildConsoleUrl } from "@/utils/liveLinks";
 
 const { toast } = useToast();
 
@@ -93,8 +94,7 @@ function resetFilter() {
 
 function goConsole(id: string) {
   const token = getAccessToken() ?? "";
-  const url = `http://localhost:5174/console/${id}?token=${encodeURIComponent(token)}`;
-  window.open(url, "_blank", "noopener");
+  window.open(buildConsoleUrl(id, token), "_blank", "noopener");
 }
 
 function prev() {

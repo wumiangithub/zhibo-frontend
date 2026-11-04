@@ -4,7 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vu
 // @ts-expect-error vue3 包没有类型声明文件
 import { Editor, Toolbar } from "@wangeditor/editor-for-vue";
 import { ArrowLeft } from "@element-plus/icons-vue";
-import { ElDialog, ElIcon, ElMessage } from "element-plus";
+import { ElButton, ElDialog, ElIcon, ElMessage, ElRadio, ElRadioGroup } from "element-plus";
 import type { MaterialListItem, MaterialType } from "@/api/materials";
 import MaterialPickerDialog from "@/views/live/components/MaterialPickerDialog.vue";
 import { isEmptyHtml } from "./isEmptyHtml";
@@ -46,6 +46,17 @@ const props = withDefaults(
     previewTitle?: string;
     /** 手机预览可选作者 */
     previewAuthor?: string;
+    /** 是否在编辑器右侧显示「预览」 */
+    showPreview?: boolean;
+    /** 是否在编辑器右侧显示「查看示例」 */
+    showExample?: boolean;
+    /** 是否在预览 / 查看示例下方显示 H5 / PC 单选 */
+    showContentViewport?: boolean;
+    /**
+     * 正文排版宽度。h5：编辑区内容列 375px，按手机宽度填写；
+     * pc：铺满编辑器原宽。可配合 v-model:content-viewport。
+     */
+    contentViewport?: "h5" | "pc";
   }>(),
   {
     placeholder: "请输入内容",
@@ -56,11 +67,16 @@ const props = withDefaults(
     exampleHtml: "",
     previewTitle: "",
     previewAuthor: "",
+    showPreview: false,
+    showExample: false,
+    showContentViewport: false,
+    contentViewport: "pc",
   },
 );
 
 const emit = defineEmits<{
   (e: "update:modelValue", v: string): void;
+  (e: "update:contentViewport", v: "h5" | "pc"): void;
 }>();
 
 const editorRef = shallowRef<any>(null);
@@ -68,6 +84,23 @@ const html = ref<string>(props.modelValue);
 const count = ref(0);
 const previewOpen = ref(false);
 const exampleOpen = ref(false);
+const viewport = ref<"h5" | "pc">(props.contentViewport);
+const showSide = computed(
+  () => props.showPreview || props.showExample || props.showContentViewport,
+);
+
+watch(
+  () => props.contentViewport,
+  (v) => {
+    if (v !== viewport.value) viewport.value = v;
+  },
+);
+
+function onViewportChange(v: string | number | boolean | undefined) {
+  if (v !== "h5" && v !== "pc") return;
+  viewport.value = v;
+  emit("update:contentViewport", v);
+}
 /** 自定义全屏（左编辑 + 右实时预览），不走 wangEditor 原生全屏 */
 const isFullscreen = ref(false);
 
@@ -304,8 +337,15 @@ defineExpose({ openPreview, openExample });
 
 <template>
   <div
+    class="rich-editor-host"
+    :class="{ 'rich-editor-host--side': showSide }"
+  >
+  <div
     class="rich-editor"
-    :class="{ 'is-fullscreen': isFullscreen }"
+    :class="{
+      'is-fullscreen': isFullscreen,
+      'is-h5-canvas': viewport === 'h5',
+    }"
   >
     <div class="rich-editor__fs-top">
       <button
@@ -429,9 +469,108 @@ defineExpose({ openPreview, openExample });
       @confirm="onPickerConfirm"
     />
   </div>
+    <div
+      v-if="showSide && !isFullscreen"
+      class="rich-editor__side"
+    >
+      <div
+        v-if="showPreview || showExample"
+        class="rich-editor__side-bar"
+      >
+        <ElButton
+          v-if="showPreview"
+          @click="openPreview"
+        >
+          预览
+        </ElButton>
+        <a
+          v-if="showExample"
+          class="rich-editor__example"
+          href="javascript:;"
+          @click.prevent="openExample"
+        >查看示例</a>
+      </div>
+      <ElRadioGroup
+        v-if="showContentViewport"
+        class="rich-editor__viewport"
+        :model-value="viewport"
+        @update:model-value="onViewportChange"
+      >
+        <ElRadio value="h5">H5</ElRadio>
+        <ElRadio value="pc">PC</ElRadio>
+      </ElRadioGroup>
+    </div>
+  </div>
 </template>
 
 <style scoped>
+.rich-editor-host {
+  width: 100%;
+  min-width: 0;
+}
+
+.rich-editor-host--side {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+/* 打开侧栏时编辑器仍用表单原来的 640，预览 / 示例 / H5 PC 挨在右侧 */
+.rich-editor-host--side > .rich-editor {
+  flex: 0 1 640px;
+  width: 640px;
+  max-width: 640px;
+}
+
+.rich-editor-host--side > .rich-editor.is-fullscreen {
+  flex: none;
+  width: 100vw;
+  max-width: none;
+}
+
+.rich-editor__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: none;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.rich-editor__side-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rich-editor__example {
+  color: var(--color-primary);
+  font-size: 13px;
+  line-height: 32px;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.rich-editor__example:hover {
+  opacity: 0.8;
+}
+
+.rich-editor__viewport {
+  display: inline-flex;
+  flex-wrap: nowrap;
+}
+
+.rich-editor__viewport :deep(.el-radio) {
+  height: 28px;
+  margin-right: 12px;
+}
+
+.rich-editor__viewport :deep(.el-radio:last-child) {
+  margin-right: 0;
+}
+
 .rich-editor {
   box-sizing: border-box;
   width: 100%;
@@ -504,6 +643,20 @@ defineExpose({ openPreview, openExample });
 .rich-editor__body {
   overflow-y: auto;
   min-width: 0;
+}
+
+/* H5：只收正文列到 375，工具栏和字数栏仍用外层原宽，填写时按手机宽度折行 */
+.rich-editor.is-h5-canvas:not(.is-fullscreen) .rich-editor__workspace {
+  align-items: center;
+  background: #f5f5f5;
+}
+
+.rich-editor.is-h5-canvas:not(.is-fullscreen) .rich-editor__body {
+  flex: none;
+  width: 375px;
+  max-width: 100%;
+  background: #fff;
+  box-shadow: 0 0 0 1px #e8e8e8;
 }
 
 .rich-editor__body :deep(img),

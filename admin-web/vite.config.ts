@@ -6,8 +6,15 @@ import AutoImport from "unplugin-auto-import/vite";
 import Components from "unplugin-vue-components/vite";
 import { ElementPlusResolver } from "unplugin-vue-components/resolvers";
 
+function listenPort(raw: string | undefined, fallback: number): number {
+  const n = Number(raw)
+  if (Number.isInteger(n) && n >= 1 && n <= 65535) return n
+  return fallback
+}
+
 export default defineConfig(({ mode }) => {
   const viteEnv = loadEnv(mode, process.cwd())
+  const fileEnv = loadEnv(mode, process.cwd(), "")
   const {
     VITE_APP_TOS_NATIVE_URL,
     VITE_APP_TOS_CDN_URL,
@@ -35,12 +42,12 @@ export default defineConfig(({ mode }) => {
       // 微信网站应用 redirect_uri 不宜带 :5173；本地用 80 使
       // http://wx.qktz.com.cn/api/v1/auth/wechat/callback 无端口（需管理员权限绑 80）
       host: true,
-      port: 80,
+      port: listenPort(fileEnv.ADMIN_WEB_PORT, 80),
       strictPort: true,
       allowedHosts: ["wx.qktz.com.cn", "localhost"],
       proxy: {
         "/api": {
-          target: "http://127.0.0.1:8081",
+          target: `http://127.0.0.1:${listenPort(fileEnv.ADMIN_SERVER_PORT, 8081)}`,
           changeOrigin: true,
         },
         // 仅代理 /tos/... 上传请求；勿匹配 /tos.umd.production.min.js（public 静态 SDK）

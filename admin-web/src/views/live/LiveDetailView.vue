@@ -12,7 +12,7 @@ import {
   type ActivityId,
 } from "@/api/activity";
 import { getAccessToken } from "@/utils/authSession";
-import { buildAudienceWatchUrl, buildLiveStudioPath } from "@/utils/liveLinks";
+import { buildAudienceWatchUrl, buildConsoleUrl, buildLiveStudioPath } from "@/utils/liveLinks";
 import { ActivityMemberRole } from "@/views/live/detail/role/roleTypes";
 import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 import UiButton from "@/components/ui/UiButton.vue";
@@ -182,8 +182,7 @@ function goLive() {
 
 function goConsole() {
   const token = getAccessToken() ?? "";
-  const url = `http://localhost:5174/console/${id.value}?token=${encodeURIComponent(token)}`;
-  window.open(url, "_blank", "noopener");
+  window.open(buildConsoleUrl(id.value, token), "_blank", "noopener");
 }
 
 onMounted(fetchDetail);

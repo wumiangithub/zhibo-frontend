@@ -1,9 +1,7 @@
 import { encodeAudienceInviteToken } from "./audienceInviteToken";
 import { encodeInviteToken } from "./inviteToken";
+import { liveWebOrigin } from "./liveWebOrigin";
 import { buildShareUrl } from "./shareUrl";
-
-/** 观众观看页根地址。换域名或端口只改这里。 */
-const AUDIENCE_WATCH_ORIGIN = "http://localhost:5174";
 
 /** 主播邀请页路径，须与路由 HostInviteView 一致。 */
 export const HOST_INVITE_PATH_PREFIX = "/invite/host";
@@ -44,7 +42,7 @@ export const PASSCODE_DEFAULT_NICKNAME = "讲师";
  */
 export function buildAudienceWatchUrl(activityId: string, employeeInviterId?: number): string {
   const id = activityId.trim();
-  const base = `${AUDIENCE_WATCH_ORIGIN}/watch/${id}`;
+  const base = `${liveWebOrigin()}/watch/${id}`;
   if (!employeeInviterId || employeeInviterId <= 0) return base;
   return buildShareUrl(base, encodeAudienceInviteToken(employeeInviterId), {
     kind: 1,
@@ -124,4 +122,13 @@ export function loadPasscodeStudioSession(): PasscodeStudioSession | null {
 
 export function clearPasscodeStudioSession(): void {
   sessionStorage.removeItem(PASSCODE_STUDIO_SESSION_KEY);
+}
+
+/** 中控台地址（live-web）。token 为空时不带 query。 */
+export function buildConsoleUrl(activityId: string, accessToken: string): string {
+  const id = activityId.trim();
+  const token = accessToken.trim();
+  const base = `${liveWebOrigin()}/console/${id}`;
+  if (!token) return base;
+  return `${base}?token=${encodeURIComponent(token)}`;
 }
