@@ -71,12 +71,12 @@ function onChatListScroll(e: Event) {
 </script>
 
 <template>
-  <div class="flex min-h-0 w-full flex-1 flex-col border-t border-gray-800 bg-gray-900 md:w-[360px] md:flex-none md:border-l md:border-t-0">
-    <div class="flex flex-none border-b border-gray-800">
+  <div class="flex min-h-0 w-full flex-1 flex-col border-t border-[var(--lw-border)] bg-[var(--lw-bg-panel)] md:w-[360px] md:flex-none md:border-l md:border-t-0">
+    <div class="flex flex-none border-b border-[var(--lw-border)]">
       <button
         type="button"
         class="flex-1 bg-transparent px-4 py-3 text-sm font-medium md:flex-1"
-        :class="activeTab === 'chat' ? 'border-b-2 border-red-500 text-red-500' : 'text-gray-400 hover:text-gray-200'"
+        :class="activeTab === 'chat' ? 'border-b-2 border-[var(--lw-color-brand)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
         @click="activeTab = 'chat'"
       >
         聊天
@@ -85,7 +85,7 @@ function onChatListScroll(e: Event) {
         v-if="!isReplay && barrage"
         type="button"
         class="hidden bg-transparent px-4 py-3 text-sm font-medium md:block md:flex-1"
-        :class="activeTab === 'barrage' ? 'border-b-2 border-red-500 text-red-500' : 'text-gray-400 hover:text-gray-200'"
+        :class="activeTab === 'barrage' ? 'border-b-2 border-[var(--lw-color-brand)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
         @click="activeTab = 'barrage'"
       >
         弹幕
@@ -93,7 +93,7 @@ function onChatListScroll(e: Event) {
       <button
         type="button"
         class="flex-1 bg-transparent px-4 py-3 text-sm font-medium"
-        :class="activeTab === 'intro' ? 'border-b-2 border-red-500 text-red-500' : 'text-gray-400 hover:text-gray-200'"
+        :class="activeTab === 'intro' ? 'border-b-2 border-[var(--lw-color-brand)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
         @click="activeTab = 'intro'"
       >
         简介

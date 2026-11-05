@@ -9,7 +9,7 @@ import { TosObjectKeyPrefix } from "@/utils/tosUpload";
 import CoursewareSection from "@/views/live/sections/CoursewareSection.vue";
 import AutoListSection from "@/views/live/sections/AutoListSection.vue";
 import {
-  COURSE_AUTO_LIST_INFO,
+  COURSE_LISTED_INFO,
   COURSE_DETAIL_PLACEHOLDER,
   type CourseBasicFormModel,
 } from "../composables/useCourseForm";
@@ -309,7 +309,7 @@ onMounted(() => {
           />
           <AutoListSection
             :form="form"
-            :info="COURSE_AUTO_LIST_INFO"
+            :info="COURSE_LISTED_INFO"
           />
         </div>
       </div>

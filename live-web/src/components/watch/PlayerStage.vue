@@ -32,6 +32,13 @@ function syncStageEl(el: HTMLElement | null) {
   props.player.bindStageEl(el);
 }
 
+/** 播放中点舞台空白暂停（底栏播放中隐藏，对齐回放 stage click）；暂停态由居中钮 .stop 起播 */
+function onStageClick() {
+  if (props.player.mediaFailed || props.player.waitingForMedia) return;
+  if (props.player.isPaused || props.player.needsTapToPlay) return;
+  props.player.pausePlayback();
+}
+
 onMounted(() => syncStageEl(stageRef.value));
 watch(stageRef, (el) => syncStageEl(el));
 onBeforeUnmount(() => syncStageEl(null));
@@ -47,16 +54,27 @@ onBeforeUnmount(() => syncStageEl(null));
         : 'min-h-0 min-w-0 flex-1',
       { 'player-stage-fullscreen': player.pseudoFullscreen },
     ]"
+    @click="onStageClick"
   >
     <button
       v-if="!player.waitingForMedia && !player.mediaFailed && (player.needsTapToPlay || player.isPaused)"
       type="button"
       class="center-play-hit"
       :aria-label="showAudioVisual ? '点击收听' : '点击播放'"
-      @click="player.resumePlayback"
+      @click.stop="player.resumePlayback"
     >
       <span class="center-play-orb" aria-hidden="true">
-        <span class="center-play-icon" />
+        <!-- SVG 矢量，避免 PNG 缩放重影/发糊；圆角三角与底栏同源 -->
+        <svg
+          class="center-play-icon"
+          viewBox="0 0 24 24"
+          fill="#fff"
+          aria-hidden="true"
+        >
+          <path
+            d="M8.9 4.95C8.15 4.5 7.2 5.05 7.2 5.95v12.1c0 .9.95 1.45 1.7 1l9.5-5.55c.8-.47.8-1.73 0-2.2L8.9 4.95z"
+          />
+        </svg>
       </span>
     </button>
 
@@ -71,7 +89,7 @@ onBeforeUnmount(() => syncStageEl(null));
       v-else-if="player.mediaFailed"
       class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/70 px-4 text-center"
     >
-      <span class="text-sm text-red-300">{{ player.failReason || '播放器加载失败' }}</span>
+      <span class="text-sm text-[var(--lw-color-danger)]">{{ player.failReason || '播放器加载失败' }}</span>
       <span class="text-xs text-gray-400">
         若直播确实在播，多半是微吼 SDK 瞬时抖动（20005），可点刷新重试
       </span>
@@ -91,8 +109,8 @@ onBeforeUnmount(() => syncStageEl(null));
       class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-6 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6"
     >
       <div class="flex flex-col items-center gap-2">
-        <span class="inline-flex items-center gap-2 rounded-full bg-red-600/20 px-3 py-1 text-xs font-medium text-red-400">
-          <span class="h-2 w-2 animate-pulse rounded-full bg-red-500"></span>
+        <span class="inline-flex items-center gap-2 rounded-full bg-[var(--lw-color-danger-muted)] px-3 py-1 text-xs font-medium text-[var(--lw-color-live)]">
+          <span class="h-2 w-2 animate-pulse rounded-full bg-[var(--lw-color-live)]"></span>
           直播中
         </span>
         <h2 class="mt-2 text-xl font-semibold text-white">{{ title }}</h2>
@@ -121,8 +139,9 @@ onBeforeUnmount(() => syncStageEl(null));
 
     <BarrageLayer :barrage="barrage" />
 
+    <!-- 媒体就绪即挂载；显隐由 PlayerToolbar controlsRevealed（默认藏，播放→暂停揭 5s） -->
     <PlayerToolbar
-      v-if="!player.mediaFailed && !player.waitingForMedia && !player.needsTapToPlay && !player.isPaused"
+      v-if="!player.mediaFailed && !player.waitingForMedia"
       :player="player"
       :barrage="barrage"
       :stats="stats"
@@ -139,13 +158,12 @@ onBeforeUnmount(() => syncStageEl(null));
   z-index: 9999;
   width: 100vw;
   height: 100dvh;
-  background: #000;
+  background: var(--lw-bg-player);
 }
 
 /*
- * 自建底栏时永久藏微吼原生控制条。
- * hiddneControl 只作用于 .vhallPlayer-container / shadow，不覆盖 .vh-player-controller；
- * 以前靠自建条 z-index 叠盖，暂停卸掉 PlayerToolbar 后原生条会露出来。
+ * 轻量 CSS 兜底：playerReady 前原生条可能闪一下。
+ * 主路径：VhallWatchAdapter 在 playerReady 后 removeChild（对齐 demo）；无 MutationObserver。
  */
 #player :deep(.vh-player-controller),
 #player :deep(.vh-player-record-control) {
@@ -163,7 +181,7 @@ onBeforeUnmount(() => syncStageEl(null));
   background: transparent;
 }
 
-/* 小屏 orb 60 / PC(md≥768) 80；三角固定 24 / 34 */
+/* 小屏 orb 60 / PC(md≥768) 80；三角 32 / 44（相对圆约 +30%，不溢出） */
 .center-play-orb {
   --orb: 60px;
   display: flex;
@@ -183,18 +201,17 @@ onBeforeUnmount(() => syncStageEl(null));
 
 .center-play-icon {
   display: block;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
+  /* 三角视觉重心偏左，略右移居中 */
   margin-left: calc(var(--orb) * 3 / 64);
-  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAkCAMAAADfNcjQAAAAOVBMVEVHcEz///////////////////////////////////////////////////////////////////////99PJZNAAAAEnRSTlMAKuyQatU8BeL5g1MYqZ2+DsbzwSs0AAAAuUlEQVQ4y4WU2RaEIAxDC7K6IOb/P3ZGxzm4lDavXLGEBCKiOQSSNGQgudhdH3Goi8QMiEhAk58YYMJVq3kBDneVmZ+xybrHIfHS/T/LG0AeL+dZwck3bz14DVEB4M9JUg/4T9IHgG3fxAoA0te1LAEoGmCJoAHyDosypDUycHgl+PBzu2t1CvJdlHpe1sZ/PomBwVBbYIqYFi60+dGfZ+yXWSzOFsTqJa56VSuvWn+K2gOyP0Gmv/gBafkv2boUnyIAAAAASUVORK5CYII=");
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
+  flex: none;
 }
 
 @media (min-width: 768px) {
   .center-play-icon {
-    width: 34px;
-    height: 34px;
+    width: 44px;
+    height: 44px;
   }
 }
 

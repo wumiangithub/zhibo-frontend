@@ -474,13 +474,7 @@ onMounted(fetchList);
               >
                 数据
               </RouterLink>
-              <button
-                type="button"
-                class="op-link"
-                @click="openAuditRecords(row as CourseListItem)"
-              >
-                审核记录
-              </button>
+              <!-- D109：去审核 / 审核记录入口暂隐藏，接口与路由保留 -->
               <ElDropdown
                 trigger="click"
                 @command="(cmd: string) => onMoreCommand(cmd, row as CourseListItem)"
@@ -494,7 +488,6 @@ onMounted(fetchList);
                 <template #dropdown>
                   <ElDropdownMenu>
                     <ElDropdownItem command="share">分享</ElDropdownItem>
-                    <ElDropdownItem command="audit">去审核</ElDropdownItem>
                     <ElDropdownItem
                       v-if="row.shelfStatus === 'pending' || row.shelfStatus === 'off'"
                       command="on"

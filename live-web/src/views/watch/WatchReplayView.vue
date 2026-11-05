@@ -7,6 +7,7 @@ import NativeReplayPlayer from "@/components/watch/NativeReplayPlayer.vue";
 import WatchRoomShell from "@/components/watch/WatchRoomShell.vue";
 import WatchSidePanel from "@/components/watch/WatchSidePanel.vue";
 import ProductSheet from "@/components/watch/ProductSheet.vue";
+import UiPageHeader from "@/components/UiPageHeader.vue";
 import { useReplayWatch } from "@/composables/useReplayWatch";
 import { useChatHistory } from "@/composables/useChatHistory";
 import { useWatchCart } from "@/composables/useWatchCart";
@@ -17,10 +18,12 @@ import {
   syncViewerIdFromUrl,
 } from "@/utils/viewerAuth";
 import { storeNickname } from "@/api/watch";
-import { ensureWxJsSdk } from "@/utils/miniProgram";
+import { ensureWxJsSdk, isLikelyMiniProgramWebView } from "@/utils/miniProgram";
 
 const route = useRoute();
 const router = useRouter();
+/** 小程序 web-view 已有原生顶栏，不再叠一层返回 Header */
+const inMiniProgram = isLikelyMiniProgramWebView();
 
 const activityId = computed(() => String(route.params.id ?? ""));
 const recordIdParam = computed(() => {
@@ -63,6 +66,7 @@ const {
   cartProducts,
   openCart,
   closeCart,
+  buyProduct,
 } = useWatchCart(() => activityId.value);
 
 function preservedQuery(): Record<string, string | string[]> {
@@ -143,21 +147,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-dvh flex-col bg-black text-white">
-    <header
-      class="flex flex-none items-center gap-3 border-b border-gray-800 px-3 py-2 md:px-4"
-    >
-      <button
-        type="button"
-        class="flex-none rounded-md bg-transparent px-2 py-1 text-sm text-gray-400 hover:bg-gray-800 hover:text-white"
-        @click="goBackToWatch"
-      >
-        返回
-      </button>
-      <h1 class="min-w-0 flex-1 truncate text-sm font-medium md:text-base">
-        {{ record?.title || summary?.title || "回放" }}
-      </h1>
-    </header>
+  <div
+    class="lw-theme flex h-dvh flex-col bg-[var(--lw-bg-canvas)] text-[var(--lw-text-primary)]"
+    data-lw-theme="dark"
+  >
+    <UiPageHeader
+      v-if="!inMiniProgram"
+      :title="record?.title || summary?.title || '回放'"
+      @back="goBackToWatch"
+    />
 
     <div class="flex min-h-0 flex-1 flex-col">
       <p
@@ -214,6 +212,7 @@ onMounted(() => {
       :error="cartError"
       :products="cartProducts"
       @close="closeCart"
+      @buy="buyProduct"
     />
   </div>
 </template>

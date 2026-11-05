@@ -1,12 +1,34 @@
 import { reactive } from "vue";
 
+/** 官方 demo Notice：实时 `res.data.room_announcement_text`；历史条目多为 `content` */
+function pickAnnouncementText(raw: unknown): string {
+  const root = raw && typeof raw === "object" ? (raw as Record<string, any>) : {};
+  // $on 回调常是整包 res；也兼容直接传 data / data.data
+  const layer =
+    root.data && typeof root.data === "object" && !Array.isArray(root.data)
+      ? (root.data as Record<string, any>)
+      : root;
+  const nested =
+    layer.data && typeof layer.data === "object" && !Array.isArray(layer.data)
+      ? (layer.data as Record<string, any>)
+      : null;
+  return (
+    layer.room_announcement_text ||
+    nested?.room_announcement_text ||
+    layer.content ||
+    layer.announcement ||
+    nested?.content ||
+    nested?.announcement ||
+    ""
+  );
+}
+
 /** 房间公告：实时推送 + 进房拉历史，取最新一条 */
 export function useAnnouncement(getSdk: () => VhallSdkInstance | null) {
   const notice = reactive({ text: "" });
 
   function handleAnnouncement(data: unknown) {
-    const payload = data as { content?: string; announcement?: string };
-    const text = payload.content || payload.announcement || "";
+    const text = pickAnnouncementText(data);
     if (text) {
       notice.text = text;
     }
@@ -21,8 +43,7 @@ export function useAnnouncement(getSdk: () => VhallSdkInstance | null) {
       const raw = res as Record<string, any>;
       const list: Record<string, any>[] = Array.isArray(raw) ? raw : raw.data?.data || raw.data || [];
       if (list.length > 0) {
-        const latest = list[0] as { content?: string; announcement?: string };
-        const text = latest.content || latest.announcement || "";
+        const text = pickAnnouncementText(list[0]);
         if (text) {
           notice.text = text;
         }

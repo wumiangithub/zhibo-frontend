@@ -282,7 +282,8 @@ onMounted(() => {
         <!-- 与观看页同：预告/直播/结束共挂 PlayerStage，结束不拆 SDK -->
         <div
           v-else-if="data && (isPreview || isLive || isEnded || isReplay)"
-          class="relative flex min-h-0 flex-1 flex-col"
+          class="lw-theme relative flex min-h-0 flex-1 flex-col"
+          data-lw-theme="dark"
         >
           <PreviewScreen
             v-if="isPreview"

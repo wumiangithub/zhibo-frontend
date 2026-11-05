@@ -7,7 +7,7 @@ export interface CourseBasicFormModel {
   detailHtml: string;
   coverMaterialId: string;
   coverUrl: string;
-  autoList: boolean;
+  listed: boolean;
   ownerIds: number[];
   coursewareMaterialIds: string[];
   coursewares: ActivityCourseware[];
@@ -19,11 +19,11 @@ export const COURSE_DETAIL_PLACEHOLDER = [
   "3.图片支持jpg、png、gif格式，每张图片大小不超过5M",
 ].join("\n");
 
-export const COURSE_AUTO_LIST_INFO =
-  "若选是，合规风控部门审核课程信息及课程资料通过后，课程/子课程/小节会自动上架";
+export const COURSE_LISTED_INFO =
+  "勾选后，保存成功即上架；不勾选则为待上架，之后可在列表手动上架";
 
 export function createEmptyCourseForm(
-  defaults?: Partial<Pick<CourseBasicFormModel, "autoList" | "ownerIds">>,
+  defaults?: Partial<Pick<CourseBasicFormModel, "listed" | "ownerIds">>,
 ): CourseBasicFormModel {
   return reactive({
     name: "",
@@ -31,7 +31,7 @@ export function createEmptyCourseForm(
     detailHtml: "",
     coverMaterialId: "",
     coverUrl: "",
-    autoList: defaults?.autoList ?? true,
+    listed: defaults?.listed ?? false,
     ownerIds: [...(defaults?.ownerIds ?? [])],
     coursewareMaterialIds: [],
     coursewares: [],

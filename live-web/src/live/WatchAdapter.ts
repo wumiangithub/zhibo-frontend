@@ -29,8 +29,9 @@ export interface WatchAdapterHandlers {
    */
   onModuleReady?: () => void;
   /**
-   * 官方 `playerReady`：播放器初始化成功（见微吼 events；demo 用它置 videoIsReady）。
-   * 上层应优先据此推进自建底栏就绪；若当时 #player 内尚无 media，可短暂轮询兜底。
+   * 官方 `playerReady`：播放器初始化成功（见微吼 events；demo 用它置 videoIsReady / 绑 isPlaying）。
+   * 上层应优先据此推进自建底栏就绪，并尝试 watch `playerServer.state.isPlaying`；
+   * 若当时 #player 内尚无 media，可短 burst 轮询找节点（非常驻扫 DOM）。
    */
   onPlayerReady?: () => void;
   /**

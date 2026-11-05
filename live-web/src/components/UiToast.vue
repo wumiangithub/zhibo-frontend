@@ -21,7 +21,7 @@ const { message, visible } = useToast();
 <style scoped>
 .toast {
   position: fixed;
-  bottom: 48px;
+  top: calc(48px + env(safe-area-inset-top, 0px));
   left: 50%;
   z-index: 9999;
   max-width: min(90vw, 360px);
@@ -47,6 +47,6 @@ const { message, visible } = useToast();
 .toast-enter-from,
 .toast-leave-to {
   opacity: 0;
-  transform: translate(-50%, 8px);
+  transform: translate(-50%, -8px);
 }
 </style>

@@ -71,7 +71,6 @@ export interface CourseListItem {
   coverUrl?: string;
   shelfStatus: ShelfStatus;
   riskStatus: RiskStatus;
-  autoList?: boolean;
   listedTime?: string;
   owners?: CoursePerson[];
   contentCount: number;
@@ -118,20 +117,19 @@ export interface CreateCoursePayload {
   introduction?: string;
   detailHtml?: string;
   coverMaterialId: string;
-  autoList: boolean;
+  /** 是否上架：true → 创建/保存成功 shelfStatus=on */
+  listed: boolean;
   /** 归属人员工 id（rs_mainkey_id） */
   ownerIds: number[];
   /** 课件（有序）：素材 id + 学员权限 */
   materials?: CreateCourseMaterialItem[];
-  /** @deprecated 兼容旧调用；优先传 materials */
-  materialIds?: string[];
 }
 
 export function createCourse(payload: CreateCoursePayload) {
   return post<{ id: string }>("/courses/create", payload);
 }
 
-/** 更新课程基本信息；审核中不可改，保存后重新进入待审核 */
+/** 更新课程基本信息；免审保持 passed；listed 立刻改上架 */
 export type UpdateCoursePayload = CreateCoursePayload;
 
 export function updateCourse(id: string, payload: UpdateCoursePayload) {
@@ -357,26 +355,6 @@ export function deleteCatalogSubcourse(
 
 export function reorderCatalogSubcourses(courseId: string, ids: number[]) {
   return post<null>(`/courses/catalog/subcourses/reorder/${encodeURIComponent(courseId)}`, { ids });
-}
-
-export function reorderCatalogChapters(
-  courseId: string,
-  payload: { parentId: number; ids: number[] },
-) {
-  return post<null>(
-    `/courses/catalog/chapters/reorder/${encodeURIComponent(courseId)}`,
-    payload,
-  );
-}
-
-export function reorderCatalogLessons(
-  courseId: string,
-  payload: { parentId: number; ids: number[] },
-) {
-  return post<null>(
-    `/courses/catalog/lessons/reorder/${encodeURIComponent(courseId)}`,
-    payload,
-  );
 }
 
 /** 目录排序弹窗统一保存：`mode` 为 chapters | lessons */

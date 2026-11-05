@@ -41,7 +41,19 @@ export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
 
   async function loadRoomId() {
     const sdk = getSdk();
-    // interact_token 同步可得且稳定，优先用它；getRoominfo 偶发挂起会卡死轮询，故只作超时兜底
+    // 1) 官方 Praise demo：优先 sdk.config.lssRoomId
+    const fromConfig = sdk?.config?.lssRoomId?.trim() || "";
+    if (fromConfig) {
+      roomId = fromConfig;
+      return;
+    }
+    // 2) 可选：watchInit 里的 interact.room_id（与 chat 等同路径）
+    const fromWatchInit = sdk?.roomBaseServer?.state?.watchInitData?.interact?.room_id?.trim() || "";
+    if (fromWatchInit) {
+      roomId = fromWatchInit;
+      return;
+    }
+    // 3) 兜底：JWT interact_token（config 尚未灌好时仍可能有）；getRoominfo 偶发挂起，仅超时兜底
     roomId = roomIdFromToken();
     if (roomId || !sdk?.getRoominfo) return;
     try {

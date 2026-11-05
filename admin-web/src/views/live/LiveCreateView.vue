@@ -38,7 +38,7 @@ function buildPayload(): CreateActivityPayload {
     type: MODE_TO_TYPE[form.mode],
     viewerStyle: form.viewerStyle,
     ultraLowLatency: form.ultraLowLatency,
-    autoList: form.autoList,
+    listed: form.listed,
     hostIds: form.hostIds.slice(0, 1).map((id) => Number(id)),
     reportId: form.reportId.trim(),
   };

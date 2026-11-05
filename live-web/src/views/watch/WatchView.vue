@@ -18,6 +18,7 @@ import WatchSidePanel from "@/components/watch/WatchSidePanel.vue";
 import AccessPasswordDialog from "@/components/watch/AccessPasswordDialog.vue";
 import AccessBlockedScreen from "@/components/watch/AccessBlockedScreen.vue";
 import ProductSheet from "@/components/watch/ProductSheet.vue";
+import UiPageHeader from "@/components/UiPageHeader.vue";
 import { listWatchRecords, type WatchRecordItem } from "@/api/replayWatch";
 import { useWatchSession } from "@/composables/useWatchSession";
 import { useWatchAccessGate } from "@/composables/useWatchAccessGate";
@@ -34,12 +35,14 @@ import {
   syncViewerAccessTokenFromUrl,
   syncViewerIdFromUrl,
 } from "@/utils/viewerAuth";
-import { ensureWxJsSdk } from "@/utils/miniProgram";
+import { ensureWxJsSdk, isLikelyMiniProgramWebView } from "@/utils/miniProgram";
 import { goViewerLogin, recoverViewerAuth } from "@/utils/viewerLogin";
 import { reportLessonProgress } from "@/api/learning";
 
 const route = useRoute();
 const router = useRouter();
+/** 小程序 web-view 已有原生顶栏，不再叠一层返回 Header */
+const inMiniProgram = isLikelyMiniProgramWebView();
 const id = String(route.params.id);
 const courseContextId = String(route.query.courseId ?? "").trim().toLowerCase();
 const courseLessonNodeId = Number(route.query.lessonNodeId);
@@ -51,6 +54,7 @@ const {
   cartProducts,
   openCart,
   closeCart,
+  buyProduct,
 } = useWatchCart(() => id);
 
 const routeQuery = route.query as Record<string, unknown>;
@@ -218,6 +222,22 @@ function preservedWatchQuery(): Record<string, string | string[]> {
   return q;
 }
 
+/** H5 顶栏返回：有课程上下文回课程详情，否则 history.back，再否则首页 */
+function goBackFromWatch() {
+  if (courseContextId) {
+    void router.replace({
+      name: "learning-course",
+      params: { id: courseContextId },
+    });
+    return;
+  }
+  if (window.history.length > 1) {
+    router.back();
+    return;
+  }
+  void router.replace("/");
+}
+
 function goReplay(recordId: number) {
   void router.push({
     name: "watch-replay",
@@ -329,7 +349,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-dvh flex-col bg-black text-white">
+  <div
+    class="lw-theme flex h-dvh flex-col bg-[var(--lw-bg-canvas)] text-[var(--lw-text-primary)]"
+    data-lw-theme="dark"
+  >
+    <UiPageHeader
+      v-if="!inMiniProgram"
+      class="md:hidden"
+      :title="data?.title || '直播'"
+      @back="goBackFromWatch"
+    />
+
     <div class="flex min-h-0 flex-1 flex-col">
       <NicknameForm
         v-if="showNicknameForm"
@@ -382,14 +412,14 @@ onMounted(() => {
         </div>
 
         <!-- PC 顶栏 -->
-        <div class="hidden flex-none items-center justify-between gap-4 border-b border-gray-800 px-4 py-2 md:flex">
+        <div class="hidden flex-none items-center justify-between gap-4 border-b border-[var(--lw-border)] px-4 py-2 md:flex">
           <div class="flex min-w-0 items-center gap-2">
-            <h1 class="truncate text-sm font-semibold text-white">
+            <h1 class="truncate text-sm font-semibold text-[var(--lw-text-primary)]">
               {{ data?.title || '直播' }}
             </h1>
             <span
               v-if="data && isLive"
-              class="inline-flex flex-none items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium text-white"
+              class="inline-flex flex-none items-center gap-1 rounded bg-[var(--lw-color-live)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--lw-text-on-brand)]"
             >
               <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-white"></span>
               直播中
@@ -398,7 +428,7 @@ onMounted(() => {
           <div class="flex flex-none items-center gap-3">
             <button
               type="button"
-              class="flex h-7 w-7 flex-none items-center justify-center rounded bg-transparent text-white hover:text-red-500"
+              class="flex h-7 w-7 flex-none items-center justify-center rounded bg-transparent text-[var(--lw-text-primary)] hover:text-[var(--lw-color-brand)]"
               title="分享"
               @click="shareWatch"
             >
@@ -439,7 +469,7 @@ onMounted(() => {
           v-else-if="error"
           class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
         >
-          <p class="text-sm text-red-400">{{ error }}</p>
+          <p class="text-sm text-[var(--lw-color-danger)]">{{ error }}</p>
           <div class="flex gap-3">
             <button
               class="rounded-md border border-gray-600 bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
@@ -467,7 +497,7 @@ onMounted(() => {
 
           <EndedScreen
             v-if="isEnded || isReplay"
-            class="absolute inset-0 z-20"
+            class="absolute inset-0 z-[100]"
             :data="data"
             :show-replay-entry="showReplayEntry"
             :playback-expired="playbackExpired"
@@ -538,6 +568,7 @@ onMounted(() => {
       :error="cartError"
       :products="cartProducts"
       @close="closeCart"
+      @buy="buyProduct"
     />
 
     <RecordPickerSheet

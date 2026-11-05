@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { PlayerController } from "@/composables/usePlayerControls";
 import type { BarrageController } from "@/composables/useBarrage";
 import type { RoomStatsController } from "@/composables/useRoomStats";
 import UiBottomSheet from "@/components/UiBottomSheet.vue";
+import SheetOptionList from "@/components/SheetOptionList.vue";
 
 const props = defineProps<{
   player: PlayerController;
@@ -12,6 +13,10 @@ const props = defineProps<{
   /** 观看页小屏：点赞改走聊天底栏 */
   hideMobileBarActions?: boolean;
 }>();
+
+/** 明显圆角 ▶（与 NativeReplayPlayer 同源；24 视口、20px 下钝角，非尖三角） */
+const PLAY_ICON_PATH =
+  "M8.9 4.95C8.15 4.5 7.2 5.05 7.2 5.95v12.1c0 .9.95 1.45 1.7 1l9.5-5.55c.8-.47.8-1.73 0-2.2L8.9 4.95z";
 
 /** 与观看页 Uno `md` 一致：<768 小屏（无 hover 滑条，清晰度用底部 popup） */
 const isNarrow = ref(false);
@@ -28,11 +33,65 @@ const HOVER_HIDE_MS = 120;
 let qualityLeaveTimer: ReturnType<typeof setTimeout> | null = null;
 let volumeLeaveTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * 对齐 NativeReplayPlayer：默认收起；仅「播放→暂停」揭开；5s 无操作收起；
+ * sheet/飞出打开时强制显示且不计时。
+ */
+const controlsRevealed = ref(false);
+const CONTROLS_HIDE_MS = 5000;
+let controlsHideTimer: ReturnType<typeof setTimeout> | null = null;
+
+function clearControlsHideTimer() {
+  if (controlsHideTimer != null) {
+    clearTimeout(controlsHideTimer);
+    controlsHideTimer = null;
+  }
+}
+
+function anyOverlayOpen() {
+  return (
+    qualitySheetOpen.value ||
+    (!isNarrow.value && (qualityHover.value || qualityPinned.value)) ||
+    (!isNarrow.value && volumeHover.value)
+  );
+}
+
+/** 暂停态显示底栏并（重新）计 5s；sheet/飞出打开时只显示不计时 */
+function revealControls(restartTimer = true) {
+  controlsRevealed.value = true;
+  clearControlsHideTimer();
+  if (!restartTimer) return;
+  if (!props.player.isPaused || anyOverlayOpen()) return;
+  controlsHideTimer = setTimeout(() => {
+    controlsHideTimer = null;
+    controlsRevealed.value = false;
+  }, CONTROLS_HIDE_MS);
+}
+
+/** 播放中隐藏；暂停且已揭开显示；清晰度 sheet/飞出、音量飞出强制显示 */
+const controlsVisible = computed(
+  () =>
+    (props.player.isPaused && controlsRevealed.value) || anyOverlayOpen(),
+);
+
+/** 暂停态点操作栏：重置 5s */
+function onControlsInteract() {
+  if (props.player.isPaused) revealControls(true);
+}
+
 const currentQualityLabel = computed(() => {
   const code = props.player.currentQualityCode;
   const hit = props.player.qualityOptions.find((q) => q.code === code);
   return hit?.label || "清晰度";
 });
+
+const qualitySheetOptions = computed(() =>
+  props.player.qualityOptions.map((q) => ({
+    key: q.code,
+    label: q.label,
+    selected: q.code === props.player.currentQualityCode,
+  })),
+);
 
 /** 仅 PC 飞出层；小屏用 UiBottomSheet */
 const qualityPanelOpen = computed(
@@ -109,10 +168,12 @@ function pickQuality(code: string) {
   qualityHover.value = false;
   qualitySheetOpen.value = false;
   clearQualityLeaveTimer();
+  if (props.player.isPaused) revealControls(true);
 }
 
 /** 小屏：底部 popup；PC：点击 pin 飞出层 */
 function onQualityLabelClick() {
+  onControlsInteract();
   volumeHover.value = false;
   clearVolumeLeaveTimer();
   if (isNarrow.value) {
@@ -123,6 +184,7 @@ function onQualityLabelClick() {
 }
 
 function onVolumeIconClick() {
+  onControlsInteract();
   qualityPinned.value = false;
   clearQualityLeaveTimer();
   qualityHover.value = false;
@@ -145,6 +207,7 @@ function volumeFromClientY(clientY: number): number {
 function onVolumeTrackPointerDown(e: PointerEvent) {
   e.preventDefault();
   e.stopPropagation();
+  onControlsInteract();
   const el = e.currentTarget as HTMLElement;
   el.setPointerCapture?.(e.pointerId);
   props.player.beginVolumeDrag();
@@ -155,6 +218,7 @@ function onVolumeTrackPointerDown(e: PointerEvent) {
 }
 
 function onVolumePointerMove(e: PointerEvent) {
+  onControlsInteract();
   props.player.setVolume(volumeFromClientY(e.clientY));
 }
 
@@ -176,6 +240,29 @@ function onVolumeTrackPointerDownGuarded(e: PointerEvent) {
   onVolumeTrackPointerDown(e);
 }
 
+/** 仅 wasPlaying→暂停才揭开；起播立即收起（进房默认暂停不揭） */
+watch(
+  () => props.player.isPaused,
+  (paused, wasPaused) => {
+    if (!paused) {
+      clearControlsHideTimer();
+      controlsRevealed.value = false;
+      return;
+    }
+    if (wasPaused === false) revealControls(true);
+  },
+);
+
+/** sheet / PC 飞出打开时强制显示且不计时；从打开→关闭后若仍暂停再计 5s（勿在 isNarrow 初同步时误揭） */
+watch(anyOverlayOpen, (open, wasOpen) => {
+  if (open) {
+    clearControlsHideTimer();
+    controlsRevealed.value = true;
+    return;
+  }
+  if (wasOpen && props.player.isPaused) revealControls(true);
+});
+
 onMounted(() => {
   narrowMql = window.matchMedia("(max-width: 767px)");
   syncNarrow();
@@ -183,6 +270,7 @@ onMounted(() => {
   document.addEventListener("pointerdown", onDocPointerDown);
 });
 onBeforeUnmount(() => {
+  clearControlsHideTimer();
   narrowMql?.removeEventListener("change", syncNarrow);
   narrowMql = null;
   document.removeEventListener("pointerdown", onDocPointerDown);
@@ -196,7 +284,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="player-toolbar" @click.stop>
+  <div
+    class="player-toolbar"
+    :class="{ 'is-hidden': !controlsVisible }"
+    @click.stop="onControlsInteract"
+    @pointerdown.stop="onControlsInteract"
+  >
     <div class="toolbar-left">
       <button
         type="button"
@@ -204,23 +297,25 @@ onBeforeUnmount(() => {
         :title="player.isPaused || player.needsTapToPlay ? '播放' : '暂停'"
         @click="player.togglePlayback"
       >
-        <!-- 暂停中：播放三角 -->
+        <!-- 暂停中：圆角播放三角 -->
         <svg
           v-if="player.isPaused || player.needsTapToPlay"
           class="bar-icon"
           viewBox="0 0 24 24"
           fill="currentColor"
         >
-          <path d="M8 5v14l11-7L8 5z" />
+          <path :d="PLAY_ICON_PATH" />
         </svg>
-        <!-- 播放中：暂停双竖线 -->
+        <!-- 播放中：圆角暂停双竖线 -->
         <svg
           v-else
           class="bar-icon"
           viewBox="0 0 24 24"
           fill="currentColor"
         >
-          <path d="M6 5h4v14H6V5zm8 0h4v14h-4V5z" />
+          <path
+            d="M7 5h2a1 1 0 011 1v12a1 1 0 01-1 1H7a1 1 0 01-1-1V6a1 1 0 011-1zm8 0h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V6a1 1 0 011-1z"
+          />
         </svg>
       </button>
     </div>
@@ -314,31 +409,48 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- 弹幕 -->
+      <!-- 弹幕：白「弹」；关态仅加斜线（不加红/品牌色） -->
       <button
         type="button"
-        class="bar-btn"
+        class="bar-btn barrage-btn"
         :title="barrage.barrageOn ? '关弹幕' : '开弹幕'"
+        :aria-pressed="barrage.barrageOn"
         @click="barrage.toggleBarrage"
       >
         <svg
-          v-if="barrage.barrageOn"
           class="bar-icon"
-          fill="none"
-          stroke="currentColor"
           viewBox="0 0 24 24"
+          aria-hidden="true"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5M4 6h16a1 1 0 011 1v10a1 1 0 01-1 1H8l-4 3V7a1 1 0 011-1z" />
-        </svg>
-        <svg
-          v-else
-          class="bar-icon"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16a1 1 0 011 1v10a1 1 0 01-1 1H8l-4 3V7a1 1 0 011-1z" />
-          <path stroke-linecap="round" stroke-width="2" d="M5 5l14 14" />
+          <rect
+            x="3.25"
+            y="4.5"
+            width="17.5"
+            height="15"
+            rx="2.4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.75"
+          />
+          <text
+            x="12"
+            y="15"
+            text-anchor="middle"
+            fill="currentColor"
+            font-size="9"
+            font-weight="700"
+            font-family="system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+          >弹</text>
+          <line
+            v-if="!barrage.barrageOn"
+            x1="5.5"
+            y1="18"
+            x2="18.5"
+            y2="6"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linecap="round"
+          />
         </svg>
       </button>
 
@@ -383,32 +495,13 @@ onBeforeUnmount(() => {
     <UiBottomSheet
       :open="qualitySheetOpen"
       title="清晰度"
+      show-handle
       @close="qualitySheetOpen = false"
     >
-      <ul class="py-1">
-        <li
-          v-for="q in player.qualityOptions"
-          :key="q.code"
-        >
-          <button
-            type="button"
-            class="flex w-full items-center justify-between px-4 py-3.5 text-left text-[15px] active:bg-gray-800"
-            :class="q.code === player.currentQualityCode ? 'text-red-400' : 'text-gray-100'"
-            @click="pickQuality(q.code)"
-          >
-            <span>{{ q.label }}</span>
-            <svg
-              v-if="q.code === player.currentQualityCode"
-              class="h-5 w-5 flex-none"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-          </button>
-        </li>
-      </ul>
+      <SheetOptionList
+        :options="qualitySheetOptions"
+        @select="(key) => pickQuality(String(key))"
+      />
     </UiBottomSheet>
   </div>
 </template>
@@ -425,9 +518,23 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   padding: 0 12px;
-  background: #1f2937;
-  color: #fff;
+  /* 半透明深底，视频可透出；轻 blur 保白字可读 */
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--lw-text-primary);
   overflow: visible;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.player-toolbar.is-hidden {
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
 }
 
 .toolbar-left {
@@ -455,7 +562,13 @@ onBeforeUnmount(() => {
 }
 
 .bar-btn:hover {
-  color: #ef4444;
+  color: var(--lw-color-brand);
+}
+
+/* 弹幕开关：开/关都保持白色，关态只靠斜线区分，不用红/品牌色 */
+.barrage-btn,
+.barrage-btn:hover {
+  color: #fff;
 }
 
 .bar-icon {
@@ -511,7 +624,7 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   padding: 4px 0;
   list-style: none;
-  background: #262626;
+  background: var(--lw-bg-bubble);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -521,13 +634,13 @@ onBeforeUnmount(() => {
   line-height: 44px;
   text-align: center;
   font-size: 14px;
-  color: #fff;
+  color: var(--lw-text-primary);
   cursor: pointer;
 }
 
 .quality-item:hover,
 .quality-item.is-active {
-  color: #ef4444;
+  color: var(--lw-color-brand);
 }
 
 /* 竖条音量：深色圆角胶囊；自定义轨道（底=0 顶=100） */
@@ -584,7 +697,7 @@ onBeforeUnmount(() => {
 
 .volume-track-fill {
   bottom: 0;
-  background: #ef4444;
+  background: var(--lw-color-brand);
 }
 
 .volume-track-thumb {
@@ -595,7 +708,7 @@ onBeforeUnmount(() => {
   margin-left: -6px;
   margin-bottom: -6px;
   border-radius: 50%;
-  background: #ef4444;
+  background: var(--lw-color-brand);
   pointer-events: none;
 }
 </style>

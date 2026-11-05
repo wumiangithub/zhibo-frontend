@@ -32,8 +32,8 @@ const emit = defineEmits<{ enter: [] }>();
     >
       <div class="w-full max-w-sm rounded-lg bg-gray-800 p-6 text-center">
         <div class="mb-4 flex justify-center">
-          <span class="inline-flex items-center gap-2 rounded-full bg-red-600/20 px-3 py-1 text-sm font-medium text-red-400">
-            <span class="h-2 w-2 animate-pulse rounded-full bg-red-500"></span>
+          <span class="inline-flex items-center gap-2 rounded-full bg-[var(--lw-color-danger-muted)] px-3 py-1 text-sm font-medium text-[var(--lw-color-live)]">
+            <span class="h-2 w-2 animate-pulse rounded-full bg-[var(--lw-color-live)]"></span>
             直播已开始
           </span>
         </div>

@@ -161,10 +161,6 @@ export function parseHhMmSsToSec(raw: string | undefined | null): number | null 
   return h * 3600 + min * 60 + s;
 }
 
-export function updateViewerStatus(id: number, status: 0 | 1) {
-  return put<{ id: number; status: number }>(`/viewers/update-status/${id}`, { status });
-}
-
 export function updateViewerBlacklist(
   id: number,
   body: { banComment: 0 | 1; banPurchase: 0 | 1; banAccess: 0 | 1 },

@@ -178,8 +178,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
 
   /**
    * afterInit：仅安全绑定后工作，不碰房间信息 API。
-   * 播放器就绪主路径是官方 playerReady（及次要 vhallplay_LOADED）；此处不再立刻狂扫 DOM。
-   * 仅标 waiting；若 ~2.5s 仍无事件推进再启短轮询兜底（防事件漏发挂死）。
+   * 播放器就绪主路径是官方 playerReady（及次要 vhallplay_LOADED）+ playerServer.isPlaying；
+   * 此处不立刻扫 DOM。仅标 waiting；若 ~2.5s 仍无事件推进再启短 burst 兜底（防事件漏发挂死）。
    */
   function beginAfterInitSideEffects(epoch: number) {
     if (epoch !== initEpoch) return;

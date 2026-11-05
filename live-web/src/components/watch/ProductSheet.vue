@@ -16,7 +16,11 @@ defineProps<{
   products: CartProductDisplay[];
 }>();
 
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{
+  close: [];
+  /** 点击购买；后续接订单中心下单链路 */
+  buy: [item: CartProductDisplay];
+}>();
 </script>
 
 <template>
@@ -25,62 +29,111 @@ const emit = defineEmits<{ close: [] }>();
     title="本场商品"
     @close="emit('close')"
   >
-    <div class="px-4 py-3">
-      <p
+    <div class="px-4 py-2">
+      <div
         v-if="loading"
-        class="py-10 text-center text-sm text-gray-400"
+        class="flex flex-col items-center justify-center gap-3 py-14 text-gray-400"
       >
-        加载中…
-      </p>
-      <p
+        <span class="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300" />
+        <p class="text-sm">
+          加载中…
+        </p>
+      </div>
+
+      <div
         v-else-if="error"
-        class="py-10 text-center text-sm text-red-400"
+        class="flex flex-col items-center justify-center gap-2 py-14"
       >
-        {{ error }}
-      </p>
-      <p
+        <p class="text-sm text-[var(--lw-color-danger)]">
+          {{ error }}
+        </p>
+      </div>
+
+      <div
         v-else-if="products.length === 0"
-        class="py-10 text-center text-sm text-gray-500"
+        class="flex flex-col items-center justify-center gap-3 py-14 text-gray-500"
       >
-        本场暂无关联商品
-      </p>
+        <span
+          class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-gray-500"
+          aria-hidden="true"
+        >
+          <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+          </svg>
+        </span>
+        <p class="text-sm">
+          本场暂无关联商品
+        </p>
+      </div>
+
       <ul
         v-else
-        class="space-y-3"
+        class="m-0 list-none divide-y divide-white/5 p-0"
       >
         <li
-          v-for="item in products"
+          v-for="(item, idx) in products"
           :key="item.spuId"
-          class="flex items-start gap-3 rounded-lg bg-gray-800/80 px-3 py-3"
+          class="flex items-stretch gap-3 py-3"
         >
-          <img
-            v-if="item.coverImg"
-            :src="item.coverImg"
-            :alt="item.productName"
-            class="h-14 w-14 flex-none rounded-md object-cover bg-gray-700"
-          >
-          <span
-            v-else
-            class="mt-0.5 flex h-14 w-14 flex-none items-center justify-center rounded-md bg-yellow-500/20 text-yellow-400"
-            aria-hidden="true"
-          >
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-          </span>
-          <div class="min-w-0 flex-1">
-            <p class="line-clamp-2 text-sm font-medium text-gray-100">
+          <!-- 封面居左 -->
+          <div class="relative h-[76px] w-[76px] flex-none overflow-hidden rounded-xl bg-[#2a3140]">
+            <img
+              v-if="item.coverImg"
+              :src="item.coverImg"
+              :alt="item.productName"
+              class="h-full w-full object-cover"
+              loading="lazy"
+            >
+            <div
+              v-else
+              class="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-[#2f3645] to-[#232833] text-gray-500"
+              aria-hidden="true"
+            >
+              <svg class="h-7 w-7 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.5"
+                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                />
+              </svg>
+              <span class="text-[10px] tracking-wide text-gray-500">暂无封面</span>
+            </div>
+            <span
+              class="absolute left-1 top-1 flex h-4 min-w-4 items-center justify-center rounded bg-black/55 px-1 text-[10px] font-medium tabular-nums text-white/90"
+            >
+              {{ idx + 1 }}
+            </span>
+          </div>
+
+          <!-- 中间：标题 + 价格 -->
+          <div class="flex min-w-0 flex-1 flex-col justify-between py-0.5">
+            <p class="line-clamp-2 text-[15px] font-medium leading-5 text-white/95">
               {{ item.productName || '未命名商品' }}
             </p>
             <p
               v-if="item.priceText"
-              class="mt-1 text-sm font-medium text-yellow-400"
+              class="mt-auto truncate text-[17px] font-semibold tabular-nums tracking-tight text-[var(--lw-color-brand)]"
             >
               {{ item.priceText }}
             </p>
-            <p class="mt-1 truncate text-xs text-gray-500">
-              ID {{ item.spuId }}
+            <p
+              v-else
+              class="mt-auto text-sm text-[var(--lw-text-muted)]"
+            >
+              价格待定
             </p>
+          </div>
+
+          <!-- 右侧：购买 -->
+          <div class="flex flex-none items-end pb-0.5">
+            <button
+              type="button"
+              class="h-8 rounded-full bg-[var(--lw-color-brand)] px-3.5 text-[13px] font-medium text-[var(--lw-text-on-brand)] shadow-sm active:bg-[var(--lw-color-brand-hover)]"
+              @click="emit('buy', item)"
+            >
+              购买
+            </button>
           </div>
         </li>
       </ul>

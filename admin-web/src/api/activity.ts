@@ -167,7 +167,6 @@ export interface ActivityDetail extends ActivityListItem {
   warmupUrl?: string;
   promoCoverUrl?: string;
   detailHtml?: string;
-  autoList?: boolean;
   /** 绑定的直播报备 ID；未绑定不返回 */
   reportId?: string;
   reportTitle?: string;
@@ -229,8 +228,8 @@ export interface CreateActivityPayload {
   ultraLowLatency?: boolean;
   coverUrl?: string;
   detailHtml?: string;
-  /** 是否自动上架（审核通过后）；替代 listed */
-  autoList: boolean;
+  /** 是否上架：true → 创建成功 shelfStatus=on；false → pending */
+  listed: boolean;
   /** 主播员工 id（rs_mainkey_id），1～20 */
   hostIds: number[];
   /** 绑定已通过直播报备 UUID；创建必填 */
@@ -435,7 +434,8 @@ export interface UpdateActivityPayload {
   endTime?: string;
   coverUrl?: string;
   detailHtml?: string;
-  autoList?: boolean;
+  /** 是否上架；保存时立刻改 shelfStatus */
+  listed?: boolean;
   hostIds?: number[];
   ownerIds?: number[];
   products?: ActivityProduct[];

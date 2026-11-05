@@ -2,10 +2,12 @@ import { ref } from "vue";
 import { listWatchProducts } from "@/api/watchProducts";
 import { listViewerProductsForBoundSpus } from "@/api/orderCenter";
 import type { CartProductDisplay } from "@/components/watch/ProductSheet.vue";
+import { useToast } from "@/composables/useToast";
 import { isViewerLoggedIn } from "@/utils/viewerAuth";
 
 /** 直播 / 回放共用小黄车拉数。 */
 export function useWatchCart(getActivityId: () => string) {
+  const { toast } = useToast();
   const cartOpen = ref(false);
   const cartLoading = ref(false);
   const cartError = ref("");
@@ -75,6 +77,20 @@ export function useWatchCart(getActivityId: () => string) {
     cartOpen.value = false;
   }
 
+  /**
+   * 购买入口（后续接订单中心下单 / 支付）。
+   * 当前仅占位，避免按钮无响应。
+   */
+  function buyProduct(item: CartProductDisplay) {
+    if (!isViewerLoggedIn()) {
+      toast("请先登录后再购买");
+      return;
+    }
+    const name = item.productName?.trim() || "该商品";
+    // TODO: 订单中心商品详情 → 选 SKU → 下单支付
+    toast(`「${name}」购买功能开发中`);
+  }
+
   return {
     cartOpen,
     cartLoading,
@@ -82,5 +98,6 @@ export function useWatchCart(getActivityId: () => string) {
     cartProducts,
     openCart,
     closeCart,
+    buyProduct,
   };
 }

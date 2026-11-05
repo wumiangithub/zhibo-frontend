@@ -25,12 +25,6 @@ const emit = defineEmits<{ refreshed: [] }>();
 const { form, submitting } = useLiveForm();
 const leave = useLeaveConfirm({ routeLeave: false });
 
-/** 待审核或未写风控状态时，基本信息不可改。 */
-const auditLocked = computed(() => {
-  const status = props.detail.riskStatus;
-  return !status || status === "pending";
-});
-
 const TYPE_TO_MODE: Record<number, LiveMode> = {
   1: "voice",
   2: "video",
@@ -67,7 +61,7 @@ function applyDetail(d: ActivityDetail) {
   }));
   form.coursewares = (d.coursewares ?? []).map((c) => ({ ...c }));
   form.coursewareMaterialIds = form.coursewares.map((c) => c.id);
-  form.autoList = d.autoList ?? false;
+  form.listed = d.shelfStatus === "on";
   form.agreed = true;
   // 录播素材回显；替换视频保存时传 recordMaterialId → ready 可能变 0
   if (d.type === 4 && d.recordMaterialId) {
@@ -160,7 +154,7 @@ function diffAgainstDetail(): { otherSame: boolean; productsSame: boolean } {
     && endTime === detailEnd
     && cover === (d.coverUrl ?? "")
     && html === (d.detailHtml ?? "").trim()
-    && form.autoList === (d.autoList ?? false)
+    && form.listed === (d.shelfStatus === "on")
     && sameIdList(hostIds, (d.hosts ?? []).map((h) => h.id).slice(0, 1))
     && sameIdList(ownerIds, (d.owners ?? []).map((o) => o.id))
     && sameIdList(courseIds, (d.coursewares ?? []).map((c) => c.id))
@@ -187,8 +181,8 @@ const hasEdits = computed(() => {
   return !(otherSame && productsSame);
 });
 
-/** 未改动 / 审核锁时保存不高亮、不可点 */
-const canSave = computed(() => hasEdits.value && !auditLocked.value);
+/** 未改动时保存不高亮、不可点 */
+const canSave = computed(() => hasEdits.value);
 
 // 同步 leave.dirty，供 beforeunload / confirmLeave 与值对比一致
 watch(
@@ -201,10 +195,6 @@ watch(
 );
 
 async function onSave() {
-  if (auditLocked.value) {
-    ElMessage.warning("审核中不可编辑");
-    return;
-  }
   const err = validateBasic();
   if (err) {
     ElMessage.warning(err);
@@ -215,7 +205,7 @@ async function onSave() {
     return;
   }
   const { otherSame, productsSame } = diffAgainstDetail();
-  // 仅改关联商品：只传 products，后端不回 pending、不追加发起申请
+  // 仅改关联商品：只传 products，不改上架
   const productsOnly = otherSame && !productsSame;
   submitting.value = true;
   try {
@@ -233,7 +223,7 @@ async function onSave() {
         introduction: form.intro.trim() || undefined,
         coverUrl: form.detailCover || undefined,
         detailHtml: form.detailHtml?.trim() || undefined,
-        autoList: form.autoList,
+        listed: form.listed,
         hostIds: form.hostIds.slice(0, 1).map((id) => Number(id)),
         ownerIds: form.ownerIds.map((id) => Number(id)),
         products,
@@ -253,7 +243,7 @@ async function onSave() {
       }
     }
     await updateActivity(props.activityId, payload);
-    ElMessage.success(productsOnly ? "保存成功" : "保存成功，重新进入审核");
+    ElMessage.success("保存成功");
     leave.markClean();
     emit("refreshed");
   } catch (e) {
@@ -271,27 +261,19 @@ defineExpose({
 
 <template>
   <div class="tab-panel">
-    <p
-      v-if="auditLocked"
-      class="lock-tip"
-    >
-      审核中不可编辑
-    </p>
-    <div :class="{ 'is-locked': auditLocked }">
-      <BasicInfoSection :form="form" />
-      <ProviderModeSection
-        :form="form"
-        provider-readonly
-        mode-readonly
-        viewer-style-readonly
-      />
-      <RelatedBusinessSection
-        :form="form"
-        :known-hosts="detail.hosts"
-        :known-owners="detail.owners"
-        :host-locked="!!detail.reportId"
-      />
-    </div>
+    <BasicInfoSection :form="form" />
+    <ProviderModeSection
+      :form="form"
+      provider-readonly
+      mode-readonly
+      viewer-style-readonly
+    />
+    <RelatedBusinessSection
+      :form="form"
+      :known-hosts="detail.hosts"
+      :known-owners="detail.owners"
+      :host-locked="!!detail.reportId"
+    />
 
     <div class="save-bar">
       <UiButton

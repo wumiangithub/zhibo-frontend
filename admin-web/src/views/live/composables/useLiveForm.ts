@@ -68,8 +68,8 @@ export interface LiveFormState {
   coursewareMaterialIds: string[];
   /** 课件展示快照（详情回显 / 新建选中后本地展示） */
   coursewares: ActivityCourseware[];
-  /** 是否自动上架 */
-  autoList: boolean;
+  /** 是否上架（创建/保存时立刻改 shelfStatus） */
+  listed: boolean;
   /** 售卖（设置页售卖 Tab；新建不提交） */
   sellAlone: boolean;
   sellType: SellType;
@@ -121,7 +121,7 @@ export function useLiveForm() {
     products: [],
     coursewareMaterialIds: [],
     coursewares: [],
-    autoList: true,
+    listed: false,
     sellAlone: true,
     sellType: "free",
     price: "",

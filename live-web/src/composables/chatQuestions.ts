@@ -7,6 +7,7 @@ import {
   isQuestionAnswerCreate,
   normalizeQuestionMessage,
   parseSendQuestionResult,
+  QUESTION_DISABLED_TOAST,
   questionFailText,
   questionMessageId,
 } from "@/utils/vhallQuestion";
@@ -46,17 +47,6 @@ function writeQuestionSentAt(senderId: string, at: number) {
   }
 }
 
-function clearQuestionSentAt(senderId: string, at: number) {
-  const key = senderKey(senderId);
-  if (questionSentAt.get(key) === at) questionSentAt.delete(key);
-  try {
-    const storageKey = `${QUESTION_SENT_KEY}.${key}`;
-    if (Number(localStorage.getItem(storageKey)) === at) localStorage.removeItem(storageKey);
-  } catch {
-    /* ignore */
-  }
-}
-
 interface QuestionChatState {
   chatMessages: ChatMessage[];
   chatInput: string;
@@ -84,6 +74,13 @@ export function createChatQuestions(deps: {
 }) {
   const { chat, getSdk, getSender, canSend, trimList, scrollChatToBottom } = deps;
   const { toast } = useToast();
+  /** 请求进行中防连点；不弹 15s toast，等 SDK 结果再决定文案 */
+  let questionInFlight = false;
+
+  /** 问答未开启文案停留 3s，其余沿用默认 2s */
+  function toastQuestionFail(msg: string) {
+    toast(msg, msg === QUESTION_DISABLED_TOAST ? 3000 : undefined);
+  }
 
   function resolveSend(sdk: VhallSdkInstance): ((text: string) => Promise<unknown>) | null {
     if (typeof sdk.sendQuestion === "function") {
@@ -128,6 +125,11 @@ export function createChatQuestions(deps: {
     scrollChatToBottom();
   }
 
+  /**
+   * 检查顺序：校验 → inFlight → SDK send → 失败 toast（513016 / QUESTION_DISABLED 优先）→
+   * 成功且距上次成功 <15s 则仅 15s toast → 否则 writeSentAt + 上屏。
+   * 不可在 SDK 前因 15s 间隔提前 return，否则问答关闭时只看到 15s 文案。
+   */
   async function sendQuestion(): Promise<void> {
     const text = chat.chatInput.trim();
     const sdk = getSdk();
@@ -138,26 +140,37 @@ export function createChatQuestions(deps: {
       toast("当前直播不支持提问");
       return;
     }
+    if (questionInFlight) return;
+
     const sender = getSender();
-    const elapsed = Date.now() - readQuestionSentAt(sender.id);
-    if (elapsed < QUESTION_GAP_MS) {
-      const waitSec = Math.ceil((QUESTION_GAP_MS - elapsed) / 1000);
-      toast(`15秒内只能提一个问题，请${waitSec}秒后再试`);
-      return;
-    }
-    const sentAt = Date.now();
-    writeQuestionSentAt(sender.id, sentAt);
+    const lastSentAt = readQuestionSentAt(sender.id);
+    const elapsed = Date.now() - lastSentAt;
+    const rateLimited = lastSentAt > 0 && elapsed < QUESTION_GAP_MS;
+
+    questionInFlight = true;
     chat.chatInput = "";
     try {
       const result = await send(text);
       console.log("[vhall-sdk] sendQuestion result", result);
       const parsed = parseSendQuestionResult(result);
       if (!parsed.ok) {
-        clearQuestionSentAt(sender.id, sentAt);
         chat.chatInput = text;
-        toast(parsed.message);
+        // 513016 / QUESTION_DISABLED：永不被 15s 文案盖住
+        toastQuestionFail(parsed.message);
         return;
       }
+
+      // 问答已开启。客户端 15s 只在成功之后约束：过快则提示且不上屏/不上报，
+      // 避免关问答时被 15s 文案抢先（须先拿到 SDK 结果才能区分）。
+      if (rateLimited) {
+        const waitSec = Math.ceil((QUESTION_GAP_MS - elapsed) / 1000);
+        chat.chatInput = text;
+        toast(`15秒内只能提一个问题，请${waitSec}秒后再试`);
+        return;
+      }
+
+      const sentAt = Date.now();
+      writeQuestionSentAt(sender.id, sentAt);
       deps.onSent?.(text, parsed.id);
       upsert({
         sender_id: sender.id,
@@ -170,10 +183,11 @@ export function createChatQuestions(deps: {
         kind: "question",
       });
     } catch (e) {
-      clearQuestionSentAt(sender.id, sentAt);
       chat.chatInput = text;
       console.warn("[vhall-sdk] sendQuestion failed", e);
-      toast(questionFailText(e));
+      toastQuestionFail(questionFailText(e));
+    } finally {
+      questionInFlight = false;
     }
   }
 

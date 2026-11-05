@@ -124,6 +124,21 @@ interface VhallPlayerModule {
   getVolume?(): number;
 }
 
+/**
+ * 官方 demo 竖屏播控用的内部模块（未全文档化）。
+ * 本站仅取 play/pause + state.isPlaying；清晰度仍走文档 `player.*`。
+ */
+interface VhallPlayerServerState {
+  isPlaying?: boolean;
+  isMuted?: boolean;
+}
+
+interface VhallPlayerServer {
+  state?: VhallPlayerServerState;
+  play?(): void;
+  pause?(): void;
+}
+
 /** 微吼进出房推送的分组上下文 */
 interface VhallUserPresenceGroupInit {
   isInGroup: boolean;
@@ -289,6 +304,11 @@ interface VhallSdkInstance {
   $on(event: string, handler: (data: unknown) => void): void;
   destroy?(): void;
   player?: VhallPlayerModule;
+  /**
+   * demo Stream/Player 播控主路径（play / state.isPlaying）。
+   * 可选；缺失时回退 `player.play/pause` 再回退 HTMLMediaElement。
+   */
+  playerServer?: VhallPlayerServer;
   chat: ChatModule;
   openBarrage?(): void;
   closeBarrage?(): void;
@@ -301,6 +321,10 @@ interface VhallSdkInstance {
   vhall_get_live_history_question_msg?(): Promise<unknown>;
   vhall_get_history_notice(page: number): Promise<{ code: number | string; data: { data: VhallNoticeItem[] } }>;
   interactTools: InteractTools;
+  /** 官方 Praise demo：`jssdk.config.lssRoomId` 即互动 room_id */
+  config?: { lssRoomId?: string };
+  /** 进房后 watchInit 里也可能带 interact.room_id（chat 等同路径） */
+  roomBaseServer?: { state?: { watchInitData?: { interact?: { room_id?: string } } } };
   getRoominfo?(): Promise<{ room_id?: string; roomId?: string; interact?: { room_id?: string } }>;
 }
 

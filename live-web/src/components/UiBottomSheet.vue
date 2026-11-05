@@ -8,8 +8,10 @@ const props = withDefaults(
     title?: string;
     /** dialog 无障碍名；默认用 title */
     ariaLabel?: string;
-    /** 是否显示右上角关闭 */
+    /** 是否显示右上角关闭（轻量 ✕，点遮罩亦可关） */
     showClose?: boolean;
+    /** 顶部拖拽把手（播放器选项等 action sheet 感） */
+    showHandle?: boolean;
     /** md+ 改为居中卡片（选回放等）；默认始终贴底 */
     centerOnDesktop?: boolean;
     /** 面板最大高度 */
@@ -18,9 +20,11 @@ const props = withDefaults(
   }>(),
   {
     showClose: true,
+    showHandle: false,
     centerOnDesktop: false,
     maxHeightClass: "max-h-[70dvh]",
-    zIndexClass: "z-[90]",
+    /** 高于结束页 fixed 遮罩 z-[100]，避免「查看回放」选片弹层被盖住 */
+    zIndexClass: "z-[110]",
   },
 );
 
@@ -50,7 +54,8 @@ onBeforeUnmount(() => {
     <Transition name="ui-sheet">
       <div
         v-if="open"
-        class="ui-sheet-root fixed inset-0 flex flex-col justify-end"
+        class="lw-theme ui-sheet-root fixed inset-0 flex flex-col justify-end"
+        data-lw-theme="dark"
         :class="[
           zIndexClass,
           centerOnDesktop ? 'ui-sheet-center-md md:items-center md:justify-center' : '',
@@ -63,7 +68,7 @@ onBeforeUnmount(() => {
           @click="emit('close')"
         />
         <div
-          class="ui-sheet-panel relative flex w-full flex-col rounded-t-2xl bg-gray-900 text-white shadow-xl"
+          class="ui-sheet-panel relative flex w-full flex-col rounded-t-2xl bg-[var(--lw-bg-panel)] text-[var(--lw-text-primary)] shadow-xl"
           :class="[
             maxHeightClass,
             centerOnDesktop
@@ -74,21 +79,52 @@ onBeforeUnmount(() => {
           aria-modal="true"
           :aria-label="ariaLabel || title || '弹层'"
         >
+          <div
+            v-if="showHandle"
+            class="flex flex-none justify-center pt-2.5 pb-0.5"
+            aria-hidden="true"
+          >
+            <span class="h-1 w-9 rounded-full bg-gray-600" />
+          </div>
+
           <slot name="header">
             <div
               v-if="title || showClose"
-              class="flex flex-none items-center justify-between border-b border-gray-800 px-4 py-3"
+              class="flex flex-none items-center border-b border-gray-800/80 px-4 py-3"
+              :class="showHandle ? 'relative justify-center' : 'justify-between'"
             >
-              <h2 class="text-base font-semibold">
+              <h2
+                v-if="title"
+                class="text-[15px] font-semibold tracking-wide text-gray-100"
+              >
                 {{ title }}
               </h2>
+              <span
+                v-else-if="!showHandle"
+                class="flex-1"
+              />
               <button
                 v-if="showClose"
                 type="button"
-                class="rounded-md bg-transparent px-2 py-1 text-sm text-gray-400 hover:text-white"
+                class="flex h-8 w-8 flex-none items-center justify-center rounded-full text-white transition-colors hover:bg-white/5"
+                :class="showHandle ? 'absolute right-2 top-1/2 -translate-y-1/2' : ''"
+                aria-label="关闭"
                 @click="emit('close')"
               >
-                关闭
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               </button>
             </div>
           </slot>

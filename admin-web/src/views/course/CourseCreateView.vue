@@ -33,7 +33,7 @@ const knownOwners = (defaults.knownOwners ?? []).map((item) => ({
 }));
 
 const form = createEmptyCourseForm({
-  autoList: true,
+  listed: false,
   ownerIds: defaultOwnerIds,
 });
 const formRef = ref<InstanceType<typeof CourseBasicForm> | null>(null);
@@ -59,7 +59,7 @@ async function onSave() {
     const created = await createCourse({
       title: form.name.trim(),
       coverMaterialId: form.coverMaterialId,
-      autoList: form.autoList,
+      listed: form.listed,
       ownerIds: [...form.ownerIds],
       ...(intro ? { introduction: intro } : {}),
       ...(detail && detail !== "<p><br></p>" ? { detailHtml: detail } : {}),

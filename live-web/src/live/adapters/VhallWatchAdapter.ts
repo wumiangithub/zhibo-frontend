@@ -13,14 +13,16 @@ const VHALL_SDK_SCRIPT_URL = "https://cnstatic01.e.vhall.com/jssdk/dist/3.9.1/Vh
 /** 微吼自带隐藏控制条 class（官方拼写即为 hiddne，非 typo） */
 const HIDDNE_CONTROL_CLASS = "hiddneControl";
 
-/** MutationObserver 兜底最长观察时间：容器异步插入后事件可能已错过 */
-const HIDE_CONTROL_OBSERVER_MS = 8000;
+/** 对齐 demo：playerReady 后再动 DOM，等控制条插完 */
+const REMOVE_NATIVE_CONTROL_DELAY_MS = 50;
 
 /** 微吼观看适配器：脚本加载、VhallSDK init/destroy、事件绑定 */
 export class VhallWatchAdapter implements WatchAdapter {
   private sdk: VhallSdkInstance | null = null;
-  private hideControlObserver: MutationObserver | null = null;
-  private hideControlTimer: ReturnType<typeof setTimeout> | null = null;
+  /** playerReady 一次性拆条定时器；destroy 时清掉 */
+  private removeNativeControlTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 本会话是否已按 demo 拆过原生底栏（一次性） */
+  private nativeControlsRemoved = false;
 
   getSdk(): VhallSdkInstance | null {
     return this.sdk;
@@ -127,31 +129,30 @@ export class VhallWatchAdapter implements WatchAdapter {
       handlers.onUserOffline(msg);
     });
 
-    // 隐藏控制条：SDK 自带 .hiddneControl（拼写即为 hiddne）+ 显式藏 .vh-player-controller。
-    // moduleReady=模块就绪；playerReady=播放器初始化成功（官方/demo 主信号）；
-    // vhallplay_LOADED=视频加载完（次要）。事件先后不定且可能只来其一，都听并幂等。
-    // 容器/控制条由 SDK 异步插入，事件可能早于 DOM，故短时 MutationObserver 兜底；destroy 时断开防泄漏。
+    // 藏原生控制条：对齐 demo Player — playerReady 后 setTimeout(50) 再 removeChild；
+    // 次要：vhallplay_LOADED 若更早且尚未拆过则同路径一次。无 MutationObserver。
+    // hiddneControl 作辅；PlayerStage :deep CSS 仅防闪。
     this.sdk.$on("moduleReady", () => {
       this.applyHiddneControl();
       // 对齐 demo：isModuleReady 后再拉历史/房间信息；勿在 new 后立刻调
       handlers.onModuleReady?.();
     });
     this.sdk.$on("playerReady", () => {
-      this.applyHiddneControl();
+      this.scheduleRemoveNativeControls();
       handlers.onPlayerReady?.();
     });
     this.sdk.$on("vhallplay_LOADED", () => {
-      this.applyHiddneControl();
+      this.scheduleRemoveNativeControls();
       handlers.onPlayerLoaded?.();
     });
     this.applyHiddneControl();
-    this.armHideControlObserver();
 
     handlers.afterInit();
   }
 
   destroy(): void {
-    this.stopHideControlObserver();
+    this.clearRemoveNativeControlTimer();
+    this.nativeControlsRemoved = false;
     if (this.sdk?.destroy) {
       try {
         this.sdk.destroy();
@@ -168,37 +169,44 @@ export class VhallWatchAdapter implements WatchAdapter {
   }
 
   /**
-   * 1) 给壳 / shadow 加 SDK 自带 hiddneControl（不覆盖 .vh-player-controller）
-   * 2) 显式 display:none 原生底栏（暂停时 SDK 常再插/再显该节点；PlayerStage 另有 :deep CSS）
-   * classList / style 均幂等；持久隐藏靠 CSS，此处配合 MutationObserver 在 SDK 重插时再刷一次
+   * 给壳 / shadow 加 SDK 自带 hiddneControl（辅路径；不覆盖 .vh-player-controller）。
+   * 主路径仍是 removeNativeControls 拆节点。
    */
   private applyHiddneControl(): void {
     document
       .querySelectorAll("#player .vhallPlayer-container, #player .vhallPlayerh5-shadow")
       .forEach((el) => el.classList.add(HIDDNE_CONTROL_CLASS));
+  }
+
+  /** 对齐 demo：就绪后延迟再拆，幂等，会话内只跑一轮 */
+  private scheduleRemoveNativeControls(): void {
+    if (this.nativeControlsRemoved) return;
+    this.clearRemoveNativeControlTimer();
+    this.removeNativeControlTimer = setTimeout(() => {
+      this.removeNativeControlTimer = null;
+      this.removeNativeControls();
+    }, REMOVE_NATIVE_CONTROL_DELAY_MS);
+  }
+
+  /**
+   * 对齐官方 demo 竖屏路径：removeChild `.vh-player-controller` / `.vh-player-record-control`。
+   * 本站底栏全自建，一律拆；CSS 仅兜底闪一下。
+   */
+  private removeNativeControls(): void {
+    if (this.nativeControlsRemoved) return;
+    this.applyHiddneControl();
     document
       .querySelectorAll("#player .vh-player-controller, #player .vh-player-record-control")
       .forEach((el) => {
-        (el as HTMLElement).style.setProperty("display", "none", "important");
+        el.parentNode?.removeChild(el);
       });
+    this.nativeControlsRemoved = true;
   }
 
-  private armHideControlObserver(): void {
-    this.stopHideControlObserver();
-    const root = document.querySelector("#player");
-    if (!root) return;
-    this.hideControlObserver = new MutationObserver(() => this.applyHiddneControl());
-    this.hideControlObserver.observe(root, { childList: true, subtree: true });
-    // 固定观察窗口：勿在仅挂上 hiddneControl 后立刻停，控制条可能晚于壳插入
-    this.hideControlTimer = setTimeout(() => this.stopHideControlObserver(), HIDE_CONTROL_OBSERVER_MS);
-  }
-
-  private stopHideControlObserver(): void {
-    if (this.hideControlTimer) {
-      clearTimeout(this.hideControlTimer);
-      this.hideControlTimer = null;
+  private clearRemoveNativeControlTimer(): void {
+    if (this.removeNativeControlTimer) {
+      clearTimeout(this.removeNativeControlTimer);
+      this.removeNativeControlTimer = null;
     }
-    this.hideControlObserver?.disconnect();
-    this.hideControlObserver = null;
   }
 }

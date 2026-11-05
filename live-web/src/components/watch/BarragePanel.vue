@@ -35,11 +35,11 @@ function insertEmoji(name: string) {
     <div class="min-h-0 flex-1 overflow-y-auto p-4">
       <!-- 弹幕开关 -->
       <div class="mb-4 flex items-center justify-between">
-        <span class="text-sm text-gray-300">弹幕显示</span>
+        <span class="text-sm text-[var(--lw-text-primary)]">弹幕显示</span>
         <button
           type="button"
           class="relative h-6 w-11 rounded-full transition-colors"
-          :class="barrage.barrageOn ? 'bg-red-500' : 'bg-gray-600'"
+          :class="barrage.barrageOn ? 'bg-[var(--lw-color-brand)]' : 'bg-[var(--lw-border-strong)]'"
           @click="barrage.toggleBarrage"
         >
           <span
@@ -52,14 +52,14 @@ function insertEmoji(name: string) {
       <div class="space-y-4 text-sm">
         <!-- 显示区域 -->
         <div>
-          <p class="mb-2 text-gray-400">显示区域</p>
+          <p class="mb-2 text-[var(--lw-text-secondary)]">显示区域</p>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="(label, idx) in AREA_OPTIONS"
               :key="label"
               type="button"
               class="rounded-md px-3 py-1.5 text-xs transition-colors"
-              :class="barrage.barrageSettings.area === idx ? 'bg-red-500 text-white' : 'bg-gray-800 text-gray-300 hover:text-white'"
+              :class="barrage.barrageSettings.area === idx ? 'bg-[var(--lw-color-brand)] text-[var(--lw-text-on-brand)]' : 'bg-[var(--lw-bg-elevated)] text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
               @click="barrage.barrageSettings.area = idx"
             >
               {{ label }}
@@ -69,27 +69,27 @@ function insertEmoji(name: string) {
 
         <!-- 不透明度 -->
         <div>
-          <p class="mb-2 text-gray-400">不透明度 <span class="text-gray-500">{{ barrage.barrageSettings.opacity }}%</span></p>
+          <p class="mb-2 text-[var(--lw-text-secondary)]">不透明度 <span class="text-[var(--lw-text-muted)]">{{ barrage.barrageSettings.opacity }}%</span></p>
           <input
             v-model.number="barrage.barrageSettings.opacity"
             type="range"
             min="0"
             max="100"
             step="5"
-            class="w-full accent-red-500"
+            class="w-full accent-[var(--lw-color-brand)]"
           />
         </div>
 
         <!-- 字体大小 -->
         <div>
-          <p class="mb-2 text-gray-400">字体大小</p>
+          <p class="mb-2 text-[var(--lw-text-secondary)]">字体大小</p>
           <div class="flex gap-2">
             <button
               v-for="opt in FONT_OPTIONS"
               :key="opt.value"
               type="button"
               class="rounded-md px-3 py-1.5 text-xs transition-colors"
-              :class="barrage.barrageSettings.fontSize === opt.value ? 'bg-red-500 text-white' : 'bg-gray-800 text-gray-300 hover:text-white'"
+              :class="barrage.barrageSettings.fontSize === opt.value ? 'bg-[var(--lw-color-brand)] text-[var(--lw-text-on-brand)]' : 'bg-[var(--lw-bg-elevated)] text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
               @click="barrage.barrageSettings.fontSize = opt.value"
             >
               {{ opt.label }}
@@ -99,7 +99,7 @@ function insertEmoji(name: string) {
 
         <!-- 弹幕颜色 -->
         <div>
-          <p class="mb-2 text-gray-400">弹幕颜色</p>
+          <p class="mb-2 text-[var(--lw-text-secondary)]">弹幕颜色</p>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="c in BARRAGE_COLORS"
@@ -115,14 +115,14 @@ function insertEmoji(name: string) {
 
         <!-- 弹幕速度 -->
         <div>
-          <p class="mb-2 text-gray-400">弹幕速度</p>
+          <p class="mb-2 text-[var(--lw-text-secondary)]">弹幕速度</p>
           <div class="flex gap-2">
             <button
               v-for="opt in SPEED_OPTIONS"
               :key="opt.value"
               type="button"
               class="rounded-md px-3 py-1.5 text-xs transition-colors"
-              :class="barrage.barrageSettings.speed === opt.value ? 'bg-red-500 text-white' : 'bg-gray-800 text-gray-300 hover:text-white'"
+              :class="barrage.barrageSettings.speed === opt.value ? 'bg-[var(--lw-color-brand)] text-[var(--lw-text-on-brand)]' : 'bg-[var(--lw-bg-elevated)] text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
               @click="barrage.barrageSettings.speed = opt.value"
             >
               {{ opt.label }}
@@ -133,15 +133,15 @@ function insertEmoji(name: string) {
     </div>
 
     <!-- 弹幕输入栏 -->
-    <div class="flex-none border-t border-gray-800 p-3">
+    <div class="flex-none border-t border-[var(--lw-border)] p-3">
       <div class="flex items-center gap-2">
         <span
-          class="h-4 w-4 flex-none rounded-full border border-gray-600"
+          class="h-4 w-4 flex-none rounded-full border border-[var(--lw-border-strong)]"
           :style="{ backgroundColor: barrage.barrageSettings.color }"
         ></span>
         <div class="relative z-50 flex-none">
           <button
-            class="rounded-md bg-gray-800 p-2 text-gray-400 hover:bg-gray-700 hover:text-gray-200"
+            class="rounded-md bg-[var(--lw-bg-elevated)] p-2 text-[var(--lw-text-secondary)] hover:bg-[var(--lw-border)] hover:text-[var(--lw-text-primary)]"
             title="表情"
             @click="showEmoji = !showEmoji"
           >
@@ -160,11 +160,11 @@ function insertEmoji(name: string) {
           type="text"
           maxlength="60"
           placeholder="发个弹幕…"
-          class="min-w-0 flex-1 rounded-md bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none"
+          class="min-w-0 flex-1 rounded-md bg-[var(--lw-bg-elevated)] px-3 py-2 text-sm text-[var(--lw-text-primary)] placeholder-[var(--lw-text-muted)] focus:outline-none"
           @keyup.enter="barrage.sendDanmaku"
         />
         <button
-          class="flex-none rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+          class="flex-none rounded-md bg-[var(--lw-color-brand)] px-4 py-2 text-sm font-medium text-[var(--lw-text-on-brand)] hover:bg-[var(--lw-color-brand-hover)] disabled:opacity-50"
           :disabled="!barrage.danmakuInput.trim()"
           @click="barrage.sendDanmaku"
         >

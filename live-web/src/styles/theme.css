@@ -1,0 +1,70 @@
+/**
+ * live-web 观众观看主题 token（仅观看直播 / 回放 / 预告 / 结束）
+ * 挂载点：根节点 class="lw-theme"（可加 data-lw-theme="dark"|"light"）
+ * Teleport 弹层同步加 lw-theme，否则变量传不进去。
+ * 约定见 docs/设计规范.md「live-web」
+ *
+ * 前缀 --lw-，避免与 admin-web --color-* 冲突。
+ * 首页 / 中控台壳 / 课程等不要挂 lw-theme。
+ * 当前只实现 dark；light 占位。
+ */
+
+.lw-theme,
+.lw-theme[data-lw-theme="dark"] {
+  /* —— 品牌强调色（关注 / 主持人徽章 / Tab 底边 / 购买 / 进度） —— */
+  --lw-color-brand: #ff6a3d;
+  --lw-color-brand-hover: #e85d32;
+  --lw-color-brand-muted: rgba(255, 106, 61, 0.22);
+
+  /* —— 表面分层（深 → 浅） —— */
+  --lw-bg-canvas: #0b0d12;
+  --lw-bg-panel: #12151c;
+  --lw-bg-elevated: #1c212b;
+  --lw-bg-bubble: #2a303c;
+  --lw-bg-player: #000000;
+  --lw-bg-overlay: rgba(0, 0, 0, 0.7);
+
+  /* —— 边框 —— */
+  --lw-border: #2a3140;
+  --lw-border-strong: #3a4252;
+
+  /* —— 文字 —— */
+  --lw-text-primary: rgba(255, 255, 255, 0.92);
+  --lw-text-secondary: rgba(255, 255, 255, 0.55);
+  --lw-text-muted: rgba(255, 255, 255, 0.38);
+  --lw-text-on-brand: #ffffff;
+
+  /* —— 角色 / 互动 —— */
+  --lw-color-host-badge: var(--lw-color-brand);
+  --lw-color-assistant: #fbbf24;
+  --lw-color-assistant-muted: rgba(251, 191, 36, 0.2);
+  --lw-color-guest: #a78bfa;
+  --lw-color-guest-muted: rgba(167, 139, 250, 0.2);
+  --lw-color-ask: #38bdf8;
+  --lw-color-ask-muted: rgba(56, 189, 248, 0.25);
+  --lw-color-like: #fcd34d;
+  --lw-color-like-badge: #f59e0b;
+
+  /* —— 功能色（与品牌色分离） —— */
+  --lw-color-live: #ef4444;
+  --lw-color-danger: #f5222d;
+  --lw-color-danger-muted: rgba(245, 34, 45, 0.2);
+  --lw-color-success: #22c55e;
+  --lw-color-warning: #fbbf24;
+}
+
+/*
+ * 白天主题待实现（仅 .lw-theme）：
+ *
+ * .lw-theme[data-lw-theme="light"] {
+ *   --lw-bg-canvas: #f5f6f8;
+ *   --lw-bg-panel: #ffffff;
+ *   --lw-bg-elevated: #f0f1f3;
+ *   --lw-bg-bubble: #f3f4f6;
+ *   --lw-bg-player: #000000;
+ *   --lw-border: #e5e7eb;
+ *   --lw-text-primary: rgba(17, 24, 39, 0.92);
+ *   --lw-text-secondary: rgba(17, 24, 39, 0.55);
+ *   --lw-text-muted: rgba(17, 24, 39, 0.38);
+ * }
+ */

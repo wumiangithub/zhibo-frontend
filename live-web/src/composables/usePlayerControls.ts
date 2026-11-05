@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, reactive } from "vue";
+import { isReactive, onBeforeUnmount, onMounted, reactive, watch, type WatchStopHandle } from "vue";
 
 export interface PlayerControlsOptions {
   getSdk: () => VhallSdkInstance | null;
@@ -54,9 +54,11 @@ function codesToQualityOptions(list: string[]): QualityOption[] {
 
 /**
  * 播放器交互（自建底栏，不依赖微吼 `.vh-player-controller`）：
- * - 等 `<video>` 出现后再出「点击播放」；过早点击会因 await 丢掉用户手势
- * - 直播中微吼常不提供暂停，学员/助理用自建暂停/继续（直操作 media）
- * - 清晰度走文档 `player` API；音量/静音只走 HTMLMediaElement（不调 setMute/getVolume）
+ * - 就绪主路径：`playerReady`（及次要 `vhallplay_LOADED`）
+ * - 播控/播态对齐官方 demo：优先 `playerServer.play/pause` + `playerServer.state.isPlaying`；
+ *   其次文档 `player.play/pause`；再才 HTMLMediaElement
+ * - DOM：仅短 burst 找 `<video>` 并绑 play/pause/ended；**无**常驻 500ms 扫 DOM
+ * - 清晰度走文档 `player` API；音量/静音只走 HTMLMediaElement
  * - 全屏优先舞台 requestFullscreen，失败伪全屏
  */
 export function usePlayerControls(options: PlayerControlsOptions) {
@@ -79,7 +81,8 @@ export function usePlayerControls(options: PlayerControlsOptions) {
   });
 
   let playPollTimer: ReturnType<typeof setInterval> | null = null;
-  let mediaStateTimer: ReturnType<typeof setInterval> | null = null;
+  /** 短 burst：找 media 并绑事件后即停（非常驻播态轮询） */
+  let mediaBindTimer: ReturnType<typeof setInterval> | null = null;
   let playInProgress = false;
   let playRequested = false;
   let userPaused = false;
@@ -89,6 +92,9 @@ export function usePlayerControls(options: PlayerControlsOptions) {
   let volumeBeforeMute = 50;
   /** 拖拽滑条期间禁止 sync 回写，避免 UI 被瞬时旧值拽回中间 */
   let volumeDragging = false;
+  /** demo 式：已挂上 playerServer.state.isPlaying 时，media 事件不再抢播态 UI */
+  let preferSdkPlaying = false;
+  let stopSdkPlayingWatch: WatchStopHandle | null = null;
 
   function applyPausedUi(paused: boolean) {
     if (player.waitingForMedia || player.mediaFailed) {
@@ -105,6 +111,7 @@ export function usePlayerControls(options: PlayerControlsOptions) {
   }
 
   function onMediaPlay() {
+    if (preferSdkPlaying) return;
     if (!playRequested) {
       applyPausedUi(true);
       return;
@@ -115,6 +122,7 @@ export function usePlayerControls(options: PlayerControlsOptions) {
   }
 
   function onMediaPause() {
+    if (preferSdkPlaying) return;
     if (player.waitingForMedia) return;
     applyPausedUi(true);
     if (playRequested) {
@@ -142,7 +150,92 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     media.addEventListener("play", onMediaPlay);
     media.addEventListener("pause", onMediaPause);
     media.addEventListener("ended", onMediaEnded);
-    if (!player.waitingForMedia) applyPausedUi(media.paused);
+    if (!player.waitingForMedia && !preferSdkPlaying) applyPausedUi(media.paused);
+  }
+
+  function unbindSdkPlayingWatch() {
+    stopSdkPlayingWatch?.();
+    stopSdkPlayingWatch = null;
+    preferSdkPlaying = false;
+  }
+
+  /**
+   * 对齐 demo：playerReady 后把 playerServer.state 包成 reactive，再 watch isPlaying。
+   * 没有 playerServer 则保持 media 事件播态。
+   */
+  function bindSdkPlayingWatch(): boolean {
+    const ps = getSdk()?.playerServer;
+    if (!ps?.state) return false;
+    try {
+      if (!isReactive(ps.state)) {
+        ps.state = reactive(ps.state);
+      }
+    } catch {
+      return false;
+    }
+    unbindSdkPlayingWatch();
+    preferSdkPlaying = true;
+    stopSdkPlayingWatch = watch(
+      () => getSdk()?.playerServer?.state?.isPlaying,
+      (playing) => {
+        if (disposed || playing == null) return;
+        if (playing) {
+          if (!playRequested) {
+            applyPausedUi(true);
+            return;
+          }
+          applyPausedUi(false);
+          userPaused = false;
+          options.onUserPlay?.();
+          return;
+        }
+        if (player.waitingForMedia) return;
+        applyPausedUi(true);
+        if (playRequested) {
+          userPaused = true;
+          options.onUserPause?.();
+        }
+      },
+      { immediate: true },
+    );
+    return true;
+  }
+
+  /** demo：playerServer.play；文档：player.play */
+  function callSdkPlay(): boolean {
+    const sdk = getSdk();
+    if (typeof sdk?.playerServer?.play === "function") {
+      sdk.playerServer.play();
+      return true;
+    }
+    if (typeof sdk?.player?.play === "function") {
+      sdk.player.play();
+      return true;
+    }
+    return false;
+  }
+
+  /** demo 未展示 pause；优先 playerServer.pause，再文档 player.pause */
+  function callSdkPause(): boolean {
+    const sdk = getSdk();
+    if (typeof sdk?.playerServer?.pause === "function") {
+      sdk.playerServer.pause();
+      return true;
+    }
+    if (typeof sdk?.player?.pause === "function") {
+      sdk.player.pause();
+      return true;
+    }
+    return false;
+  }
+
+  function applyUnmuteToMedia(media: HTMLMediaElement) {
+    media.muted = false;
+    if (player.volume > 0) media.volume = player.volume / 100;
+    else media.volume = Math.max(media.volume, 0.5);
+    player.muted = false;
+    player.volume = Math.round(media.volume * 100);
+    if (player.volume > 0) volumeBeforeMute = player.volume;
   }
 
   function bindStageEl(el: HTMLElement | null) {
@@ -275,22 +368,38 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     }
   }
 
-  function stopMediaStatePoll() {
-    if (mediaStateTimer) {
-      clearInterval(mediaStateTimer);
-      mediaStateTimer = null;
+  function stopMediaBindBurst() {
+    if (mediaBindTimer) {
+      clearInterval(mediaBindTimer);
+      mediaBindTimer = null;
     }
   }
 
-  function startMediaStatePoll() {
-    if (mediaStateTimer) return;
-    mediaStateTimer = setInterval(() => {
-      if (disposed || player.waitingForMedia || player.mediaFailed) return;
-      const media = findPlayerMedia();
-      if (!media) return;
-      bindMediaEvents(media);
-      applyPausedUi(media.paused);
+  /**
+   * DOM 短 burst：仅在 playerReady / 起播 / 兜底就绪后找 media 并绑事件；
+   * 找到即停。播态靠 playerServer.isPlaying 或 media 事件，不常驻扫 DOM。
+   */
+  function startMediaBindBurst(maxTries = 16) {
+    if (boundMedia && document.contains(boundMedia)) {
       syncVolumeFromMedia();
+      return;
+    }
+    stopMediaBindBurst();
+    let tries = 0;
+    mediaBindTimer = setInterval(() => {
+      if (disposed) {
+        stopMediaBindBurst();
+        return;
+      }
+      tries += 1;
+      const media = findPlayerMedia();
+      if (media) {
+        bindMediaEvents(media);
+        syncVolumeFromMedia();
+        stopMediaBindBurst();
+        return;
+      }
+      if (tries >= maxTries) stopMediaBindBurst();
     }, 500);
   }
 
@@ -300,17 +409,17 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     player.failReason = "";
     player.needsTapToPlay = true;
     player.isPaused = true;
-    startMediaStatePoll();
+    startMediaBindBurst();
   }
 
   function markMediaFailed(reason = "播放器加载失败") {
     stopPlayPoll();
+    stopMediaBindBurst();
     player.waitingForMedia = false;
     player.needsTapToPlay = false;
     player.isPaused = false;
     player.mediaFailed = true;
     player.failReason = reason;
-    stopMediaStatePoll();
   }
 
   function tryAdvanceMediaReady(media: HTMLMediaElement): boolean {
@@ -321,29 +430,35 @@ export function usePlayerControls(options: PlayerControlsOptions) {
       stopPlayPoll();
       return true;
     }
-    if (userPaused || media.paused) {
+    if (userPaused || (!preferSdkPlaying && media.paused)) {
       player.waitingForMedia = false;
       player.mediaFailed = false;
       applyPausedUi(true);
       stopPlayPoll();
-      startMediaStatePoll();
+      return true;
+    }
+    if (preferSdkPlaying) {
+      const playing = !!getSdk()?.playerServer?.state?.isPlaying;
+      player.waitingForMedia = false;
+      player.mediaFailed = false;
+      applyPausedUi(!playing);
+      stopPlayPoll();
       return true;
     }
     player.waitingForMedia = false;
     player.mediaFailed = false;
     applyPausedUi(false);
     stopPlayPoll();
-    startMediaStatePoll();
     return true;
   }
 
   /**
-   * DOM 兜底轮询：仅在官方事件未推进就绪时使用。
-   * 主路径应走 playerReady / vhallplay_LOADED；自建底栏仍需 HTMLMediaElement，故事件后无节点时才轮询。
+   * DOM 兜底轮询：仅在官方事件未推进就绪、或事件后尚无 media 节点时使用。
+   * 硬上限；找到 media 即停。
    */
   function startPlayPoll(maxTries = 20) {
     stopPlayPoll();
-    stopMediaStatePoll();
+    stopMediaBindBurst();
     player.waitingForMedia = true;
     player.mediaFailed = false;
     player.needsTapToPlay = false;
@@ -364,11 +479,13 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     }, 500);
   }
 
-  /** 官方/事件推进：有 media 则结束等待；无则短轮询兜底（对齐 demo playerReady，仍兼容自建底栏） */
+  /** 官方/事件推进：绑 isPlaying；有 media 则结束等待；无则短轮询找节点 */
   function advanceFromSdkEvent(source: "playerReady" | "vhallplay_LOADED") {
     const at = new Date().toISOString();
     const presence = inspectPlayerMediaPresence();
     console.log(`[player] ${source} @ ${at}`, presence);
+    const watched = bindSdkPlayingWatch();
+    console.log(`[player] ${source} @ ${at} playerServer.isPlaying watch=${watched}`);
     const media = findPlayerMedia();
     if (!media) {
       console.warn(
@@ -393,32 +510,38 @@ export function usePlayerControls(options: PlayerControlsOptions) {
 
   async function resumePlayback() {
     if (playInProgress) return;
-    const media = findPlayerMedia();
-    if (!media) {
-      player.waitingForMedia = true;
-      player.needsTapToPlay = false;
-      player.mediaFailed = false;
-      if (!playPollTimer) startPlayPoll();
-      return;
-    }
-
-    bindMediaEvents(media);
     playInProgress = true;
     playRequested = true;
     userPaused = false;
     try {
-      // 起播解除静音；已有用户音量则保留，否则抬到 ≥0.5 方便出声
-      media.muted = false;
-      if (player.volume > 0) media.volume = player.volume / 100;
-      else media.volume = Math.max(media.volume, 0.5);
-      player.muted = false;
-      player.volume = Math.round(media.volume * 100);
-      if (player.volume > 0) volumeBeforeMute = player.volume;
+      const media = findPlayerMedia();
+      if (media) {
+        bindMediaEvents(media);
+        applyUnmuteToMedia(media);
+      }
+
+      // 对齐 demo：用户手势内优先 SDK play（playerServer → player）
+      if (callSdkPlay()) {
+        player.waitingForMedia = false;
+        player.mediaFailed = false;
+        applyPausedUi(false);
+        if (!media) startMediaBindBurst();
+        else syncVolumeFromMedia();
+        return;
+      }
+
+      if (!media) {
+        player.waitingForMedia = true;
+        player.needsTapToPlay = false;
+        player.mediaFailed = false;
+        if (!playPollTimer) startPlayPoll();
+        return;
+      }
+
       await media.play();
       player.waitingForMedia = false;
       player.mediaFailed = false;
       applyPausedUi(false);
-      startMediaStatePoll();
     } catch (e) {
       showTapOverlay();
       const benign =
@@ -437,11 +560,15 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     if (player.waitingForMedia || player.mediaFailed) {
       return;
     }
+    userPaused = true;
+    playRequested = true;
+    if (callSdkPause()) {
+      applyPausedUi(true);
+      return;
+    }
     const media = findPlayerMedia();
     if (!media) return;
     bindMediaEvents(media);
-    userPaused = true;
-    playRequested = true;
     media.pause();
     applyPausedUi(true);
   }
@@ -451,12 +578,7 @@ export function usePlayerControls(options: PlayerControlsOptions) {
       void resumePlayback();
       return;
     }
-    const media = findPlayerMedia();
-    if (!media) {
-      void resumePlayback();
-      return;
-    }
-    if (media.paused || player.isPaused) void resumePlayback();
+    if (player.isPaused) void resumePlayback();
     else pausePlayback();
   }
 
@@ -474,7 +596,8 @@ export function usePlayerControls(options: PlayerControlsOptions) {
 
   function resetPlayback() {
     stopPlayPoll();
-    stopMediaStatePoll();
+    stopMediaBindBurst();
+    unbindSdkPlayingWatch();
     unbindMediaEvents();
     playRequested = false;
     userPaused = false;
@@ -498,9 +621,10 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     disposed = true;
     document.removeEventListener("fullscreenchange", handleFullscreenChange);
     document.removeEventListener("keydown", handleGlobalKeydown);
+    unbindSdkPlayingWatch();
     unbindMediaEvents();
     stopPlayPoll();
-    stopMediaStatePoll();
+    stopMediaBindBurst();
     stageEl = null;
   });
 
