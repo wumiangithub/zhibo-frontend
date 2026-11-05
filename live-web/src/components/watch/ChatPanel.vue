@@ -6,6 +6,8 @@ import { splitEmojiText } from "@/constants/emoji";
 import type { ChatController } from "@/composables/useChat";
 import { formatChatShowTime } from "@/utils/formatChatShowTime";
 import { vhallChatRoleBadge } from "@/utils/vhallChatRole";
+import { questionAnswerText } from "@/utils/vhallQuestion";
+import cartYellowUrl from "@/assets/images/cart-yellow.png";
 
 const props = withDefaults(
   defineProps<{
@@ -23,7 +25,6 @@ const props = withDefaults(
   },
 );
 const chat = props.chat;
-const isDev = import.meta.env.DEV;
 
 const emit = defineEmits<{ cart: []; like: []; listScroll: [e: Event] }>();
 
@@ -70,6 +71,8 @@ const messageShowTimes = computed(() => {
     formatChatShowTime(i > 0 ? list[i - 1]?.timestamp : null, m.timestamp),
   );
 });
+/** 空输入点「问」后，下一次发送走提问 */
+const askMode = ref(false);
 /** 小屏输入框是否聚焦（失焦时短暂延迟，避免点发送/表情先塌布局） */
 const mobileInputFocused = ref(false);
 let mobileBlurTimer: ReturnType<typeof setTimeout> | null = null;
@@ -79,8 +82,26 @@ const mobileComposerActive = computed(
   () =>
     mobileInputFocused.value ||
     showEmoji.value ||
+    askMode.value ||
     !!chat.chatInput.trim(),
 );
+
+function onAskToggle(checked: boolean) {
+  if (chat.isChatMuted) return;
+  askMode.value = checked;
+  if (checked) {
+    const el = mobileInputEl.value ?? inputEl.value;
+    chat.requestChatFocus(el);
+  }
+}
+
+function sendCurrent() {
+  if (askMode.value) {
+    void chat.sendQuestion();
+    return;
+  }
+  void chat.sendChat();
+}
 
 function insertEmoji(name: string) {
   const el = inputEl.value ?? mobileInputEl.value;
@@ -116,18 +137,34 @@ function toggleMobileEmoji() {
 }
 
 function sendMobileChat() {
-  void chat.sendChat();
+  sendCurrent();
 }
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 flex-col">
+  <div class="relative flex min-h-0 flex-1 flex-col">
     <!-- 表情面板打开时的全屏遮罩：点面板外任意处关闭 -->
     <div
       v-if="showEmoji"
       class="fixed inset-0 z-40"
       @click="showEmoji = false"
     ></div>
+
+    <!-- 小黄车：悬浮右下角（底栏之上） -->
+    <button
+      type="button"
+      class="absolute right-2 z-30 flex h-14 w-14 items-center justify-center active:scale-95 md:hidden"
+      style="bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px))"
+      aria-label="购物车"
+      @click="emit('cart')"
+    >
+      <img
+        :src="cartYellowUrl"
+        alt=""
+        class="h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]"
+        draggable="false"
+      >
+    </button>
 
     <!-- 禁言提示 -->
     <div
@@ -189,10 +226,16 @@ function sendMobileChat() {
               >
                 {{ roleBadge(msg) }}
               </span>
+              <span
+                v-if="msg.kind === 'question'"
+                class="flex-none rounded bg-sky-500/25 px-1.5 py-0.5 text-[10px] leading-4 text-sky-200"
+              >
+                问
+              </span>
             </div>
             <!-- 同一暗色气泡：上引用（竖条+浅灰小字）/ 下正文（更大更白），非分离卡片 -->
             <div
-              v-if="msg.reply || msg.msg?.trim()"
+              v-if="msg.reply || msg.msg?.trim() || msg.answer"
               class="mt-1 inline-block max-w-full rounded-[14px] bg-[#3a3a3a] px-3 py-2.5"
             >
               <div
@@ -220,6 +263,12 @@ function sendMobileChat() {
                   >
                   <span v-else>{{ seg.value }}</span>
                 </template>
+              </div>
+              <div
+                v-if="questionAnswerText(msg)"
+                class="mt-2 border-t border-white/10 pt-2 text-[12px] leading-[18px] text-[#c8c8c8]"
+              >
+                {{ questionAnswerText(msg) }}
               </div>
             </div>
             <div
@@ -276,7 +325,7 @@ function sendMobileChat() {
           type="text"
           maxlength="140"
           name="zhibo-chat-message"
-          placeholder="参与聊天"
+          :placeholder="askMode ? '发起提问' : '参与聊天'"
           autocomplete="off"
           autocorrect="off"
           autocapitalize="off"
@@ -284,45 +333,51 @@ function sendMobileChat() {
           class="min-w-0 flex-1 rounded-md bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none disabled:opacity-50"
           :disabled="chat.isChatMuted"
           @focus="chat.requestChatFocus(inputEl)"
-          @keyup.enter="chat.sendChat"
+          @keyup.enter="sendCurrent"
         >
         <button
-          v-if="isDev"
           type="button"
-          class="flex-none rounded-md bg-gray-700 px-3 py-2 text-sm font-medium text-amber-300 hover:bg-gray-600 disabled:opacity-50"
-          title="联调 sendCustomEvent"
+          role="checkbox"
+          class="inline-flex flex-none cursor-pointer select-none items-center gap-1.5 text-sm text-gray-200 disabled:opacity-50"
+          title="提问"
+          :aria-checked="askMode"
+          :aria-label="askMode ? '取消提问模式' : '开启提问模式'"
           :disabled="chat.isChatMuted"
-          @click="chat.sendCustomEventTest()"
+          @click="onAskToggle(!askMode)"
         >
-          自定义消息
+          <span
+            class="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[3px] border-2"
+            :class="askMode ? 'border-sky-400 bg-sky-500 text-white' : 'border-gray-300 bg-gray-800'"
+            aria-hidden="true"
+          >
+            <svg
+              v-if="askMode"
+              class="h-3 w-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+            </svg>
+          </span>
+          <span>问</span>
         </button>
         <button
           class="flex-none rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
           :disabled="chat.isChatMuted || !chat.chatInput.trim()"
-          @click="chat.sendChat"
+          @click="sendCurrent"
         >
           发送
         </button>
       </div>
     </div>
 
-    <!-- 小屏底栏 -->
+    <!-- 小屏底栏（小黄车已改为悬浮） -->
     <div class="flex flex-none items-center gap-2 border-t border-gray-800 bg-gray-900 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] md:hidden">
-      <!-- 回放：仅小黄车 -->
       <template v-if="isReadonly">
         <div class="min-w-0 flex-1 text-xs text-gray-500">
           回放不支持聊天
         </div>
-        <button
-          type="button"
-          class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-yellow-400 active:bg-gray-700"
-          aria-label="购物车"
-          @click="emit('cart')"
-        >
-          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13L5.4 5M7 13l-2.3 2.3c-.4.4-.1 1.1.5 1.1H17M10 20a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
-          </svg>
-        </button>
       </template>
 
       <template v-else>
@@ -356,7 +411,7 @@ function sendMobileChat() {
             type="text"
             maxlength="140"
             name="zhibo-chat-message"
-            placeholder="参与聊天"
+            :placeholder="askMode ? '发起提问' : '参与聊天'"
             autocomplete="off"
             autocorrect="off"
             autocapitalize="off"
@@ -370,17 +425,34 @@ function sendMobileChat() {
         </div>
 
         <button
-          v-if="isDev && mobileComposerActive"
           type="button"
-          class="flex h-9 flex-none items-center justify-center rounded-full bg-gray-800 px-2.5 text-[11px] font-medium text-amber-300 active:bg-gray-700 disabled:opacity-50"
-          aria-label="自定义消息"
-          title="联调 sendCustomEvent"
+          role="checkbox"
+          class="inline-flex flex-none cursor-pointer select-none items-center gap-1.5 text-sm text-gray-200 disabled:opacity-50"
+          title="提问"
+          :aria-checked="askMode"
+          :aria-label="askMode ? '取消提问模式' : '开启提问模式'"
           :disabled="chat.isChatMuted"
           @mousedown.prevent
-          @click="chat.sendCustomEventTest()"
+          @click="onAskToggle(!askMode)"
         >
-          自定义
+          <span
+            class="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[3px] border-2"
+            :class="askMode ? 'border-sky-400 bg-sky-500 text-white' : 'border-gray-300 bg-gray-800'"
+            aria-hidden="true"
+          >
+            <svg
+              v-if="askMode"
+              class="h-3 w-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+            </svg>
+          </span>
+          <span>问</span>
         </button>
+
         <button
           v-if="mobileComposerActive"
           type="button"
@@ -395,35 +467,23 @@ function sendMobileChat() {
           </svg>
         </button>
 
-        <template v-else>
-          <button
-            type="button"
-            class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-yellow-400 active:bg-gray-700"
-            aria-label="购物车"
-            @click="emit('cart')"
+        <button
+          v-else-if="showLike"
+          type="button"
+          class="relative flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-red-400 active:bg-gray-700"
+          aria-label="点赞"
+          @click="emit('like')"
+        >
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.601 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+          </svg>
+          <span
+            v-if="likeCount && likeCount > 0"
+            class="absolute -right-0.5 -top-0.5 min-w-[14px] rounded-full bg-red-500 px-1 text-center text-[10px] leading-[14px] text-white"
           >
-            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13L5.4 5M7 13l-2.3 2.3c-.4.4-.1 1.1.5 1.1H17M10 20a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
-            </svg>
-          </button>
-          <button
-            v-if="showLike"
-            type="button"
-            class="relative flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-red-400 active:bg-gray-700"
-            aria-label="点赞"
-            @click="emit('like')"
-          >
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.601 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-            </svg>
-            <span
-              v-if="likeCount && likeCount > 0"
-              class="absolute -right-0.5 -top-0.5 min-w-[14px] rounded-full bg-red-500 px-1 text-center text-[10px] leading-[14px] text-white"
-            >
-              {{ likeCount > 99999 ? '99999+' : likeCount }}
-            </span>
-          </button>
-        </template>
+            {{ likeCount > 99999 ? '99999+' : likeCount }}
+          </span>
+        </button>
       </template>
     </div>
 

@@ -12,6 +12,14 @@ import {
   saveViewerSession,
 } from "@/utils/viewerAuth";
 
+/** 登录成功后的站内回跳；登录页自身一律回首页。 */
+export function safeViewerRedirect(raw: unknown): string {
+  const value = String(raw ?? "").trim();
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
+  if (value.startsWith("/login")) return "/";
+  return value;
+}
+
 /**
  * 跳观众登录：小程序 web-view 内走小程序登录页；纯 H5 立刻走本站 `/login`。
  * 纯浏览器不先等微信 JS-SDK（CDN 卡住会一直停在观看页）。

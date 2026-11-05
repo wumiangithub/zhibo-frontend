@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { PlayerController } from "@/composables/usePlayerControls";
 import type { BarrageController } from "@/composables/useBarrage";
 import type { RoomStatsController } from "@/composables/useRoomStats";
+import UiBottomSheet from "@/components/UiBottomSheet.vue";
 
 const props = defineProps<{
   player: PlayerController;
@@ -12,13 +13,14 @@ const props = defineProps<{
   hideMobileBarActions?: boolean;
 }>();
 
-/** 与观看页 Uno `md` 一致：<768 小屏（无 hover 滑条，清晰度点开） */
+/** 与观看页 Uno `md` 一致：<768 小屏（无 hover 滑条，清晰度用底部 popup） */
 const isNarrow = ref(false);
 let narrowMql: MediaQueryList | null = null;
 
-/** PC 悬停；小屏清晰度靠点击 pin */
+/** PC 悬停 / 点击 pin；小屏改走 qualitySheetOpen */
 const qualityHover = ref(false);
 const qualityPinned = ref(false);
+const qualitySheetOpen = ref(false);
 const volumeHover = ref(false);
 
 /** 短暂离开不立刻关，避免斜移/缝隙闪关（仅 PC） */
@@ -32,8 +34,9 @@ const currentQualityLabel = computed(() => {
   return hit?.label || "清晰度";
 });
 
-const qualityPanelOpen = computed(() =>
-  isNarrow.value ? qualityPinned.value : qualityHover.value || qualityPinned.value,
+/** 仅 PC 飞出层；小屏用 UiBottomSheet */
+const qualityPanelOpen = computed(
+  () => !isNarrow.value && (qualityHover.value || qualityPinned.value),
 );
 
 const volumePct = computed(() =>
@@ -48,8 +51,11 @@ function syncNarrow() {
   if (isNarrow.value) {
     volumeHover.value = false;
     qualityHover.value = false;
+    qualityPinned.value = false;
     clearVolumeLeaveTimer();
     clearQualityLeaveTimer();
+  } else {
+    qualitySheetOpen.value = false;
   }
 }
 
@@ -101,13 +107,18 @@ function pickQuality(code: string) {
   props.player.setQuality(code);
   qualityPinned.value = false;
   qualityHover.value = false;
+  qualitySheetOpen.value = false;
   clearQualityLeaveTimer();
 }
 
-/** 小屏：点击开/关列表；PC：悬停为主，点击也可 pin */
+/** 小屏：底部 popup；PC：点击 pin 飞出层 */
 function onQualityLabelClick() {
   volumeHover.value = false;
   clearVolumeLeaveTimer();
+  if (isNarrow.value) {
+    qualitySheetOpen.value = true;
+    return;
+  }
   qualityPinned.value = !qualityPinned.value;
 }
 
@@ -368,6 +379,37 @@ onBeforeUnmount(() => {
         </svg>
       </button>
     </div>
+
+    <UiBottomSheet
+      :open="qualitySheetOpen"
+      title="清晰度"
+      @close="qualitySheetOpen = false"
+    >
+      <ul class="py-1">
+        <li
+          v-for="q in player.qualityOptions"
+          :key="q.code"
+        >
+          <button
+            type="button"
+            class="flex w-full items-center justify-between px-4 py-3.5 text-left text-[15px] active:bg-gray-800"
+            :class="q.code === player.currentQualityCode ? 'text-red-400' : 'text-gray-100'"
+            @click="pickQuality(q.code)"
+          >
+            <span>{{ q.label }}</span>
+            <svg
+              v-if="q.code === player.currentQualityCode"
+              class="h-5 w-5 flex-none"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+        </li>
+      </ul>
+    </UiBottomSheet>
   </div>
 </template>
 

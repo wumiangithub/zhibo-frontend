@@ -44,7 +44,10 @@ function isOrderCenterSuccess(code: unknown): boolean {
 }
 
 function stringifyBigIntIds(raw: string): string {
-  return raw.replace(/"spuId"\s*:\s*(\d+)/g, '"spuId":"$1"');
+  return raw
+    .replace(/"spuId"\s*:\s*(\d+)/g, '"spuId":"$1"')
+    .replace(/"orderId"\s*:\s*(\d+)/g, '"orderId":"$1"')
+    .replace(/"orderNo"\s*:\s*(\d+)/g, '"orderNo":"$1"');
 }
 
 function pickPriceFromSkuList(skuList: unknown): string | undefined {
@@ -190,4 +193,148 @@ export async function listViewerProductsForBoundSpus(
   return ordered
     .map((id) => found.get(String(id)))
     .filter((p): p is ViewerOrderCenterProduct => !!p);
+}
+
+/** 订单状态：待支付（对方 order_stats） */
+export const ORDER_STATUS_UNPAID = 1010;
+/** 订单状态：已支付 / 已付款 */
+export const ORDER_STATUS_PAID = 1030;
+
+export interface ViewerOrderItem {
+  orderNo: string;
+  productName: string;
+  customerAccount: string;
+  customerName: string;
+  orderStatus: number;
+  /** 金额字符串，原样展示 */
+  orderMoney: string;
+  createTime: string;
+  coverImg: string;
+  serviceDay: number | string | null;
+  validityLabel: string;
+}
+
+export interface ViewerOrderListResult {
+  list: ViewerOrderItem[];
+  page: number;
+  size: number;
+  total: number;
+}
+
+export function orderStatusLabel(status: number): string {
+  if (status === ORDER_STATUS_PAID) return "已付款";
+  if (status === ORDER_STATUS_UNPAID) return "待支付";
+  return status ? `状态${status}` : "";
+}
+
+export function isPaidOrder(status: number): boolean {
+  return status === ORDER_STATUS_PAID;
+}
+
+function asText(v: unknown): string {
+  if (v == null) return "";
+  return String(v);
+}
+
+function normalizeOrderItem(raw: unknown): ViewerOrderItem {
+  const r = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const status = Number(r.orderStatus);
+  const serviceDay = r.serviceDay;
+  return {
+    orderNo: asText(r.orderNo),
+    productName: asText(r.productName),
+    customerAccount: asText(r.customerAccount),
+    customerName: asText(r.customerName),
+    orderStatus: Number.isFinite(status) ? status : 0,
+    orderMoney: r.orderMoney != null ? String(r.orderMoney) : "",
+    createTime: asText(r.createTime),
+    coverImg: asText(r.coverImg),
+    serviceDay:
+      serviceDay == null || serviceDay === ""
+        ? null
+        : typeof serviceDay === "number" || typeof serviceDay === "string"
+          ? serviceDay
+          : String(serviceDay),
+    validityLabel: asText(r.validityLabel),
+  };
+}
+
+function asPageNumber(v: unknown, fallback: number): number {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/**
+ * 观众端我的订单列表。
+ * POST /order-center/api/live/viewer/order/list
+ * 头 Authorization-Live-Viewers；page 从 1 起，pageSize 1～100。
+ * 不按状态筛选；页面只展示 orderStatus=1030。
+ */
+export async function listMyOrders(opts?: {
+  page?: number;
+  pageSize?: number;
+}): Promise<ViewerOrderListResult> {
+  const token = getViewerAccessToken();
+  if (!token) {
+    throw new Error("请先登录");
+  }
+
+  const page = opts?.page != null && opts.page >= 1 ? Math.floor(opts.page) : 1;
+  const pageSize =
+    opts?.pageSize != null && opts.pageSize >= 1
+      ? Math.min(100, Math.floor(opts.pageSize))
+      : 20;
+
+  const url = `${orderCenterBase()}/order-center/api/live/viewer/order/list`;
+  let resp;
+  try {
+    resp = await axios.post(
+      url,
+      { page, pageSize },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization-Live-Viewers": `Bearer ${token}`,
+        },
+        responseType: "text",
+        transformResponse: [(data) => data],
+        timeout: 20000,
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 401,
+      },
+    );
+  } catch (e) {
+    throw new Error(axiosErrorMessage(e, "网络异常"));
+  }
+
+  let body: OrderCenterListBody;
+  try {
+    const text = typeof resp.data === "string" ? resp.data : JSON.stringify(resp.data ?? {});
+    body = JSON.parse(stringifyBigIntIds(text)) as OrderCenterListBody;
+  } catch {
+    if (resp.status === 401) throw new Error("登录状态已失效");
+    throw new Error("订单中心响应无法解析");
+  }
+
+  const code = body.code;
+  const authFailed =
+    resp.status === 401 ||
+    code === 401 ||
+    code === "401" ||
+    code === 16 ||
+    code === "16";
+  if (authFailed) {
+    throw new Error(body.message || body.msg || "登录状态已失效");
+  }
+  if (!isOrderCenterSuccess(code)) {
+    throw new Error(body.message || body.msg || "请求失败");
+  }
+
+  const data = body.data ?? {};
+  const list = (data.list ?? []).map(normalizeOrderItem);
+  return {
+    list,
+    page: asPageNumber(data.page, page),
+    size: asPageNumber(data.size, pageSize),
+    total: asPageNumber(data.total, list.length),
+  };
 }

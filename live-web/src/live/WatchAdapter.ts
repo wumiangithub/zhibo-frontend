@@ -8,6 +8,10 @@ export interface WatchAdapterHandlers {
   onLiveStart: () => void;
   onChatMsg: (msg: VhallChatMsgMessage) => void;
   onChatDelete: (msg: unknown) => void;
+  /** 微吼提问：question_answer_create / question_answer_commit */
+  onQuestion?: (msg: unknown) => void;
+  /** 微吼撤回提问回复：question_answer_backout */
+  onQuestionBackout?: (msg: unknown) => void;
   onDisableChat: () => void;
   onPermitChat: () => void;
   onAnnouncement: (msg: unknown) => void;
@@ -25,8 +29,13 @@ export interface WatchAdapterHandlers {
    */
   onModuleReady?: () => void;
   /**
-   * 微吼播放器 `vhallplay_LOADED`：视频侧加载完成信号。
-   * 上层可据此尝试推进与轮询相同的就绪路径；无媒体节点时勿当成功。
+   * 官方 `playerReady`：播放器初始化成功（见微吼 events；demo 用它置 videoIsReady）。
+   * 上层应优先据此推进自建底栏就绪；若当时 #player 内尚无 media，可短暂轮询兜底。
+   */
+  onPlayerReady?: () => void;
+  /**
+   * 微吼 `vhallplay_LOADED`：视频侧加载完成（demo 多用于关 loading）。
+   * 作为 playerReady 的次要信号；无媒体节点时勿当成功。
    */
   onPlayerLoaded?: () => void;
   /**

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import UiBottomSheet from "@/components/UiBottomSheet.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -32,7 +33,12 @@ const playing = ref(false);
 const current = ref(0);
 const duration = ref(0);
 const rate = ref(1);
+/** PC 飞出层；小屏用底部 popup */
 const showRates = ref(false);
+const speedSheetOpen = ref(false);
+/** 与 Uno `md` 一致：<768 用 popup */
+const isNarrow = ref(false);
+let narrowMql: MediaQueryList | null = null;
 const isFullscreen = ref(false);
 /** CSS 伪全屏（Fullscreen API 不可用时） */
 const pseudoFullscreen = ref(false);
@@ -121,6 +127,21 @@ function setRate(v: number) {
   const el = videoRef.value;
   if (el) el.playbackRate = v;
   showRates.value = false;
+  speedSheetOpen.value = false;
+}
+
+function syncNarrow() {
+  isNarrow.value = !!narrowMql?.matches;
+  if (isNarrow.value) showRates.value = false;
+  else speedSheetOpen.value = false;
+}
+
+function onSpeedClick() {
+  if (isNarrow.value) {
+    speedSheetOpen.value = true;
+    return;
+  }
+  showRates.value = !showRates.value;
 }
 
 function syncFullscreenFlag() {
@@ -235,6 +256,9 @@ watch(
 
 onMounted(() => {
   bindVideo(videoRef.value);
+  narrowMql = window.matchMedia("(max-width: 767px)");
+  syncNarrow();
+  narrowMql.addEventListener("change", syncNarrow);
   document.addEventListener("fullscreenchange", syncFullscreenFlag);
   document.addEventListener("keydown", onFsKeydown);
   const video = videoRef.value;
@@ -245,6 +269,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  narrowMql?.removeEventListener("change", syncNarrow);
+  narrowMql = null;
   document.removeEventListener("fullscreenchange", syncFullscreenFlag);
   document.removeEventListener("keydown", onFsKeydown);
   const video = videoRef.value;
@@ -342,12 +368,12 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="rounded-md bg-gray-800 px-3 py-1.5 text-sm text-white hover:bg-gray-700"
-              @click="showRates = !showRates"
+              @click="onSpeedClick"
             >
               {{ rate === 1 ? "倍速" : `${rate}x` }}
             </button>
             <div
-              v-if="showRates"
+              v-if="showRates && !isNarrow"
               class="absolute bottom-full right-0 z-10 mb-1 min-w-[5rem] overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-lg"
             >
               <button
@@ -385,6 +411,37 @@ onBeforeUnmount(() => {
         已禁止快进，请按进度完整观看
       </p>
     </div>
+
+    <UiBottomSheet
+      :open="speedSheetOpen"
+      title="倍速"
+      @close="speedSheetOpen = false"
+    >
+      <ul class="py-1">
+        <li
+          v-for="opt in SPEED_OPTIONS"
+          :key="opt"
+        >
+          <button
+            type="button"
+            class="flex w-full items-center justify-between px-4 py-3.5 text-left text-[15px] active:bg-gray-800"
+            :class="opt === rate ? 'text-red-400' : 'text-gray-100'"
+            @click="setRate(opt)"
+          >
+            <span>{{ opt }}x</span>
+            <svg
+              v-if="opt === rate"
+              class="h-5 w-5 flex-none"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+        </li>
+      </ul>
+    </UiBottomSheet>
   </div>
 </template>
 

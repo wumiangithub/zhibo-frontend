@@ -450,29 +450,36 @@ onMounted(() => {
           </div>
         </div>
 
-        <PreviewScreen
-          v-else-if="data && isPreview"
-          :data="data"
-          :countdown="countdown"
-          :show-live-start-popup="showLiveStartPopup"
-          @enter="enterLiveFromPreview"
-        />
-
-        <EndedScreen
-          v-else-if="data && (isEnded || isReplay)"
-          :data="data"
-          :show-replay-entry="showReplayEntry"
-          :playback-expired="playbackExpired"
-          :replay-loading="replayLoading"
-          @replay="onViewReplay"
-        />
-
+        <!-- 预告 / 直播 / 结束同一页：PlayerStage 常挂，overlay 只改壳；不因结束拆 SDK -->
         <div
-          v-else-if="data && isLive"
-          class="flex min-h-0 flex-1 flex-col"
+          v-else-if="data && (isPreview || isLive || isEnded || isReplay)"
+          class="relative flex min-h-0 flex-1 flex-col"
         >
+          <PreviewScreen
+            v-if="isPreview"
+            class="absolute inset-0 z-20"
+            :data="data"
+            :countdown="countdown"
+            :show-live-start-popup="showLiveStartPopup"
+            :host-player="false"
+            @enter="enterLiveFromPreview"
+          />
+
+          <EndedScreen
+            v-if="isEnded || isReplay"
+            class="absolute inset-0 z-20"
+            :data="data"
+            :show-replay-entry="showReplayEntry"
+            :playback-expired="playbackExpired"
+            :replay-loading="replayLoading"
+            :show-live-start-popup="showLiveStartPopup"
+            :host-player="false"
+            @replay="onViewReplay"
+            @enter="enterLiveFromPreview"
+          />
+
           <div
-            v-if="notice.text"
+            v-show="isLive && notice.text"
             class="flex flex-none items-center gap-2 bg-amber-600/90 px-4 py-2 text-sm text-white"
           >
             <span class="font-medium">公告</span>
@@ -485,7 +492,7 @@ onMounted(() => {
             </button>
           </div>
 
-          <WatchRoomShell>
+          <WatchRoomShell class="min-h-0 flex-1">
             <template #media>
               <PlayerStage
                 :player="player"
@@ -500,6 +507,7 @@ onMounted(() => {
             </template>
             <template #side>
               <WatchSidePanel
+                v-show="isLive"
                 mode="live"
                 :chat="chat"
                 :barrage="barrage"

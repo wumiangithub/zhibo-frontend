@@ -14,12 +14,21 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
+declare module "vue-router" {
+  interface RouteMeta {
+    /** 观众 H5 壳：无 access 则去 /login */
+    requiresViewer?: boolean;
+  }
+}
+
 interface VhallSdkOptions {
   app_key: string;
   signedat: string;
   webinar_id: string | number;
   email: string;
   username: string;
+  /** 观众头像 URL；无头像为 ""，仍参与签名 */
+  head: string;
   sign: string;
   sign_type?: number;
   videoContent: string;
@@ -32,6 +41,8 @@ interface ChatMessage {
   /** 文本正文；纯图片消息可为空串 */
   msg: string;
   msgId?: string;
+  /** 本站 room_comment.id；本次发送上报成功后才有，供本场软删 */
+  commentId?: number;
   /** 聊天附带图片（微吼 data.image_urls / img_urls，已规范化） */
   imageUrls?: string[];
   /** 发送者头像 URL；空则 UI 用占位 */
@@ -50,12 +61,21 @@ interface ChatMessage {
    * msgId：被回复消息 id，昵称缺失时可在列表内回填。
    */
   reply?: { nickname: string; content: string; msgId?: string };
+  /** 提问。普通聊天不设。来自 sendQuestion / question_answer_* */
+  kind?: "question";
+  /** 主持人对该提问的回复 */
+  answer?: { nickname: string; content: string; roleLabel?: string };
 }
 
 interface ChatModule {
   sendChat(msg: string): void;
   /** 官方文档：发送自定义消息，返回 Promise */
   sendCustomEvent(msg: { type: string; data: unknown }): Promise<unknown>;
+  /**
+   * 3.x demo 的提问入口。本站优先调实例上的 sendQuestion，没有再走这里。
+   * 参数为提问文本，≤140。
+   */
+  sendQuestion?(content: string): Promise<unknown> | void;
 }
 
 interface PraiseModule {
@@ -275,6 +295,10 @@ interface VhallSdkInstance {
   sendBarrage?(text: string): void;
   setBarrageInfo?(opt: BarrageInfo): void;
   vhall_get_live_history_chat_msg(opt: { page: number }): Promise<{ code: number | string; msg?: string; data: VhallHistoryChatItem[] }>;
+  /** 提交问答提问。文本 ≤140，返回 Promise */
+  sendQuestion?(content: string): Promise<unknown>;
+  /** 直播中的历史提问。demo 无参，成功体为列表或 { data: 列表 } */
+  vhall_get_live_history_question_msg?(): Promise<unknown>;
   vhall_get_history_notice(page: number): Promise<{ code: number | string; data: { data: VhallNoticeItem[] } }>;
   interactTools: InteractTools;
   getRoominfo?(): Promise<{ room_id?: string; roomId?: string; interact?: { room_id?: string } }>;

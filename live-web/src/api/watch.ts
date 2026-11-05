@@ -24,6 +24,8 @@ export interface SdkInitPayload {
   /** 已签名 `{viewerId}@qkzb.com`，不要在前端改，否则签名失效 */
   email: string;
   username: string;
+  /** 观众头像 URL；无头像为 ""。已参与签名，init 必须原样传 head */
+  head: string;
   webinarId: string;
   appKey: string;
   signedAt: string;

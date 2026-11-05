@@ -337,7 +337,11 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     return true;
   }
 
-  function startPlayPoll() {
+  /**
+   * DOM 兜底轮询：仅在官方事件未推进就绪时使用。
+   * 主路径应走 playerReady / vhallplay_LOADED；自建底栏仍需 HTMLMediaElement，故事件后无节点时才轮询。
+   */
+  function startPlayPoll(maxTries = 20) {
     stopPlayPoll();
     stopMediaStatePoll();
     player.waitingForMedia = true;
@@ -349,7 +353,7 @@ export function usePlayerControls(options: PlayerControlsOptions) {
       tries += 1;
       const media = findPlayerMedia();
       if (media && tryAdvanceMediaReady(media)) return;
-      if (tries >= 40) {
+      if (tries >= maxTries) {
         if (!findPlayerMedia()) {
           markMediaFailed("播放器长时间未就绪");
         } else {
@@ -360,26 +364,31 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     }, 500);
   }
 
-  function onVhallPlayLoaded() {
+  /** 官方/事件推进：有 media 则结束等待；无则短轮询兜底（对齐 demo playerReady，仍兼容自建底栏） */
+  function advanceFromSdkEvent(source: "playerReady" | "vhallplay_LOADED") {
     const at = new Date().toISOString();
     const presence = inspectPlayerMediaPresence();
-    console.log(`[player] vhallplay_LOADED @ ${at}`, presence);
+    console.log(`[player] ${source} @ ${at}`, presence);
     const media = findPlayerMedia();
     if (!media) {
       console.warn(
-        `[player] vhallplay_LOADED @ ${at} 已回调但 #player 内未找到 video/audio/#player-vhall-video，不推进就绪（继续轮询）`,
+        `[player] ${source} @ ${at} 已回调但 #player 内未找到 video/audio/#player-vhall-video，短轮询兜底`,
         presence,
       );
+      if (!playPollTimer) startPlayPoll(16);
       return;
     }
     if (tryAdvanceMediaReady(media)) {
-      console.log(`[player] vhallplay_LOADED @ ${at} 已找到媒体并推进就绪`, presence);
-    } else {
-      console.warn(
-        `[player] vhallplay_LOADED @ ${at} 已找到媒体但尚未可决出播放态（readyState/paused），继续轮询`,
-        { presence, paused: media.paused, readyState: media.readyState },
-      );
+      console.log(`[player] ${source} @ ${at} 已找到媒体并推进就绪`, presence);
     }
+  }
+
+  function onPlayerReady() {
+    advanceFromSdkEvent("playerReady");
+  }
+
+  function onVhallPlayLoaded() {
+    advanceFromSdkEvent("vhallplay_LOADED");
   }
 
   async function resumePlayback() {
@@ -503,6 +512,7 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     stopPlayPoll,
     resetPlayback,
     notifyAutoplayFailed,
+    onPlayerReady,
     onVhallPlayLoaded,
     markMediaFailed,
     bindStageEl,

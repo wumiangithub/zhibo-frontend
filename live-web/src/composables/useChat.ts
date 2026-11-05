@@ -1,5 +1,13 @@
 import { nextTick, reactive } from "vue";
-import { deleteComment, reportComment } from "@/api/comments";
+import {
+  CommentType,
+  deleteComment,
+  reportComment,
+  upsertQuestionAnswer,
+  type ReportCommentBody,
+  type UpsertQuestionAnswerBody,
+} from "@/api/comments";
+import { createChatQuestions } from "@/composables/chatQuestions";
 import { normalizeEmojiText } from "@/constants/emoji";
 import { collectVhallChatImageUrls } from "@/utils/vhallChatImage";
 import { parseVhallChatRole } from "@/utils/vhallChatRole";
@@ -242,30 +250,129 @@ function formatCommentTime(ts: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-/**
- * 上报本站评论（须观众 JWT；viewerId 由后端从 Authorization 解析）。
- * 只报本人发言：发聊天必须登录，勿把当前 JWT 绑到他人 chatMsg。
- */
-function persistComment(options: ChatOptions, msg: ChatMessage) {
-  const activityId = options.getActivityId?.()?.trim() ?? "";
-  if (!activityId) return;
-  if (options.getViewerId?.() == null) return;
-  const text = msg.msg?.trim() || (msg.imageUrls?.length ? "[图片]" : "");
-  if (!text) return;
-  void reportComment(activityId, {
-    content: text.slice(0, 500),
-    nickname: msg.sender_name || undefined,
-    roleName: msg.role_name ?? undefined,
-    providerMsgId:
-      msg.msgId && !msg.msgId.startsWith("local_") ? msg.msgId.slice(0, 64) : undefined,
-    commentTime: formatCommentTime(msg.timestamp || Date.now()),
-  }).catch((e) => {
-    console.warn("评论上报本站失败", e);
-  });
+interface PendingComment {
+  text: string;
+  t: number;
+  commentId?: number;
+  message?: ChatMessage;
+  /** chatDelete 早于上报返回：拿到 id 后再软删 */
+  deleted?: boolean;
+  attached: boolean;
 }
 
 export function useChat(options: ChatOptions) {
   const { getSdk, getSender, onIncoming } = options;
+  /** 本次发送、尚未对上列表消息的上报；不带微吼 msgId */
+  const pendingComments: PendingComment[] = [];
+
+  function softDeleteReported(activityId: string, commentId: number) {
+    void deleteComment(activityId, { commentId }).catch((e) => {
+      console.warn("评论软删上报失败", e);
+    });
+  }
+
+  /**
+   * 发送成功后立刻上报本人评论（须观众 JWT）。
+   * 不等 chatMsg 回声，不传微吼 msgId。他人消息不入库。
+   */
+  function reportSentMessage(text: string) {
+    const activityId = options.getActivityId?.()?.trim() ?? "";
+    if (!activityId) return;
+    if (options.getViewerId?.() == null) return;
+    const content = text.trim().slice(0, 500);
+    if (!content) return;
+    const now = Date.now();
+    while (pendingComments.length && now - pendingComments[0].t > 120000) {
+      pendingComments.shift();
+    }
+    const slot: PendingComment = {
+      text: normalizeEmojiText(content),
+      t: now,
+      attached: false,
+    };
+    pendingComments.push(slot);
+    const sender = getSender();
+    void reportComment(activityId, {
+      content,
+      nickname: sender.name || undefined,
+      roleName: 2,
+      commentType: CommentType.CHAT,
+      commentTime: formatCommentTime(now),
+    })
+      .then((res) => {
+        if (res?.id == null) return;
+        slot.commentId = res.id;
+        if (slot.message) slot.message.commentId = res.id;
+        if (slot.deleted) softDeleteReported(activityId, res.id);
+      })
+      .catch((e) => {
+        console.warn("评论上报本站失败", e);
+      });
+  }
+
+  /**
+   * 提问发送成功后上报。与聊天同一张表，类型为提问。
+   * 须已拿到云提问 id（sendQuestion data.id）→ questionId；此时尚无 msg_id。
+   * 不等问答回声，他人提问不入库。
+   */
+  function reportSentQuestion(text: string, questionId: string) {
+    const activityId = options.getActivityId?.()?.trim() ?? "";
+    if (!activityId) return;
+    if (options.getViewerId?.() == null) return;
+    const content = text.trim().slice(0, 500);
+    const qid = questionId.trim().slice(0, 64);
+    if (!content || !qid) return;
+    const sender = getSender();
+    const now = Date.now();
+    void reportComment(activityId, {
+      content,
+      nickname: sender.name || undefined,
+      roleName: 2,
+      commentType: CommentType.QUESTION,
+      questionId: qid,
+      commentTime: formatCommentTime(now),
+    }).catch((e) => {
+      console.warn("提问上报本站失败", e);
+    });
+  }
+
+  /** create 携带 msg_id 时幂等补写；行已存在则只补 msg，不改 viewer。 */
+  function reportQuestionMsgBackfill(body: ReportCommentBody) {
+    const activityId = options.getActivityId?.()?.trim() ?? "";
+    if (!activityId) return;
+    if (options.getViewerId?.() == null) return;
+    if (!body.questionId?.trim() || !body.msgId?.trim()) return;
+    void reportComment(activityId, body).catch((e) => {
+      console.warn("提问 msg_id 补写失败", e);
+    });
+  }
+
+  /** commit 后把主持人回复 upsert 到同一提问行（多观众重复 POST，后端幂等）。 */
+  function reportQuestionAnswer(body: UpsertQuestionAnswerBody) {
+    const activityId = options.getActivityId?.()?.trim() ?? "";
+    if (!activityId) return;
+    if (options.getViewerId?.() == null) return;
+    if (!body.questionId?.trim() || !body.answerContent?.trim()) return;
+    void upsertQuestionAnswer(activityId, body).catch((e) => {
+      console.warn("提问回复上报本站失败", e);
+    });
+  }
+
+  /** 回声上屏后记下本站评论 id，便于随后 chatDelete 按 commentId 软删 */
+  function claimPending(msg: ChatMessage) {
+    if (msg.kind === "question") return;
+    const key = normalizeEmojiText((msg.msg || "").trim());
+    if (!key) return;
+    const now = Date.now();
+    const slot = pendingComments.find(
+      (p) => !p.attached && p.text === key && now - p.t < 20000,
+    );
+    if (!slot) return;
+    slot.attached = true;
+    slot.message = msg;
+    if (slot.commentId != null) msg.commentId = slot.commentId;
+  }
+
   const chat = reactive({
     chatMessages: [] as ChatMessage[],
     chatInput: "",
@@ -352,13 +459,32 @@ export function useChat(options: ChatOptions) {
     }
   }
 
+  const questions = createChatQuestions({
+    chat,
+    getSdk,
+    getSender,
+    canSend: gateUnauthenticated,
+    trimList,
+    scrollChatToBottom,
+    onSent: reportSentQuestion,
+    onCreateMsgBackfill: reportQuestionMsgBackfill,
+    onAnswerCommit: reportQuestionAnswer,
+  });
+
   function sendChat() {
     const msg = chat.chatInput.trim();
     const sdk = getSdk();
     if (!msg || !sdk || chat.isChatMuted || msg.length > MAX_LEN) return;
     if (!gateUnauthenticated()) return;
     try {
-      sdk.chat.sendChat(msg);
+      const result = sdk.chat.sendChat(msg) as unknown;
+      console.log("[vhall-sdk] sendChat result", result);
+      if (result && typeof (result as Promise<unknown>).then === "function") {
+        void (result as Promise<unknown>).then(
+          (data) => console.log("[vhall-sdk] sendChat resolved", data),
+          (err) => console.log("[vhall-sdk] sendChat rejected", err),
+        );
+      }
       const sender = getSender();
       chat.chatMessages.push({
         sender_id: sender.id,
@@ -372,35 +498,9 @@ export function useChat(options: ChatOptions) {
       trimList();
       chat.chatInput = "";
       scrollChatToBottom();
+      reportSentMessage(msg);
     } catch (e) {
       console.error("发送聊天失败", e);
-    }
-  }
-
-  /**
-   * 联调官方 `chat.sendCustomEvent`（文档：{ type, data } → Promise）。
-   * data.name 取当前聊天输入框内容；收包看 `[vhall-sdk] sendCustomEvent` / `customEvent`。
-   */
-  async function sendCustomEventTest(): Promise<void> {
-    const text = chat.chatInput.trim();
-    if (!text || text.length > MAX_LEN) return;
-    const sdk = getSdk();
-    if (!sdk?.chat?.sendCustomEvent) {
-      console.warn("[vhall-sdk] sendCustomEvent unavailable: SDK 未就绪或不支持");
-      return;
-    }
-    const payload = {
-      type: "zhibo_test",
-      data: {
-        name: text,
-        at: Date.now(),
-      },
-    };
-    try {
-      const result = await sdk.chat.sendCustomEvent(payload);
-      console.log("[vhall-sdk] sendCustomEvent result", result);
-    } catch (e) {
-      console.warn("[vhall-sdk] sendCustomEvent failed", e);
     }
   }
 
@@ -424,8 +524,7 @@ export function useChat(options: ChatOptions) {
     );
     if (placeholderIdx !== -1) {
       chat.chatMessages.splice(placeholderIdx, 1, msg);
-      // 本地发送回声：只上报本人
-      persistComment(options, msg);
+      claimPending(msg);
       return;
     }
     // 他人消息或无占位命中时的常规去重：近 5 秒内相同发送者 + 内容视为同一条
@@ -437,14 +536,20 @@ export function useChat(options: ChatOptions) {
           sameChatBody(m, msg) &&
           Math.abs(m.timestamp - Date.now()) < 5000,
       );
-    if (isDuplicate) return;
+    if (isDuplicate) {
+      const existing = chat.chatMessages.slice(-20).find(
+        (m) =>
+          m.sender_id === msg.sender_id &&
+          sameChatBody(m, msg) &&
+          Math.abs(m.timestamp - Date.now()) < 5000,
+      );
+      if (existing) claimPending(existing);
+      return;
+    }
     chat.chatMessages.push(msg);
     trimList();
-    // 他人 chatMsg 不上报（viewerId 来自当前 JWT，不能绑到别人）
-    const selfId = options.getSender().id?.trim() || "";
-    if (selfId && msg.sender_id?.trim() === selfId) {
-      persistComment(options, msg);
-    }
+    // 弹幕没有 local_ 占位，回声靠正文对上本次发送
+    claimPending(msg);
   }
 
   function handleChatMessage(data: VhallChatMsgMessage) {
@@ -463,14 +568,26 @@ export function useChat(options: ChatOptions) {
 
   function handleChatDelete(data: unknown) {
     const { msgId } = data as { msgId?: string };
-    if (msgId) {
-      chat.chatMessages = chat.chatMessages.filter((m) => m.msgId !== msgId);
-      const activityId = options.getActivityId?.()?.trim() ?? "";
-      if (activityId && !msgId.startsWith("local_") && options.getViewerId?.() != null) {
-        void deleteComment(activityId, { providerMsgId: msgId.slice(0, 64) }).catch((e) => {
-          console.warn("评论软删上报失败", e);
-        });
-      }
+    if (!msgId) return;
+    const hit = chat.chatMessages.find((m) => m.msgId === msgId);
+    chat.chatMessages = chat.chatMessages.filter((m) => m.msgId !== msgId);
+    const activityId = options.getActivityId?.()?.trim() ?? "";
+    if (!activityId || options.getViewerId?.() == null) return;
+    if (hit?.commentId != null) {
+      softDeleteReported(activityId, hit.commentId);
+      return;
+    }
+    const slot = pendingComments.find((p) => p.message === hit);
+    if (slot) {
+      slot.deleted = true;
+      if (slot.commentId != null) softDeleteReported(activityId, slot.commentId);
+      return;
+    }
+    // 刷新前写入、仍带微吼 msgId 的历史行
+    if (!msgId.startsWith("local_")) {
+      void deleteComment(activityId, { msgId: msgId.slice(0, 64) }).catch((e) => {
+        console.warn("评论软删上报失败", e);
+      });
     }
   }
 
@@ -507,6 +624,8 @@ export function useChat(options: ChatOptions) {
         console.warn("加载聊天历史失败", e);
       }
       throw e;
+    } finally {
+      if (!historyDisposed) await questions.loadHistory();
     }
   }
 
@@ -566,8 +685,11 @@ export function useChat(options: ChatOptions) {
     requestChatFocus,
     completeVerify,
     sendChat,
-    sendCustomEventTest,
+    sendQuestion: questions.sendQuestion,
+    reportSentMessage,
     handleChatMessage,
+    handleQuestion: questions.handleQuestion,
+    handleQuestionBackout: questions.handleQuestionBackout,
     handleChatDelete,
     loadChatHistory,
     scheduleLoadHistory,

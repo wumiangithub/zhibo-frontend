@@ -49,6 +49,8 @@ export class VhallWatchAdapter implements WatchAdapter {
       // 签名里含 email。有观众 id 时已是 {id}@qkzb.com；换账号必须重新拉签名再 new，不能只改这一字段
       email: data.sdk.email,
       username: data.sdk.username,
+      // 无头像也要传空串，且必须与签名时的 head 一致
+      head: data.sdk.head ?? "",
       sign: data.sdk.sign,
       sign_type: data.sdk.signType ?? 0,
       videoContent: "#player",
@@ -89,6 +91,18 @@ export class VhallWatchAdapter implements WatchAdapter {
       console.log(`[vhall-sdk] chatMsg @ ${new Date().toISOString()}`, msg);
       handlers.onChatMsg(msg);
     });
+    this.sdk.$on("question_answer_create", (msg: unknown) => {
+      console.log(`[vhall-sdk] question_answer_create @ ${new Date().toISOString()}`, msg);
+      handlers.onQuestion?.(msg);
+    });
+    this.sdk.$on("question_answer_commit", (msg: unknown) => {
+      console.log(`[vhall-sdk] question_answer_commit @ ${new Date().toISOString()}`, msg);
+      handlers.onQuestion?.(msg);
+    });
+    this.sdk.$on("question_answer_backout", (msg: unknown) => {
+      console.log(`[vhall-sdk] question_answer_backout @ ${new Date().toISOString()}`, msg);
+      handlers.onQuestionBackout?.(msg);
+    });
     // 联调 chat.sendCustomEvent：官方文档回执 + 广播
     this.sdk.$on("sendCustomEvent", (msg: unknown) => {
       console.log(`[vhall-sdk] sendCustomEvent @ ${new Date().toISOString()}`, msg);
@@ -114,12 +128,17 @@ export class VhallWatchAdapter implements WatchAdapter {
     });
 
     // 隐藏控制条：SDK 自带 .hiddneControl（拼写即为 hiddne）+ 显式藏 .vh-player-controller。
-    // moduleReady=模块就绪、vhallplay_LOADED=视频加载完；二者先后不定且可能只来其一，都听并幂等。
+    // moduleReady=模块就绪；playerReady=播放器初始化成功（官方/demo 主信号）；
+    // vhallplay_LOADED=视频加载完（次要）。事件先后不定且可能只来其一，都听并幂等。
     // 容器/控制条由 SDK 异步插入，事件可能早于 DOM，故短时 MutationObserver 兜底；destroy 时断开防泄漏。
     this.sdk.$on("moduleReady", () => {
       this.applyHiddneControl();
       // 对齐 demo：isModuleReady 后再拉历史/房间信息；勿在 new 后立刻调
       handlers.onModuleReady?.();
+    });
+    this.sdk.$on("playerReady", () => {
+      this.applyHiddneControl();
+      handlers.onPlayerReady?.();
     });
     this.sdk.$on("vhallplay_LOADED", () => {
       this.applyHiddneControl();

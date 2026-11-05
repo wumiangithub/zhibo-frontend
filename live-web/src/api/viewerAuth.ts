@@ -1,4 +1,5 @@
-import { post } from "./http";
+import { get, post } from "./http";
+import { getViewerAccessToken } from "@/utils/viewerAuth";
 
 export interface ViewerAuthUser {
   id: number;
@@ -25,6 +26,14 @@ export function devPhoneLogin(phone: string) {
   return post<ViewerAuthSession>("/viewer/auth/dev-phone-login", {
     phone,
     agreed: true,
+  });
+}
+
+/** 当前观众。成功 data 即 user。 */
+export function getViewerUserInfo() {
+  const token = getViewerAccessToken();
+  return get<ViewerAuthUser>("/viewer/auth/user-info", {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 }
 

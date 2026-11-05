@@ -279,27 +279,38 @@ onMounted(() => {
             重试
           </button>
         </div>
-        <PreviewScreen
-          v-else-if="data && isPreview"
-          :data="data"
-          :countdown="countdown"
-          :show-live-start-popup="showLiveStartPopup"
-          @enter="enterLiveFromPreview"
-        />
-        <EndedScreen
-          v-else-if="data && (isEnded || isReplay)"
-          :data="data"
-          :show-replay-entry="false"
-        />
-        <PlayerStage
-          v-else-if="data && isLive"
-          :player="player"
-          :barrage="barrage"
-          :stats="stats"
-          :title="data.title"
-          :is-audio-live="isAudioLive"
-          @retry="load"
-        />
+        <!-- 与观看页同：预告/直播/结束共挂 PlayerStage，结束不拆 SDK -->
+        <div
+          v-else-if="data && (isPreview || isLive || isEnded || isReplay)"
+          class="relative flex min-h-0 flex-1 flex-col"
+        >
+          <PreviewScreen
+            v-if="isPreview"
+            class="absolute inset-0 z-20"
+            :data="data"
+            :countdown="countdown"
+            :show-live-start-popup="showLiveStartPopup"
+            :host-player="false"
+            @enter="enterLiveFromPreview"
+          />
+          <EndedScreen
+            v-if="isEnded || isReplay"
+            class="absolute inset-0 z-20"
+            :data="data"
+            :show-replay-entry="false"
+            :show-live-start-popup="showLiveStartPopup"
+            :host-player="false"
+            @enter="enterLiveFromPreview"
+          />
+          <PlayerStage
+            :player="player"
+            :barrage="barrage"
+            :stats="stats"
+            :title="data.title"
+            :is-audio-live="isAudioLive"
+            @retry="load"
+          />
+        </div>
         <div
           v-else
           class="player-state"

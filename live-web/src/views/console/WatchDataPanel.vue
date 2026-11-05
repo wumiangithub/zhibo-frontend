@@ -26,10 +26,13 @@ const trendRef = ref<{
 } | null>(null);
 const refreshing = ref(false);
 
-const commentCount = computed(() => props.chat.chatMessages.length);
+const chatComments = computed(() =>
+  props.chat.chatMessages.filter((m) => m.kind !== "question"),
+);
+const commentCount = computed(() => chatComments.value.length);
 const commentUsers = computed(() => {
   const ids = new Set<string>();
-  for (const m of props.chat.chatMessages) {
+  for (const m of chatComments.value) {
     const id = m.sender_id?.trim();
     if (id) ids.add(id);
   }

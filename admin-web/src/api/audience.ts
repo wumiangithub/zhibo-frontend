@@ -48,6 +48,8 @@ export interface AudienceCommentItem {
   guestId?: string;
   nickname?: string;
   content: string;
+  /** 1 聊天 / 2 提问 */
+  commentType?: number;
   commentTime: string;
   deleted: boolean;
 }

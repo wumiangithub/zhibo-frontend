@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import cartYellowUrl from "@/assets/images/cart-yellow.png";
+
 withDefaults(
   defineProps<{
     title: string;
@@ -25,7 +27,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 flex-col">
+  <div class="relative flex min-h-0 flex-1 flex-col">
     <div class="min-h-0 flex-1 overflow-y-auto p-4">
       <h3 class="mb-3 text-base font-semibold text-white">
         {{ title }}
@@ -41,6 +43,23 @@ const emit = defineEmits<{
         </p>
       </div>
     </div>
+
+    <!-- 小黄车：悬浮右下角（与聊天页一致） -->
+    <button
+      type="button"
+      class="absolute right-2 z-30 flex h-14 w-14 items-center justify-center active:scale-95 md:hidden"
+      style="bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px))"
+      aria-label="购物车"
+      @click="emit('cart')"
+    >
+      <img
+        :src="cartYellowUrl"
+        alt=""
+        class="h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]"
+        draggable="false"
+      >
+    </button>
+
     <div class="flex flex-none items-center gap-2 border-t border-gray-800 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] md:hidden">
       <button
         type="button"
@@ -48,16 +67,6 @@ const emit = defineEmits<{
         @click="emit('goChat')"
       >
         {{ readonlyChat ? "查看聊天" : "参与聊天" }}
-      </button>
-      <button
-        type="button"
-        class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-gray-800 text-yellow-400"
-        title="购物车"
-        @click="emit('cart')"
-      >
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l3-8H6.4M7 13L5.4 5M7 13l-2.3 2.3c-.4.4-.1 1.1.5 1.1H17M10 20a1 1 0 11-2 0 1 1 0 012 0zm8 0a1 1 0 11-2 0 1 1 0 012 0z" />
-        </svg>
       </button>
       <button
         v-if="showLike"

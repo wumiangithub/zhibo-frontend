@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import type { WatchSummaryData } from "@/api/watch";
 
-defineProps<{
-  data: WatchSummaryData;
-  countdown: string;
-  showLiveStartPopup: boolean;
-}>();
+withDefaults(
+  defineProps<{
+    data: WatchSummaryData;
+    countdown: string;
+    showLiveStartPopup: boolean;
+    /** false：由外层 PlayerStage 提供 #player/#docWrap，本组件只做遮罩 */
+    hostPlayer?: boolean;
+  }>(),
+  { hostPlayer: true },
+);
 
 const emit = defineEmits<{ enter: [] }>();
 </script>
@@ -43,13 +48,15 @@ const emit = defineEmits<{ enter: [] }>();
       </div>
     </div>
 
-    <div
-      id="player"
-      class="min-h-0 w-full flex-1 opacity-0"
-    />
-    <div
-      id="docWrap"
-      class="hidden"
-    />
+    <template v-if="hostPlayer">
+      <div
+        id="player"
+        class="min-h-0 w-full flex-1 opacity-0"
+      />
+      <div
+        id="docWrap"
+        class="hidden"
+      />
+    </template>
   </div>
 </template>

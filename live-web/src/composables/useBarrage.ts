@@ -38,7 +38,11 @@ const MAX_LEN = 60;
 /** 同一条文本可能被乐观上屏 + 多次回声重复送达，窗口内只滚一次 */
 const DEDUP_WINDOW = 5000;
 
-export function useBarrage(getSdk: () => VhallSdkInstance | null) {
+export function useBarrage(
+  getSdk: () => VhallSdkInstance | null,
+  /** 发送成功后回调（本站评论在此时入库，不等 chatMsg） */
+  onSent?: (text: string) => void,
+) {
   const barrage = reactive({
     danmakuList: [] as DanmakuItem[],
     danmakuInput: "",
@@ -137,6 +141,7 @@ export function useBarrage(getSdk: () => VhallSdkInstance | null) {
     spawnDanmaku(text);
     try {
       sdk.chat.sendChat(text);
+      onSent?.(text);
     } catch (e) {
       console.error("发送弹幕失败", e);
     }

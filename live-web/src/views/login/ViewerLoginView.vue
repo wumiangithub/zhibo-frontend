@@ -1,227 +1,362 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { storeNickname } from "@/api/watch";
-import { ApiError } from "@/api/http";
-import { devPhoneLogin } from "@/api/viewerAuth";
+import { getViewerUserInfo } from "@/api/viewerAuth";
 import { useToast } from "@/composables/useToast";
-import { saveViewerSession } from "@/utils/viewerAuth";
+import {
+  clearViewerSession,
+  getViewerAccessToken,
+  getViewerPhoneMasked,
+  saveViewerSession,
+} from "@/utils/viewerAuth";
+import {
+  isViewerLoginRequiredError,
+  safeViewerRedirect,
+  tryRefreshViewerSession,
+} from "@/utils/viewerLogin";
 
 const route = useRoute();
 const router = useRouter();
 const { toast } = useToast();
 
-/** 对齐小程序：仅 Vite 开发构建可用明文手机号造号 */
-const isDevLogin = import.meta.env.DEV;
+/** 对齐小程序：仅 Vite 开发构建展示明文手机号入口 */
+const showDevLogin = import.meta.env.DEV;
 
-const phone = ref("");
-const loading = ref(false);
-const error = ref("");
+const agreed = ref(false);
+const phoneMasked = ref("");
 
-const canSubmit = computed(
-  () => /^1\d{10}$/.test(phone.value) && !loading.value,
-);
-
-function onPhoneInput(e: Event) {
-  const raw = (e.target as HTMLInputElement).value || "";
-  phone.value = raw.replace(/\D/g, "").slice(0, 11);
-  error.value = "";
+function redirectTarget(): string {
+  return safeViewerRedirect(route.query.redirect);
 }
 
-function safeRedirect(): string {
-  const raw = String(route.query.redirect ?? "").trim();
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/";
-  if (raw.startsWith("/login")) return "/";
-  return raw;
+function needAgree() {
+  toast("请先阅读并同意用户协议和隐私协议");
 }
 
-async function onLogin() {
-  if (!isDevLogin) {
-    toast("请从微信小程序进入登录");
+function onToggleAgree() {
+  agreed.value = !agreed.value;
+}
+
+function onPhoneLogin() {
+  if (!agreed.value) {
+    needAgree();
     return;
   }
-  if (loading.value) return;
-  if (!/^1\d{10}$/.test(phone.value)) {
-    error.value = "请输入正确的手机号";
+  toast("请在微信小程序内完成手机号授权登录");
+}
+
+function onWechatLogin() {
+  if (!agreed.value) {
+    needAgree();
     return;
   }
-  loading.value = true;
-  error.value = "";
+  toast("请在微信小程序内完成微信授权登录");
+}
+
+function onOtherLogin() {
+  if (!showDevLogin) return;
+  if (!agreed.value) {
+    needAgree();
+    return;
+  }
+  void router.push({
+    name: "viewer-dev-login",
+    query: route.query.redirect ? { redirect: String(route.query.redirect) } : {},
+  });
+}
+
+function openAgreement(kind: "user" | "privacy") {
+  void router.push({ name: kind === "privacy" ? "agreement-privacy" : "agreement-user" });
+}
+
+async function bounceIfLoggedIn() {
+  phoneMasked.value = getViewerPhoneMasked();
+  if (!getViewerAccessToken()) return;
+
+  async function enter() {
+    const user = await getViewerUserInfo();
+    saveViewerSession({ user });
+    phoneMasked.value = user.phoneMasked?.trim() || "";
+    await router.replace(redirectTarget());
+  }
+
   try {
-    const data = await devPhoneLogin(phone.value);
-    saveViewerSession(data);
-    const nick = data.user?.nickname?.trim();
-    if (nick) storeNickname(nick);
-    toast("登录成功");
-    await router.replace(safeRedirect());
+    await enter();
   } catch (e) {
-    error.value =
-      e instanceof ApiError || e instanceof Error
-        ? e.message
-        : "登录失败";
-  } finally {
-    loading.value = false;
+    if (!isViewerLoginRequiredError(e)) return;
+    const refreshed = await tryRefreshViewerSession();
+    if (!refreshed) {
+      clearViewerSession();
+      phoneMasked.value = "";
+      return;
+    }
+    try {
+      await enter();
+    } catch {
+      clearViewerSession();
+      phoneMasked.value = "";
+    }
   }
 }
 
-function goBack() {
-  if (window.history.length > 1) {
-    router.back();
-    return;
-  }
-  void router.replace("/");
-}
+onMounted(() => {
+  void bounceIfLoggedIn();
+});
 </script>
 
 <template>
-  <div class="login">
-    <header class="login__nav">
-      <button
-        type="button"
-        class="login__back"
-        aria-label="返回"
-        @click="goBack"
-      >
-        ‹
-      </button>
-      <h1 class="login__title">手机号登录</h1>
-    </header>
-
-    <template v-if="isDevLogin">
-      <p class="login__hint">
-        仅开发环境可用：输入合法手机号即可登录；未注册将自动注册。
-      </p>
-
-      <div class="login__field">
-        <span class="login__label">手机号</span>
-        <input
-          class="login__input"
-          type="tel"
-          inputmode="numeric"
-          maxlength="11"
-          placeholder="请输入手机号"
-          :value="phone"
-          :disabled="loading"
-          @input="onPhoneInput"
-          @keyup.enter="onLogin"
+  <div class="stage">
+    <div class="sheet">
+      <div class="hero">
+        <span class="geo geo-a" />
+        <span class="geo geo-b" />
+        <span class="geo geo-c" />
+        <p
+          v-if="phoneMasked"
+          class="phone"
         >
+          {{ phoneMasked }}
+        </p>
       </div>
 
-      <p
-        v-if="error"
-        class="login__error"
-      >
-        {{ error }}
-      </p>
+      <div class="actions">
+        <button
+          type="button"
+          class="btn btn-phone"
+          @click="onPhoneLogin"
+        >
+          <img
+            class="icon"
+            src="/audience/phone.png"
+            alt=""
+          >
+          <span>授权手机号快捷登录</span>
+        </button>
 
-      <button
-        type="button"
-        class="login__btn"
-        :disabled="!canSubmit"
-        @click="onLogin"
-      >
-        {{ loading ? "登录中…" : "登录" }}
-      </button>
-    </template>
+        <button
+          type="button"
+          class="btn btn-wechat"
+          @click="onWechatLogin"
+        >
+          <img
+            class="icon"
+            src="/audience/wechat.png"
+            alt=""
+          >
+          <span>微信一键授权登录</span>
+        </button>
 
-    <template v-else>
-      <p class="login__hint">
-        观众登录请使用微信小程序。本页明文手机号登录仅本地开发可用。
-      </p>
-    </template>
+        <div class="agree">
+          <button
+            type="button"
+            class="check"
+            :class="{ on: agreed }"
+            aria-label="同意协议"
+            @click="onToggleAgree"
+          >
+            <span
+              v-if="agreed"
+              class="mark"
+            />
+          </button>
+          <p class="agree-text">
+            <button
+              type="button"
+              class="muted"
+              @click="onToggleAgree"
+            >
+              我已阅读并同意：
+            </button>
+            <button
+              type="button"
+              class="link"
+              @click="openAgreement('user')"
+            >
+              《用户协议》
+            </button>
+            <span class="muted">和</span>
+            <button
+              type="button"
+              class="link"
+              @click="openAgreement('privacy')"
+            >
+              《隐私协议》
+            </button>
+          </p>
+        </div>
+
+        <button
+          v-if="showDevLogin"
+          type="button"
+          class="other"
+          @click="onOtherLogin"
+        >
+          其他登录方式
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.login {
+.stage {
   min-height: 100dvh;
-  box-sizing: border-box;
-  background: #ffffff;
-  color: #111111;
-  padding: 0 16px 24px;
+  background: #f5f5f5;
+  display: flex;
+  justify-content: center;
 }
-.login__nav {
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100dvh;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+.hero {
   position: relative;
+  height: 210px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #cfe8ff 0%, #e8f3ff 55%, #ffffff 100%);
+}
+.geo {
+  position: absolute;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+.geo-a {
+  width: 80px;
+  height: 80px;
+  left: 24px;
+  top: 36px;
+  transform: rotate(18deg);
+}
+.geo-b {
+  width: 60px;
+  height: 60px;
+  right: 40px;
+  top: 24px;
+  transform: rotate(-12deg);
+}
+.geo-c {
+  width: 45px;
+  height: 45px;
+  right: 80px;
+  top: 90px;
+  transform: rotate(28deg);
+  opacity: 0.7;
+}
+.phone {
+  position: relative;
+  z-index: 1;
+  margin: 100px 0 0;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: #111111;
+  letter-spacing: 1px;
+}
+.actions {
+  flex: 1;
+  padding: 24px 18% 40px;
+  display: flex;
+  flex-direction: column;
+}
+.btn {
+  width: 100%;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 48px;
-  margin: 0 -16px 16px;
-  border-bottom: 1px solid #f0f0f0;
-}
-.login__back {
-  position: absolute;
-  left: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  border: 0;
-  background: transparent;
-  font-size: 28px;
-  line-height: 1;
-  color: #111;
-  padding: 4px 10px;
   cursor: pointer;
 }
-.login__title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
+.btn + .btn {
+  margin-top: 22px;
 }
-.login__hint {
-  margin: 0 0 20px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #8c8c8c;
+.btn-phone {
+  background: #1677ff;
 }
-.login__field {
-  height: 48px;
-  padding: 0 14px;
-  box-sizing: border-box;
-  border: 1px solid #e5e5e5;
-  border-radius: 6px;
+.btn-wechat {
+  background: #07c160;
+}
+.icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+.agree {
+  margin-top: 20px;
+  margin-left: -12%;
+  margin-right: -12%;
   display: flex;
   align-items: center;
+  justify-content: center;
+}
+.check {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  border-radius: 50%;
+  border: 1px solid #c0c4cc;
   background: #ffffff;
-}
-.login__label {
-  width: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  font-size: 15px;
-  color: #111111;
-}
-.login__input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  outline: none;
-  font-size: 15px;
-  color: #111111;
-  background: transparent;
-}
-.login__input::placeholder {
-  color: #bfbfbf;
-}
-.login__error {
-  margin: 10px 0 0;
-  font-size: 13px;
-  color: #ff4d4f;
-}
-.login__btn {
-  display: block;
-  width: 100%;
-  margin-top: 32px;
-  height: 44px;
-  border: 0;
-  border-radius: 6px;
-  background: #1677ff;
-  color: #ffffff;
-  font-size: 16px;
-  font-weight: 500;
+  padding: 0;
   cursor: pointer;
 }
-.login__btn:disabled {
-  background: #91bfff;
-  cursor: not-allowed;
+.check.on {
+  border-color: #1677ff;
+  background: #1677ff;
+}
+.mark {
+  width: 7px;
+  height: 4px;
+  border-left: 1.5px solid #ffffff;
+  border-bottom: 1.5px solid #ffffff;
+  transform: rotate(-45deg);
+  margin-top: -1px;
+}
+.agree-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 20px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.muted,
+.link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: 12px;
+  line-height: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.muted {
+  color: #8c8c8c;
+}
+.link {
+  color: #1677ff;
+}
+.other {
+  margin-top: 24px;
+  border: 0;
+  background: transparent;
+  color: #8c8c8c;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+  cursor: pointer;
 }
 </style>

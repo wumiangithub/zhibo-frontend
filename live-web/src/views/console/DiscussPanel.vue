@@ -7,6 +7,7 @@ import type { ChatController } from "@/composables/useChat";
 import { useToast } from "@/composables/useToast";
 import { formatChatShowTime } from "@/utils/formatChatShowTime";
 import { vhallChatRoleBadge } from "@/utils/vhallChatRole";
+import { questionAnswerText } from "@/utils/vhallQuestion";
 
 type DiscussTab = "all" | "user" | "mine" | "host" | "follower";
 
@@ -17,7 +18,6 @@ const props = defineProps<{
 }>();
 
 const { toast } = useToast();
-const isDev = import.meta.env.DEV;
 
 const tab = ref<DiscussTab>("all");
 const onlyQa = ref(false);
@@ -165,9 +165,7 @@ function onKeywordToggle() {
 
 function onAskToggle(e: Event) {
   const el = e.target as HTMLInputElement;
-  askMode.value = false;
-  el.checked = false;
-  toastSoon("提问");
+  askMode.value = el.checked;
 }
 
 function insertEmoji(name: string) {
@@ -179,6 +177,10 @@ function insertEmoji(name: string) {
 function send() {
   if (!showRealList.value) {
     toastSoon("发送");
+    return;
+  }
+  if (askMode.value) {
+    void props.chat.sendQuestion();
     return;
   }
   props.chat.sendChat();
@@ -380,9 +382,13 @@ onBeforeUnmount(() => {
                   class="badge"
                   :class="badgeToneClass(msg)"
                 >{{ roleBadge(msg) }}</span>
+                <span
+                  v-if="msg.kind === 'question'"
+                  class="badge is-question"
+                >问</span>
               </div>
               <div
-                v-if="msg.reply || msg.msg?.trim()"
+                v-if="msg.reply || msg.msg?.trim() || msg.answer"
                 class="msg-text"
               >
                 <div
@@ -408,6 +414,12 @@ onBeforeUnmount(() => {
                     >
                     <span v-else>{{ seg.value }}</span>
                   </template>
+                </p>
+                <p
+                  v-if="questionAnswerText(msg)"
+                  class="msg-answer"
+                >
+                  {{ questionAnswerText(msg) }}
                 </p>
               </div>
               <div
@@ -546,7 +558,7 @@ onBeforeUnmount(() => {
         class="input"
         rows="2"
         maxlength="140"
-        placeholder="说点什么吧~"
+        :placeholder="askMode ? '发起提问' : '说点什么吧~'"
         :disabled="!active || chat.isChatMuted"
         @focus="chat.requestChatFocus(inputEl as unknown as HTMLInputElement)"
         @keydown.enter.exact.prevent="send"
@@ -562,16 +574,6 @@ onBeforeUnmount(() => {
           提问
         </label>
         <div class="composer-actions">
-          <button
-            v-if="isDev"
-            type="button"
-            class="custom-msg"
-            title="联调 sendCustomEvent"
-            :disabled="!active || chat.isChatMuted"
-            @click="chat.sendCustomEventTest()"
-          >
-            自定义消息
-          </button>
           <button
             type="button"
             class="send"
@@ -990,6 +992,11 @@ onBeforeUnmount(() => {
   color: #722ed1;
 }
 
+.badge.is-question {
+  background: #e6f4ff;
+  color: #1677ff;
+}
+
 .msg-text {
   margin: 4px 0 0;
   padding: 10px 12px;
@@ -1022,6 +1029,16 @@ onBeforeUnmount(() => {
   font-size: 14px;
   line-height: 20px;
   word-break: break-word;
+}
+
+.msg-answer {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid #e5e5e5;
+  color: #8c8c8c;
+  font-size: 12px;
+  line-height: 18px;
+  word-break: break-all;
 }
 
 .msg-images {
@@ -1156,27 +1173,6 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-
-.custom-msg {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  background: #fff;
-  color: #ad6800;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.custom-msg:hover:not(:disabled) {
-  border-color: #faad14;
-  color: #d48806;
-}
-
-.custom-msg:disabled {
-  opacity: 0.45;
-  cursor: default;
 }
 
 .send {

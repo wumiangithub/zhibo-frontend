@@ -43,7 +43,7 @@ function resolveId(id: MaybeRefOrGetter<string>): string {
 }
 
 /**
- * 观看页与中控台共用：先 /summary 定页壳，需挂 SDK 时再 /sdk-sign + init。
+ * 观看页与中控台共用：先 /summary 定页壳，再 /sdk-sign + init（含结束壳，便于听 live_start）。
  * 观众上下线落库不在这里：生产靠微吼回调，本地靠观看页按钮模拟回调。
  */
 export function useWatchSession(opts: WatchSessionOptions) {
@@ -52,7 +52,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
   const error = ref("");
   /** 页壳（D95 summary） */
   const data = ref<WatchSummaryData | null>(null) as Ref<WatchSummaryData | null>;
-  /** 最近一次签名（仅直播/预告 init 时有） */
+  /** 最近一次签名（init 时有） */
   const sign = ref<WatchSdkSignData | null>(null) as Ref<WatchSdkSignData | null>;
   const sdkFailed = ref(false);
   const showLiveStartPopup = ref(false);
@@ -73,7 +73,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
   let moduleReadyEpoch = -1;
 
   const { countdown, start: startCountdown, stop: stopCountdown } = useCountdown();
-  const barrage = useBarrage(getSdk);
+  let reportSentChat: (text: string) => void = () => {};
+  const barrage = useBarrage(getSdk, (text) => reportSentChat(text));
   const chat = useChat({
     getSdk,
     getSender: () => ({
@@ -88,6 +89,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
     getViewerId: () => getViewerId(),
     onUnauthenticatedChat: opts.onUnauthenticatedChat,
   });
+  reportSentChat = chat.reportSentMessage;
   const stats = useRoomStats(getSdk);
   const notice = useAnnouncement(getSdk);
   const player = usePlayerControls({
@@ -108,9 +110,17 @@ export function useWatchSession(opts: WatchSessionOptions) {
   const canPlayReplay = computed(() => false);
   const sdkReady = computed(() => !!adapter?.getSdk() && !sdkFailed.value && isLive.value);
 
+  /** 主观看页 / 中控台：预告、直播、结束类都挂 SDK，才能立刻收到 live_start / live_over */
   function shouldInitSdk(res: WatchSummaryData): boolean {
-    // 仅直播 / 预告挂 SDK；结束与云侧 4/5 一律结束页 + 本站回放页
-    return res.state === 1 || res.state === 2;
+    return res.state === 1 || res.state === 2 || res.state === 3 || res.state === 4 || res.state === 5;
+  }
+
+  function isEndedLikeState(state: number | undefined | null): boolean {
+    return state === 3 || state === 4 || state === 5;
+  }
+
+  function hasLiveSdk(): boolean {
+    return !!adapter?.getSdk() && !sdkFailed.value;
   }
 
   /** 本次 SDK 实例用的观众 id。undefined 表示还没拉过签名 */
@@ -148,7 +158,9 @@ export function useWatchSession(opts: WatchSessionOptions) {
   }
 
   function handleLiveStart() {
-    if (isPreview.value) showLiveStartPopup.value = true;
+    if (isPreview.value || isEnded.value || isReplay.value) {
+      showLiveStartPopup.value = true;
+    }
   }
 
   function destroySdk() {
@@ -164,11 +176,23 @@ export function useWatchSession(opts: WatchSessionOptions) {
     sign.value = null;
   }
 
-  /** afterInit：仅安全绑定后工作，不碰房间信息 API */
+  /**
+   * afterInit：仅安全绑定后工作，不碰房间信息 API。
+   * 播放器就绪主路径是官方 playerReady（及次要 vhallplay_LOADED）；此处不再立刻狂扫 DOM。
+   * 仅标 waiting；若 ~2.5s 仍无事件推进再启短轮询兜底（防事件漏发挂死）。
+   */
   function beginAfterInitSideEffects(epoch: number) {
     if (epoch !== initEpoch) return;
     chat.resetHistoryLoad();
-    player.startPlayPoll();
+    player.waitingForMedia = true;
+    player.mediaFailed = false;
+    player.needsTapToPlay = false;
+    player.isPaused = false;
+    window.setTimeout(() => {
+      if (epoch !== initEpoch) return;
+      if (!player.waitingForMedia || player.mediaFailed || player.needsTapToPlay) return;
+      player.startPlayPoll(16);
+    }, 2500);
   }
 
   /**
@@ -191,7 +215,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
     if (!data.value) return;
     const epoch = ++initEpoch;
     sign.value = signData;
-    // 先关 loading，让 WatchView/ConsoleView 挂上 PlayerStage 或 PreviewScreen（内含 #player/#docWrap）
+    // 先关 loading，让 WatchView/ConsoleView 挂上 PlayerStage（内含 #player/#docWrap）
     loading.value = false;
     player.resetPlayback();
     await nextTick();
@@ -235,6 +259,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
         onLiveStart: handleLiveStart,
         onChatMsg: chat.handleChatMessage,
         onChatDelete: chat.handleChatDelete,
+        onQuestion: chat.handleQuestion,
+        onQuestionBackout: chat.handleQuestionBackout,
         onDisableChat: () => chat.setMuted(true),
         onPermitChat: () => chat.setMuted(false),
         onAnnouncement: notice.handleAnnouncement,
@@ -248,6 +274,10 @@ export function useWatchSession(opts: WatchSessionOptions) {
         },
         afterInit: () => beginAfterInitSideEffects(epoch),
         onModuleReady: () => beginModuleReadySideEffects(epoch),
+        onPlayerReady: () => {
+          if (epoch !== initEpoch) return;
+          player.onPlayerReady();
+        },
         onPlayerLoaded: () => {
           if (epoch !== initEpoch) return;
           player.onVhallPlayLoaded();
@@ -286,10 +316,10 @@ export function useWatchSession(opts: WatchSessionOptions) {
       data.value = summary;
       if (!shouldInitSdk(summary)) {
         loading.value = false;
-        stats.markLiveEnded();
+        if (isEndedLikeState(summary.state)) stats.markLiveEnded();
         return;
       }
-      if (summary.state === 4 || summary.state === 5) {
+      if (isEndedLikeState(summary.state)) {
         stats.markLiveEnded();
       }
       await fetchSignAndInit();
@@ -299,15 +329,18 @@ export function useWatchSession(opts: WatchSessionOptions) {
     }
   }
 
-  /** live_over：立刻切结束页，不顺手再 init 回放（契约：立刻切结束态） */
+  /**
+   * live_over / streamOver：只切结束 UI，不 destroySdk。
+   * 保留实例才能立刻收到再开播的 live_start（D108）。
+   */
   async function switchToEndedFromLive() {
     stats.markLiveEnded();
-    player.resetPlayback();
-    destroySdk();
+    showLiveStartPopup.value = false;
+    player.pausePlayback();
     const id = resolveId(opts.activityId);
     try {
       const summary = await getWatchSummary(id);
-      // 强制 state=3 出 EndedScreen；刷新后再按云侧 4/5 进回放
+      // 强制 state=3 出 EndedScreen 壳；云侧 4/5 仍当结束壳，回放走独立路由
       data.value = { ...summary, state: 3 };
     } catch {
       if (data.value) {
@@ -319,6 +352,23 @@ export function useWatchSession(opts: WatchSessionOptions) {
     loading.value = false;
   }
 
+  /**
+   * 预告/结束壳上点「立即观看」：SDK 已在则只翻 state + 起播，避免 destroy+recreate。
+   */
+  function enterLiveFromPreview() {
+    showLiveStartPopup.value = false;
+    if (hasLiveSdk() && data.value) {
+      stats.resetLiveEnded();
+      data.value = { ...data.value, state: 1 };
+      player.resetPlayback();
+      player.waitingForMedia = true;
+      player.startPlayPoll();
+      void player.resumePlayback();
+      return;
+    }
+    void load();
+  }
+
   async function load() {
     const requestedViewerId = getViewerId();
     sdkViewerId = requestedViewerId;
@@ -328,6 +378,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
     sdkRetryCount = 0;
     data.value = null;
     sign.value = null;
+    showLiveStartPopup.value = false;
     stopCountdown();
     stats.resetLiveEnded();
     destroySdk();
@@ -343,13 +394,21 @@ export function useWatchSession(opts: WatchSessionOptions) {
         startCountdown(summary.startTime);
       }
       if (shouldInitSdk(summary)) {
-        if (summary.state === 4 || summary.state === 5) {
+        if (isEndedLikeState(summary.state)) {
           stats.markLiveEnded();
         }
-        await fetchSignAndInit();
+        try {
+          await fetchSignAndInit();
+        } catch (e) {
+          // 结束类房间偶发无法 init：仍保留结束壳，不挡「查看回放」
+          if (isEndedLikeState(summary.state)) {
+            console.warn("[watch] ended-like sdk init failed, keep ended shell", e);
+            loading.value = false;
+            return;
+          }
+          throw e;
+        }
       } else {
-        // state=3 或回放关闭的 4/5：出结束页，不挂播放器
-        stats.markLiveEnded();
         loading.value = false;
       }
     } catch (e) {
@@ -363,11 +422,6 @@ export function useWatchSession(opts: WatchSessionOptions) {
       error.value = e instanceof Error ? e.message : "加载失败";
       loading.value = false;
     }
-  }
-
-  function enterLiveFromPreview() {
-    showLiveStartPopup.value = false;
-    void load();
   }
 
   async function shareWatch() {

@@ -3,6 +3,8 @@ const ACCESS_KEY = "viewerAccessToken";
 const REFRESH_KEY = "viewerRefreshToken";
 const VIEWER_ID_KEY = "viewerId";
 const PHONE_KEY = "viewerPhoneMasked";
+const NICK_KEY = "viewerNickname";
+const AVATAR_KEY = "viewerAvatarUrl";
 
 /** 观众 JWT；无则空串。 */
 export function getViewerAccessToken(): string {
@@ -182,6 +184,63 @@ function stripAccessTokenFromLocation(): void {
 
 export function isViewerLoggedIn(): boolean {
   return !!getViewerAccessToken();
+}
+
+/** 上次登录记下的脱敏手机号；没有则空串。 */
+export function getViewerPhoneMasked(): string {
+  try {
+    return localStorage.getItem(PHONE_KEY)?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+/** 绑定手机号页（本地样式）写入脱敏号。空串则清掉。 */
+export function setViewerPhoneMasked(phoneMasked: string): void {
+  try {
+    const masked = phoneMasked.trim();
+    if (masked) localStorage.setItem(PHONE_KEY, masked);
+    else localStorage.removeItem(PHONE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 资料展示缓存。与观看页 `zhibo.nickname` 分开。 */
+export function getViewerProfile(): { nickname: string; avatarUrl: string } {
+  try {
+    return {
+      nickname: localStorage.getItem(NICK_KEY)?.trim() || "",
+      avatarUrl: localStorage.getItem(AVATAR_KEY)?.trim() || "",
+    };
+  } catch {
+    return { nickname: "", avatarUrl: "" };
+  }
+}
+
+export function saveViewerProfile(data: {
+  nickname?: string;
+  avatarUrl?: string;
+}): void {
+  try {
+    if (typeof data.nickname === "string") {
+      localStorage.setItem(NICK_KEY, data.nickname);
+    }
+    if (typeof data.avatarUrl === "string" && data.avatarUrl) {
+      localStorage.setItem(AVATAR_KEY, data.avatarUrl);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearViewerProfile(): void {
+  try {
+    localStorage.removeItem(NICK_KEY);
+    localStorage.removeItem(AVATAR_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 /** 清本地观众会话（access / refresh / id / 脱敏手机号）。 */
