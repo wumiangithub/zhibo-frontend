@@ -466,6 +466,7 @@ export function useChat(options: ChatOptions) {
     canSend: gateUnauthenticated,
     trimList,
     scrollChatToBottom,
+    getActivityId: options.getActivityId,
     onSent: reportSentQuestion,
     onCreateMsgBackfill: reportQuestionMsgBackfill,
     onAnswerCommit: reportQuestionAnswer,

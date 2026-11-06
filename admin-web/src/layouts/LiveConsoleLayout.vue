@@ -12,7 +12,11 @@ const sideNav = [
   { key: "settings", label: "通用设置" },
 ] as const;
 
-const activeSide = computed(() => (route.name === "live-console-list" ? "list" : ""));
+const activeSide = computed(() => {
+  if (route.name === "live-console-list") return "list";
+  if (route.name === "live-console-room") return "list";
+  return "";
+});
 
 function onShellClick(label: string) {
   toast(`「${label}」暂未开放`);

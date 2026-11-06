@@ -1,0 +1,192 @@
+import { onBeforeUnmount, reactive } from "vue";
+
+/** SDK 把 room_id 塞在 interact_token(JWT) 的 payload 里，getRoominfo 不可用时兜底解码 */
+function roomIdFromToken(): string {
+  const token =
+    (window as unknown as { vhsdklInfo?: { interact_token?: string } }).vhsdklInfo?.interact_token ||
+    (window as unknown as { interact_token?: string }).interact_token ||
+    "";
+  const seg = token.split(".")[1];
+  if (!seg) return "";
+  try {
+    const bin = atob(seg.replace(/-/g, "+").replace(/_/g, "/"));
+    const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(bytes)) as { room_id?: string };
+    return payload.room_id || "";
+  } catch {
+    return "";
+  }
+}
+
+/** 在线人数、点赞总数：房间 id 异步可得，需轮询等到它出现再拉点赞 */
+export function useRoomStats(getSdk: () => VhallSdkInstance | null) {
+  const stats = reactive({
+    likeCount: 0,
+    onlineCount: 0,
+  });
+
+  let roomId = "";
+  let disposed = false;
+  let roomIdTimer: number | undefined;
+  /** live_over / state 3/4/5：强制 0，忽略迟到 onlinePopulation（含主讲减 1 后仍可能非 0） */
+  let liveEnded = false;
+
+  /**
+   * 对齐官方 demo Praise：连续点击只本地 +1，停手约 2s 后把增量一次 userLike({ num })。
+   * 每次点击立刻打 num:1 会被微吼限流/丢弃，刷新后总数偏少。
+   */
+  let pendingLikeIncrement = 0;
+  let postPraiseTimer: number | undefined;
+  const PRAISE_FLUSH_MS = 2000;
+
+  async function loadRoomId() {
+    const sdk = getSdk();
+    // 1) 官方 Praise demo：优先 sdk.config.lssRoomId
+    const fromConfig = sdk?.config?.lssRoomId?.trim() || "";
+    if (fromConfig) {
+      roomId = fromConfig;
+      return;
+    }
+    // 2) 可选：watchInit 里的 interact.room_id（与 chat 等同路径）
+    const fromWatchInit = sdk?.roomBaseServer?.state?.watchInitData?.interact?.room_id?.trim() || "";
+    if (fromWatchInit) {
+      roomId = fromWatchInit;
+      return;
+    }
+    // 3) 兜底：JWT interact_token（config 尚未灌好时仍可能有）；getRoominfo 偶发挂起，仅超时兜底
+    roomId = roomIdFromToken();
+    if (roomId || !sdk?.getRoominfo) return;
+    try {
+      const info = await Promise.race([
+        sdk.getRoominfo(),
+        new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 1500)),
+      ]);
+      if (info) roomId = info.room_id || info.roomId || info.interact?.room_id || "";
+    } catch (e) {
+      console.warn("获取房间信息失败", e);
+    }
+  }
+
+  async function loadLikeCount() {
+    const sdk = getSdk();
+    if (!sdk || !roomId || !sdk.interactTools?.getRoomLike) return;
+    try {
+      const res = await sdk.interactTools.getRoomLike(roomId);
+      // SDK 把整个响应 {code, data} resolve 出来，总数在 data.total
+      stats.likeCount = res.data?.total ?? res.total ?? 0;
+    } catch (e) {
+      console.warn("获取点赞数失败", e);
+    }
+  }
+
+  /** destroySdk / unmount：清掉 roomId 轮询定时器 */
+  function cancelRoomId() {
+    if (roomIdTimer != null) {
+      window.clearTimeout(roomIdTimer);
+      roomIdTimer = undefined;
+    }
+  }
+
+  /** getRoominfo 在 sdk-init 完成前返回空对象，轮询等到房间 id 出现再拉点赞总数 */
+  function scheduleRoomId(tries = 0) {
+    void loadRoomId().then(() => {
+      if (disposed) return;
+      if (roomId) {
+        void loadLikeCount();
+        return;
+      }
+      if (tries < 9) {
+        roomIdTimer = window.setTimeout(() => scheduleRoomId(tries + 1), 1000);
+      }
+    });
+  }
+
+  function flushPendingLikes() {
+    if (postPraiseTimer != null) {
+      window.clearTimeout(postPraiseTimer);
+      postPraiseTimer = undefined;
+    }
+    const num = pendingLikeIncrement;
+    pendingLikeIncrement = 0;
+    if (num <= 0) return;
+    const sdk = getSdk();
+    if (!sdk || !roomId || !sdk.interactTools?.praise?.userLike) return;
+    try {
+      // SDK 实现读 room_id，文档写 roomid，两个都传保险
+      sdk.interactTools.praise.userLike({ roomid: roomId, room_id: roomId, num });
+    } catch (e) {
+      console.error("点赞失败", e);
+    }
+  }
+
+  function handleLike() {
+    const sdk = getSdk();
+    if (!sdk || !roomId || !sdk.interactTools?.praise?.userLike) return;
+    // 乐观更新：本地点完立刻 +1；停手后再合并上报
+    pendingLikeIncrement += 1;
+    stats.likeCount += 1;
+    if (postPraiseTimer != null) window.clearTimeout(postPraiseTimer);
+    postPraiseTimer = window.setTimeout(() => {
+      postPraiseTimer = undefined;
+      flushPendingLikes();
+    }, PRAISE_FLUSH_MS);
+  }
+
+  function handleOnlinePopulation(data: unknown) {
+    if (liveEnded) {
+      stats.onlineCount = 0;
+      return;
+    }
+    const info = data as { uv?: number; total?: number };
+    // 微吼 onlinePopulation 含主讲人；本站统计不显示老师，展示前减 1，且不少于 0
+    const raw = info.uv || info.total || 0;
+    stats.onlineCount = Math.max(0, raw - 1);
+  }
+
+  /** 关播 / 已结束：实时在线人数强制 0 */
+  function markLiveEnded() {
+    liveEnded = true;
+    stats.onlineCount = 0;
+  }
+
+  /** 换场次或重新进房前复位，允许再吃 onlinePopulation */
+  function resetLiveEnded() {
+    liveEnded = false;
+  }
+
+  function handlePraiseTotal(data: unknown) {
+    const info = data as { num?: number; total?: number; count?: number };
+    // 推送的是当前总数，但批量下发有延迟，可能还没算进本地点赞；
+    // 直播点赞只增不减，用 max 夹住，服务端总数只能往上抬、不能把乐观更新压回去
+    const value = info.num ?? info.total ?? info.count;
+    if (typeof value === "number") stats.likeCount = Math.max(stats.likeCount, value);
+  }
+
+  function onPageHide() {
+    flushPendingLikes();
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", onPageHide);
+  }
+
+  onBeforeUnmount(() => {
+    disposed = true;
+    cancelRoomId();
+    window.removeEventListener("pagehide", onPageHide);
+    // 离开页面前把未上报增量送出，避免 2s 窗口内点赞丢失
+    flushPendingLikes();
+  });
+
+  return Object.assign(stats, {
+    handleLike,
+    handleOnlinePopulation,
+    handlePraiseTotal,
+    scheduleRoomId,
+    cancelRoomId,
+    markLiveEnded,
+    resetLiveEnded,
+  });
+}
+
+export type RoomStatsController = ReturnType<typeof useRoomStats>;

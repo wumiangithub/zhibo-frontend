@@ -14,6 +14,7 @@ declare module 'vue' {
     AppBreadcrumb: typeof import('./src/components/ui/AppBreadcrumb.vue')['default']
     AuditActorTag: typeof import('./src/components/audit/AuditActorTag.vue')['default']
     AuditTimelineDrawer: typeof import('./src/components/audit/AuditTimelineDrawer.vue')['default']
+    ElButton: typeof import('element-plus/es')['ElButton']
     ElIcon: typeof import('element-plus/es')['ElIcon']
     ImagePreview: typeof import('./src/components/ImagePreview.vue')['default']
     InviteHostDialog: typeof import('./src/components/live/InviteHostDialog.vue')['default']

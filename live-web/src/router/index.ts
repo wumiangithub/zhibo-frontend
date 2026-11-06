@@ -126,11 +126,6 @@ const router = createRouter({
       name: "course-lesson",
       component: () => import("@/views/course/CourseLessonView.vue"),
     },
-    {
-      path: "/console/:id",
-      name: "console",
-      component: () => import("@/views/console/ConsoleView.vue"),
-    },
   ],
 });
 

@@ -310,19 +310,23 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     });
   }
 
-  /** 播放器就绪前 canPlayDefinitions 会抛错/不回调，轮询重试 */
-  function scheduleQualityLabels(tries = 0) {
+  /**
+   * 播放器就绪前 canPlayDefinitions 会抛错/不回调，轮询重试。
+   * moduleReady 可先调；playerReady 后再调一次（中控台常更晚才有 player 模块）。
+   */
+  function scheduleQualityLabels(tries = 0, delayMs = 1500) {
     window.setTimeout(() => {
       if (disposed) return;
+      if (player.qualityOptions.length > 0) return;
       try {
         loadQualities();
       } catch {
         /* 播放器未就绪 */
       }
-      if (player.qualityOptions.length === 0 && tries < 9) {
-        scheduleQualityLabels(tries + 1);
+      if (player.qualityOptions.length === 0 && tries < 12) {
+        scheduleQualityLabels(tries + 1, delayMs);
       }
-    }, 1500);
+    }, delayMs);
   }
 
   function setQuality(code: string) {
@@ -502,6 +506,10 @@ export function usePlayerControls(options: PlayerControlsOptions) {
 
   function onPlayerReady() {
     advanceFromSdkEvent("playerReady");
+    // 清晰度列表常在 player 模块真正就绪后才有；补一轮快重试（与 moduleReady 调度并存）
+    if (player.qualityOptions.length === 0) {
+      scheduleQualityLabels(0, 300);
+    }
   }
 
   function onVhallPlayLoaded() {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Refresh } from "@element-plus/icons-vue";
 import { computed, ref } from "vue";
-import type { ChatController } from "@/composables/useChat";
+import type { ChatController } from "./composables/useChat";
 import PresenceTrendPanel from "./PresenceTrendPanel.vue";
 
 const props = defineProps<{
@@ -200,8 +200,8 @@ defineExpose({ refreshAll, refreshAndResetRange });
 }
 
 .tab.is-active {
-  color: #1677ff;
-  border-bottom-color: #1677ff;
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
   font-weight: 600;
 }
 
@@ -221,12 +221,12 @@ defineExpose({ refreshAll, refreshAndResetRange });
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #1677ff;
+  color: var(--color-primary);
   cursor: pointer;
 }
 
 .refresh:hover:not(:disabled) {
-  background: #e6f4ff;
+  background: var(--color-primary-bg);
 }
 
 .refresh:disabled {
@@ -269,7 +269,7 @@ defineExpose({ refreshAll, refreshAndResetRange });
 }
 
 .online-value {
-  color: #1677ff;
+  color: var(--color-primary);
   font-size: 44px;
   font-weight: 600;
   line-height: 1.1;

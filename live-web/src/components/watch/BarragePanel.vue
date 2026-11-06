@@ -39,7 +39,7 @@ function insertEmoji(name: string) {
         <button
           type="button"
           class="relative h-6 w-11 rounded-full transition-colors"
-          :class="barrage.barrageOn ? 'bg-[var(--lw-color-brand)]' : 'bg-[var(--lw-border-strong)]'"
+          :class="barrage.barrageOn ? 'bg-[var(--lw-color-primary)]' : 'bg-[var(--lw-border-strong)]'"
           @click="barrage.toggleBarrage"
         >
           <span
@@ -59,7 +59,7 @@ function insertEmoji(name: string) {
               :key="label"
               type="button"
               class="rounded-md px-3 py-1.5 text-xs transition-colors"
-              :class="barrage.barrageSettings.area === idx ? 'bg-[var(--lw-color-brand)] text-[var(--lw-text-on-brand)]' : 'bg-[var(--lw-bg-elevated)] text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
+              :class="barrage.barrageSettings.area === idx ? 'bg-[var(--lw-color-primary)] text-[var(--lw-text-on-brand)]' : 'bg-[var(--lw-bg-elevated)] text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
               @click="barrage.barrageSettings.area = idx"
             >
               {{ label }}
@@ -76,7 +76,7 @@ function insertEmoji(name: string) {
             min="0"
             max="100"
             step="5"
-            class="w-full accent-[var(--lw-color-brand)]"
+            class="w-full accent-[var(--lw-color-primary)]"
           />
         </div>
 
@@ -89,7 +89,7 @@ function insertEmoji(name: string) {
               :key="opt.value"
               type="button"
               class="rounded-md px-3 py-1.5 text-xs transition-colors"
-              :class="barrage.barrageSettings.fontSize === opt.value ? 'bg-[var(--lw-color-brand)] text-[var(--lw-text-on-brand)]' : 'bg-[var(--lw-bg-elevated)] text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
+              :class="barrage.barrageSettings.fontSize === opt.value ? 'bg-[var(--lw-color-primary)] text-[var(--lw-text-on-brand)]' : 'bg-[var(--lw-bg-elevated)] text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
               @click="barrage.barrageSettings.fontSize = opt.value"
             >
               {{ opt.label }}
@@ -122,7 +122,7 @@ function insertEmoji(name: string) {
               :key="opt.value"
               type="button"
               class="rounded-md px-3 py-1.5 text-xs transition-colors"
-              :class="barrage.barrageSettings.speed === opt.value ? 'bg-[var(--lw-color-brand)] text-[var(--lw-text-on-brand)]' : 'bg-[var(--lw-bg-elevated)] text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
+              :class="barrage.barrageSettings.speed === opt.value ? 'bg-[var(--lw-color-primary)] text-[var(--lw-text-on-brand)]' : 'bg-[var(--lw-bg-elevated)] text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
               @click="barrage.barrageSettings.speed = opt.value"
             >
               {{ opt.label }}
@@ -164,7 +164,7 @@ function insertEmoji(name: string) {
           @keyup.enter="barrage.sendDanmaku"
         />
         <button
-          class="flex-none rounded-md bg-[var(--lw-color-brand)] px-4 py-2 text-sm font-medium text-[var(--lw-text-on-brand)] hover:bg-[var(--lw-color-brand-hover)] disabled:opacity-50"
+          class="flex-none rounded-md bg-[var(--lw-color-primary)] px-4 py-2 text-sm font-medium text-[var(--lw-text-on-brand)] hover:bg-[var(--lw-color-primary-hover)] disabled:opacity-50"
           :disabled="!barrage.danmakuInput.trim()"
           @click="barrage.sendDanmaku"
         >

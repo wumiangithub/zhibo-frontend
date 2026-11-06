@@ -223,6 +223,15 @@ const router = createRouter({
         },
       ],
     },
+    /**
+     * 单场中控台全页（D110）：与列表壳并列，不嵌 LiveConsoleLayout 侧栏。
+     * 须鉴权（走下方 beforeEach）。
+     */
+    {
+      path: "/live-console/:id",
+      name: "live-console-room",
+      component: () => import("@/views/live-console/room/ConsoleRoomView.vue"),
+    },
   ],
 });
 

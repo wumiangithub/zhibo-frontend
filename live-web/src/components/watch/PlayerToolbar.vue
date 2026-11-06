@@ -561,8 +561,9 @@ onBeforeUnmount(() => {
   line-height: 1;
 }
 
+/* 工具栏悬停保持白字；不用品牌橙（清晰度选中等同理） */
 .bar-btn:hover {
-  color: var(--lw-color-brand);
+  color: #fff;
 }
 
 /* 弹幕开关：开/关都保持白色，关态只靠斜线区分，不用红/品牌色 */
@@ -634,13 +635,14 @@ onBeforeUnmount(() => {
   line-height: 44px;
   text-align: center;
   font-size: 14px;
-  color: var(--lw-text-primary);
+  color: var(--lw-text-secondary);
   cursor: pointer;
 }
 
 .quality-item:hover,
 .quality-item.is-active {
-  color: var(--lw-color-brand);
+  color: var(--lw-text-primary);
+  font-weight: 500;
 }
 
 /* 竖条音量：深色圆角胶囊；自定义轨道（底=0 顶=100） */
@@ -697,7 +699,8 @@ onBeforeUnmount(() => {
 
 .volume-track-fill {
   bottom: 0;
-  background: var(--lw-color-brand);
+  /* 音量用中性白，不用品牌橙（易被看成危险/错误） */
+  background: #fff;
 }
 
 .volume-track-thumb {
@@ -708,7 +711,7 @@ onBeforeUnmount(() => {
   margin-left: -6px;
   margin-bottom: -6px;
   border-radius: 50%;
-  background: var(--lw-color-brand);
+  background: #fff;
   pointer-events: none;
 }
 </style>

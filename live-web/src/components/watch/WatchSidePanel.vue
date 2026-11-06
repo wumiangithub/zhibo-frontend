@@ -76,7 +76,7 @@ function onChatListScroll(e: Event) {
       <button
         type="button"
         class="flex-1 bg-transparent px-4 py-3 text-sm font-medium md:flex-1"
-        :class="activeTab === 'chat' ? 'border-b-2 border-[var(--lw-color-brand)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
+        :class="activeTab === 'chat' ? 'border-b-2 border-[var(--lw-color-primary)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
         @click="activeTab = 'chat'"
       >
         聊天
@@ -85,7 +85,7 @@ function onChatListScroll(e: Event) {
         v-if="!isReplay && barrage"
         type="button"
         class="hidden bg-transparent px-4 py-3 text-sm font-medium md:block md:flex-1"
-        :class="activeTab === 'barrage' ? 'border-b-2 border-[var(--lw-color-brand)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
+        :class="activeTab === 'barrage' ? 'border-b-2 border-[var(--lw-color-primary)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
         @click="activeTab = 'barrage'"
       >
         弹幕
@@ -93,7 +93,7 @@ function onChatListScroll(e: Event) {
       <button
         type="button"
         class="flex-1 bg-transparent px-4 py-3 text-sm font-medium"
-        :class="activeTab === 'intro' ? 'border-b-2 border-[var(--lw-color-brand)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
+        :class="activeTab === 'intro' ? 'border-b-2 border-[var(--lw-color-primary)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
         @click="activeTab = 'intro'"
       >
         简介

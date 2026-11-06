@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { ElDatePicker, ElMessage } from "element-plus";
-import { fetchPresenceTrend, type PresenceTrendPoint } from "@/api/presenceTrend";
+import { fetchPresenceTrend, type PresenceTrendPoint } from "./api/console";
 import {
   clampPresenceTrendRange,
   formatPresenceTime,
@@ -77,7 +77,7 @@ const innerW = chartWidth - pad.left - pad.right;
 const innerH = chartHeight - pad.top - pad.bottom;
 
 const SERIES = [
-  { key: "online" as const, label: "在线", color: "#1677ff" },
+  { key: "online" as const, label: "在线", color: "var(--color-primary)" },
   { key: "enter" as const, label: "进场", color: "#52c41a" },
   { key: "leave" as const, label: "离场", color: "#eb2f96" },
 ];
@@ -422,7 +422,7 @@ defineExpose({ reload, resetAndReload });
             :cx="xAt(hoverIndex, points.length)"
             :cy="yAt(hoverPoint.online)"
             r="4"
-            fill="#1677ff"
+            fill="var(--color-primary)"
           />
           <circle
             :cx="xAt(hoverIndex, points.length)"
@@ -454,7 +454,7 @@ defineExpose({ reload, resetAndReload });
         :style="hoverTipStyle"
       >
         <div class="tip-time">{{ hoverPoint.time }}</div>
-        <div><i style="background:#1677ff" />在线 {{ hoverPoint.online }}</div>
+        <div><i style="background:var(--color-primary)" />在线 {{ hoverPoint.online }}</div>
         <div><i style="background:#52c41a" />进场 {{ hoverPoint.enter }}</div>
         <div><i style="background:#eb2f96" />离场 {{ hoverPoint.leave }}</div>
       </div>

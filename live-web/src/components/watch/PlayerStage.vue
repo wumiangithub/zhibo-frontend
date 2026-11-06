@@ -5,6 +5,7 @@ import PlayerToolbar from "@/components/watch/PlayerToolbar.vue";
 import type { PlayerController } from "@/composables/usePlayerControls";
 import type { BarrageController } from "@/composables/useBarrage";
 import type { RoomStatsController } from "@/composables/useRoomStats";
+import { isWatchRoleConflictReason, mediaFailHint } from "@/utils/sdk";
 
 const props = defineProps<{
   player: PlayerController;
@@ -13,7 +14,11 @@ const props = defineProps<{
   title: string;
   /** type=1 音频直播：浏览器常因自动播放策略把音轨挂起 */
   isAudioLive: boolean;
-  /** 观看页小屏：播放器 16:9 顶置；中控台勿开 */
+  /**
+   * 观看页：舞台始终 16:9。
+   * 小屏 width 100% + aspect-ratio；PC 在 WatchRoomShell `.media-well` 内短边铺满。
+   * 中控台勿开（由外层 `.player-area` 给 16:9 井，本组件铺满）。
+   */
   mobileAspectVideo?: boolean;
   /** 观看页小屏：点赞改走聊天底栏；中控台勿开 */
   hideMobileBarActions?: boolean;
@@ -24,6 +29,12 @@ const emit = defineEmits<{ retry: [] }>();
 /** 纯音频场（type=1）或清晰度选「音频」(code=a) 都走同一套 EQ 遮罩 */
 const showAudioVisual = computed(
   () => props.isAudioLive || props.player.currentQualityCode === "a",
+);
+
+const failHint = computed(() => mediaFailHint(props.player.failReason || ""));
+/** 角色冲突刷新绕不过，勿给「刷新重试」假希望 */
+const showFailRetry = computed(
+  () => !isWatchRoleConflictReason(props.player.failReason || ""),
 );
 
 const stageRef = ref<HTMLElement | null>(null);
@@ -50,8 +61,8 @@ onBeforeUnmount(() => syncStageEl(null));
     class="player-stage relative w-full bg-black"
     :class="[
       mobileAspectVideo
-        ? 'aspect-video flex-none md:aspect-auto md:min-h-0 md:min-w-0 md:flex-1'
-        : 'min-h-0 min-w-0 flex-1',
+        ? 'player-stage--room aspect-video flex-none'
+        : 'min-h-0 min-w-0 h-full flex-1',
       { 'player-stage-fullscreen': player.pseudoFullscreen },
     ]"
     @click="onStageClick"
@@ -89,18 +100,13 @@ onBeforeUnmount(() => syncStageEl(null));
       v-else-if="player.mediaFailed"
       class="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/70 px-4 text-center"
     >
-      <span class="text-sm text-[var(--lw-color-danger)]">{{ player.failReason || '播放器加载失败' }}</span>
-      <span class="text-xs text-gray-400">
-        若直播确实在播，多半是微吼 SDK 瞬时抖动（20005），可点刷新重试
-      </span>
-      <div class="flex flex-wrap items-center justify-center gap-2">
-        <button
-          type="button"
-          class="rounded-md border border-gray-600 bg-gray-800 px-4 py-2 text-sm text-gray-200 hover:bg-gray-700"
-          @click="emit('retry')"
-        >
-          刷新重试
-        </button>
+      <span class="text-sm font-medium text-[var(--lw-color-danger)]">{{ player.failReason || '播放器加载失败' }}</span>
+      <span class="max-w-md text-xs leading-relaxed text-gray-300">{{ failHint }}</span>
+      <div
+        v-if="showFailRetry"
+        class="flex flex-wrap items-center justify-center gap-2 pt-1"
+      >
+        <el-button type="primary" @click.stop="emit('retry')">刷新重试</el-button>
       </div>
     </div>
 
@@ -151,13 +157,31 @@ onBeforeUnmount(() => syncStageEl(null));
 </template>
 
 <style scoped>
+/*
+ * 观看页 PC：在 WatchRoomShell `.media-well`（container-type:size）内
+ * 短边铺满、长边留黑边，舞台本身保持 16:9。
+ */
+@media (min-width: 768px) {
+  .player-stage--room:not(.player-stage-fullscreen) {
+    width: min(100cqw, calc(100cqh * 16 / 9));
+    max-width: 100%;
+    height: auto;
+    max-height: 100%;
+    aspect-ratio: 16 / 9;
+    flex: none;
+  }
+}
+
 /* 伪全屏作用在舞台根，自建底栏一起铺满 */
 .player-stage.player-stage-fullscreen {
   position: fixed !important;
   inset: 0;
   z-index: 9999;
-  width: 100vw;
-  height: 100dvh;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto;
   background: var(--lw-bg-player);
 }
 

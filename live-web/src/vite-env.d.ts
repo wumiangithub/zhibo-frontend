@@ -27,7 +27,7 @@ interface VhallSdkOptions {
   webinar_id: string | number;
   email: string;
   username: string;
-  /** 观众头像 URL；无头像为 ""，仍参与签名 */
+  /** 观众头像 URL；无头像为 ""。仅非空参与签名；init 原样传（空串即可） */
   head: string;
   sign: string;
   sign_type?: number;

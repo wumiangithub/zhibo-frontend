@@ -11,10 +11,15 @@
 
 .lw-theme,
 .lw-theme[data-lw-theme="dark"] {
-  /* —— 品牌强调色（关注 / 主持人徽章 / Tab 底边 / 购买 / 进度） —— */
+  /* —— 品牌强调色（购买价 / 进度条等；勿用于发送、清晰度选中、主持人） —— */
   --lw-color-brand: #ff6a3d;
   --lw-color-brand-hover: #e85d32;
   --lw-color-brand-muted: rgba(255, 106, 61, 0.22);
+
+  /* —— 功能主色（发送 / Tab / 主持人角标 / 提问勾选；对齐 admin --color-primary） —— */
+  --lw-color-primary: #2f54eb;
+  --lw-color-primary-hover: #1d39c4;
+  --lw-color-primary-muted: rgba(47, 84, 235, 0.28);
 
   /* —— 表面分层（深 → 浅） —— */
   --lw-bg-canvas: #0b0d12;
@@ -35,13 +40,15 @@
   --lw-text-on-brand: #ffffff;
 
   /* —— 角色 / 互动 —— */
-  --lw-color-host-badge: var(--lw-color-brand);
+  --lw-color-host-badge: var(--lw-color-primary);
+  --lw-color-host-muted: var(--lw-color-primary-muted);
   --lw-color-assistant: #fbbf24;
   --lw-color-assistant-muted: rgba(251, 191, 36, 0.2);
   --lw-color-guest: #a78bfa;
   --lw-color-guest-muted: rgba(167, 139, 250, 0.2);
-  --lw-color-ask: #38bdf8;
-  --lw-color-ask-muted: rgba(56, 189, 248, 0.25);
+  /* 提问勾选 / 「问」角标：对齐功能主色（勿用天蓝） */
+  --lw-color-ask: var(--lw-color-primary);
+  --lw-color-ask-muted: var(--lw-color-primary-muted);
   --lw-color-like: #fcd34d;
   --lw-color-like-badge: #f59e0b;
 

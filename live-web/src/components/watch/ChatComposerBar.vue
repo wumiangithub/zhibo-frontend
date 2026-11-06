@@ -183,7 +183,7 @@ function onEnter() {
     <button
       v-if="!disabled"
       type="button"
-      class="flex-none rounded-md bg-[var(--lw-color-brand)] px-4 py-2 text-sm font-medium text-[var(--lw-text-on-brand)] hover:bg-[var(--lw-color-brand-hover)] disabled:opacity-50"
+      class="flex-none rounded-md bg-[var(--lw-color-primary)] px-4 py-2 text-sm font-medium text-[var(--lw-text-on-brand)] hover:bg-[var(--lw-color-primary-hover)] disabled:opacity-50"
       :disabled="controlsDisabled || !modelValue.trim()"
       @click="onSend"
     >

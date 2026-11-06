@@ -1,23 +1,32 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from "vue";
-import EmojiPanel from "@/components/EmojiPanel.vue";
-import { insertEmojiAtCursor } from "@/composables/useEmojiInsert";
-import { splitEmojiText } from "@/constants/emoji";
-import type { ChatController } from "@/composables/useChat";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef } from "vue";
+import { ElCheckbox } from "element-plus";
+import EmojiPanel from "./components/EmojiPanel.vue";
+import { insertEmojiAtCursor } from "./composables/useEmojiInsert";
+import { useDiscussFollowers } from "./composables/useDiscussFollowers";
+import { splitEmojiText } from "./constants/emoji";
+import type { ChatController } from "./composables/useChat";
+import { useAuthStore } from "@/stores/auth";
 import { useToast } from "@/composables/useToast";
-import { formatChatShowTime } from "@/utils/formatChatShowTime";
-import { vhallChatRoleBadge } from "@/utils/vhallChatRole";
-import { questionAnswerText } from "@/utils/vhallQuestion";
+import { formatChatShowTime } from "./utils/formatChatShowTime";
+import { vhallChatRoleBadge } from "./utils/vhallChatRole";
+import { questionAnswerText } from "./utils/vhallQuestion";
 
 type DiscussTab = "all" | "user" | "mine" | "host" | "follower";
 
 const props = defineProps<{
   chat: ChatController;
-  /** 是否已进房可发消息 */
+  /** 本场活动 UUID；用于拉观众名单做跟进人映射 */
+  activityId: string;
+  /** 是否已进房可发消息（直播中） */
   active: boolean;
+  /** 页壳已就绪（含预告/结束）；用于展示历史列表，不依赖直播态 */
+  shellReady?: boolean;
 }>();
 
 const { toast } = useToast();
+const auth = useAuthStore();
+const { followers, followerIdOfViewer } = useDiscussFollowers(toRef(props, "activityId"));
 
 const tab = ref<DiscussTab>("all");
 const onlyQa = ref(false);
@@ -30,7 +39,7 @@ const canScrollLeft = ref(false);
 const canScrollRight = ref(false);
 const followerOpen = ref(false);
 const followerKeyword = ref("");
-const selectedFollower = ref<{ id: string; name: string } | null>(null);
+const selectedFollower = ref<{ id: number; name: string } | null>(null);
 const brokenAvatars = reactive<Record<string, true>>({});
 
 function avatarSrc(msg: ChatMessage): string {
@@ -61,25 +70,50 @@ function badgeToneClass(msg: ChatMessage): string {
   return "is-host";
 }
 
+function isLecturerRole(role: ChatMessage["role_name"]): boolean {
+  return role === 1 || role === 3 || role === 4;
+}
+
+const filteredMessages = computed(() => {
+  let list = props.chat.chatMessages as ChatMessage[];
+  const myId = auth.user?.id;
+
+  switch (tab.value) {
+    case "user":
+      list = list.filter((m) => !isLecturerRole(m.role_name));
+      break;
+    case "host":
+      list = list.filter((m) => isLecturerRole(m.role_name));
+      break;
+    case "mine":
+      list = list.filter((m) => {
+        if (myId == null) return false;
+        return followerIdOfViewer(m.viewerUserId) === myId;
+      });
+      break;
+    case "follower": {
+      const fid = selectedFollower.value?.id;
+      if (fid == null) return [];
+      list = list.filter((m) => followerIdOfViewer(m.viewerUserId) === fid);
+      break;
+    }
+    default:
+      break;
+  }
+
+  if (onlyQa.value) {
+    list = list.filter((m) => m.kind === "question");
+  }
+  return list;
+});
+
 /** 对齐 demo：相对上一条同日同小时不显示；首条/跨小时显示 HH:mm */
 const messageShowTimes = computed(() => {
-  const list = props.chat.chatMessages;
+  const list = filteredMessages.value;
   return list.map((m, i) =>
     formatChatShowTime(i > 0 ? list[i - 1]?.timestamp : null, m.timestamp),
   );
 });
-
-/** 跟进人下拉 Mock，筛选消息能力后续再接 */
-const MOCK_FOLLOWERS = [
-  { id: "1", name: "徐龙森" },
-  { id: "2", name: "超管" },
-  { id: "3", name: "邓晓颖" },
-  { id: "4", name: "张西娜" },
-  { id: "5", name: "杨进茹" },
-  { id: "6", name: "李明轩" },
-  { id: "7", name: "王晓彤" },
-  { id: "8", name: "陈思远" },
-];
 
 const tabs: { key: DiscussTab; label: string; dropdown?: boolean }[] = [
   { key: "all", label: "全部" },
@@ -89,13 +123,24 @@ const tabs: { key: DiscussTab; label: string; dropdown?: boolean }[] = [
   { key: "follower", label: "指定跟进人", dropdown: true },
 ];
 
-const showRealList = computed(() => props.active && tab.value === "all");
+/** 页壳就绪 / 直播中 / 已有历史时展示列表；指定跟进人未选人时不展示 */
+const roomReady = computed(
+  () =>
+    !!props.shellReady ||
+    props.active ||
+    (props.chat.chatMessages as ChatMessage[]).length > 0,
+);
+const showRealList = computed(() => {
+  if (!roomReady.value) return false;
+  if (tab.value === "follower" && !selectedFollower.value) return false;
+  return true;
+});
 const showTabArrows = computed(() => canScrollLeft.value || canScrollRight.value);
 const followerTabLabel = computed(() => selectedFollower.value?.name || "指定跟进人");
 const filteredFollowers = computed(() => {
   const q = followerKeyword.value.trim();
-  if (!q) return MOCK_FOLLOWERS;
-  return MOCK_FOLLOWERS.filter((item) => item.name.includes(q));
+  if (!q) return followers.value;
+  return followers.value.filter((item) => item.name.includes(q));
 });
 
 function updateTabScroll() {
@@ -127,6 +172,7 @@ function closeFollowerMenu() {
 
 function setTab(key: DiscussTab) {
   if (key === "follower") {
+    if (selectedFollower.value) tab.value = "follower";
     followerOpen.value = !followerOpen.value;
     if (followerOpen.value) {
       void nextTick(() => {
@@ -137,25 +183,13 @@ function setTab(key: DiscussTab) {
     return;
   }
   closeFollowerMenu();
-  if (key === "all") {
-    tab.value = key;
-    return;
-  }
-  toastSoon(tabs.find((t) => t.key === key)?.label || key);
+  tab.value = key;
 }
 
-function pickFollower(item: { id: string; name: string }) {
+function pickFollower(item: { id: number; name: string }) {
   selectedFollower.value = item;
   tab.value = "follower";
   closeFollowerMenu();
-  toast("按跟进人筛选消息暂未开放");
-}
-
-function onOnlyQa(e: Event) {
-  const el = e.target as HTMLInputElement;
-  onlyQa.value = false;
-  el.checked = false;
-  toastSoon("只看问答");
 }
 
 function onKeywordToggle() {
@@ -163,22 +197,31 @@ function onKeywordToggle() {
   toastSoon("关键词高亮");
 }
 
-function onAskToggle(e: Event) {
-  const el = e.target as HTMLInputElement;
-  askMode.value = el.checked;
+/** 未进房 / 禁言时不可编辑（对齐直播间 muted+disabled 控台） */
+const composerLocked = computed(() => !props.active || props.chat.isChatMuted);
+
+function onAskChange(val: string | number | boolean) {
+  if (composerLocked.value) {
+    askMode.value = false;
+    return;
+  }
+  if (val) props.chat.requestChatFocus(inputEl.value);
+}
+
+function onEmojiToggle() {
+  if (composerLocked.value) return;
+  showEmoji.value = !showEmoji.value;
 }
 
 function insertEmoji(name: string) {
+  if (composerLocked.value) return;
   const next = insertEmojiAtCursor(inputEl.value, props.chat.chatInput, name, 140);
   if (next !== null) props.chat.chatInput = next;
   showEmoji.value = false;
 }
 
 function send() {
-  if (!showRealList.value) {
-    toastSoon("发送");
-    return;
-  }
+  if (composerLocked.value) return;
   if (askMode.value) {
     void props.chat.sendQuestion();
     return;
@@ -312,14 +355,13 @@ onBeforeUnmount(() => {
     />
 
     <div class="filters">
-      <label class="check">
-        <input
-          type="checkbox"
-          :checked="onlyQa"
-          @change="onOnlyQa"
-        >
+      <ElCheckbox
+        v-model="onlyQa"
+        size="small"
+        class="discuss-check"
+      >
         只看问答
-      </label>
+      </ElCheckbox>
       <button
         type="button"
         class="toggle"
@@ -346,13 +388,13 @@ onBeforeUnmount(() => {
     >
       <template v-if="showRealList">
         <p
-          v-if="!chat.chatMessages.length"
+          v-if="!filteredMessages.length"
           class="empty"
         >
           暂无评论
         </p>
         <template
-          v-for="(msg, idx) in chat.chatMessages"
+          v-for="(msg, idx) in filteredMessages"
           :key="msg.msgId || idx"
         >
           <div
@@ -447,25 +489,26 @@ onBeforeUnmount(() => {
         </template>
       </template>
       <p
-        v-else-if="!active"
+        v-else-if="!roomReady"
         class="empty"
       >
-        进房后显示讨论
+        加载讨论中…
       </p>
       <p
-        v-else-if="tab === 'follower'"
+        v-else-if="tab === 'follower' && !selectedFollower"
         class="empty"
       >
-        {{ selectedFollower ? `已选「${selectedFollower.name}」，按跟进人筛选暂未开放` : "请选择跟进人" }}
+        请选择跟进人
       </p>
       <p
         v-else
         class="empty"
       >
-        请选择「全部」查看消息，其它分类暂未开放
+        暂无评论
       </p>
     </div>
 
+    <!-- 原中控台竖排：表情 → 大圆角 textarea → 提问 checkbox + 发送 -->
     <div class="composer">
       <div class="tools">
         <div class="tools-left">
@@ -474,8 +517,8 @@ onBeforeUnmount(() => {
               type="button"
               class="icon-btn"
               title="表情"
-              :disabled="!active || chat.isChatMuted"
-              @click="showEmoji = !showEmoji"
+              :disabled="composerLocked"
+              @click="onEmojiToggle"
             >
               <svg
                 class="ico"
@@ -496,88 +539,42 @@ onBeforeUnmount(() => {
               @insert="insertEmoji"
             />
           </div>
-          <button
-            type="button"
-            class="icon-btn"
-            title="文件"
-            @click="toastSoon('文件')"
-          >
-            <svg
-              class="ico"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-              />
-            </svg>
-          </button>
-          <button
-            type="button"
-            class="icon-btn"
-            title="位置"
-            @click="toastSoon('位置')"
-          >
-            <svg
-              class="ico"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-              />
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-          </button>
         </div>
-        <button
-          type="button"
-          class="ops"
-          @click="toastSoon('操作')"
-        >
-          操作
-        </button>
       </div>
 
       <textarea
+        id="console-chat-input"
         ref="inputEl"
         v-model="chat.chatInput"
         class="input"
         rows="2"
         maxlength="140"
+        name="zhibo-console-chat-message"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
         :placeholder="askMode ? '发起提问' : '说点什么吧~'"
-        :disabled="!active || chat.isChatMuted"
-        @focus="chat.requestChatFocus(inputEl as unknown as HTMLInputElement)"
+        :disabled="composerLocked"
+        @focus="chat.requestChatFocus(inputEl)"
         @keydown.enter.exact.prevent="send"
       />
 
       <div class="composer-foot">
-        <label class="check">
-          <input
-            type="checkbox"
-            :checked="askMode"
-            @change="onAskToggle"
-          >
+        <ElCheckbox
+          v-model="askMode"
+          size="small"
+          class="discuss-check"
+          :disabled="composerLocked"
+          @change="onAskChange"
+        >
           提问
-        </label>
+        </ElCheckbox>
         <div class="composer-actions">
           <button
             type="button"
             class="send"
-            :disabled="!active || chat.isChatMuted || !chat.chatInput.trim()"
+            :disabled="composerLocked || !chat.chatInput.trim()"
             @click="send"
           >
             发送
@@ -591,39 +588,6 @@ onBeforeUnmount(() => {
       class="emoji-mask"
       @click="showEmoji = false"
     />
-
-    <div
-      v-if="chat.showVerifyDialog"
-      class="verify-mask"
-    >
-      <div class="verify-card">
-        <h3>参与聊天需要验证</h3>
-        <p>输入任意内容即可完成验证</p>
-        <input
-          v-model="chat.verifyInput"
-          type="text"
-          placeholder="输入任意内容..."
-          @keyup.enter="chat.completeVerify(inputEl as unknown as HTMLInputElement)"
-        >
-        <div class="verify-actions">
-          <button
-            type="button"
-            class="ghost"
-            @click="chat.showVerifyDialog = false"
-          >
-            取消
-          </button>
-          <button
-            type="button"
-            class="send"
-            :disabled="!chat.verifyInput.trim()"
-            @click="chat.completeVerify(inputEl as unknown as HTMLInputElement)"
-          >
-            确定
-          </button>
-        </div>
-      </div>
-    </div>
   </section>
 </template>
 
@@ -674,7 +638,7 @@ onBeforeUnmount(() => {
 }
 
 .tabs-arrow:hover:not(:disabled) {
-  color: #1677ff;
+  color: var(--color-primary);
 }
 
 .tabs-arrow:disabled {
@@ -712,8 +676,8 @@ onBeforeUnmount(() => {
 }
 
 .tab.is-active {
-  border-bottom-color: #1677ff;
-  color: #1677ff;
+  border-bottom-color: var(--color-primary);
+  color: var(--color-primary);
   font-weight: 600;
 }
 
@@ -760,7 +724,7 @@ onBeforeUnmount(() => {
 }
 
 .follower-search:focus-within {
-  border-color: #1677ff;
+  border-color: var(--color-primary);
 }
 
 .search-ico {
@@ -804,7 +768,7 @@ onBeforeUnmount(() => {
 .follower-item:hover,
 .follower-item.is-picked {
   background: #f5f6f8;
-  color: #1677ff;
+  color: var(--color-primary);
 }
 
 .follower-empty {
@@ -824,14 +788,40 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid #f5f5f5;
 }
 
-.check {
+.discuss-check {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  height: 14px;
+  margin-right: 0;
+  line-height: 14px;
   color: #666;
   font-size: 12px;
-  cursor: pointer;
-  user-select: none;
+  --el-checkbox-font-size: 12px;
+  --el-checkbox-input-height: 14px;
+  --el-checkbox-input-width: 14px;
+}
+
+.discuss-check :deep(.el-checkbox__input) {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 14px;
+  line-height: 14px;
+  transform: translateY(1px); /* 中文光学居中 */
+}
+
+.discuss-check :deep(.el-checkbox__inner) {
+  width: 14px;
+  height: 14px;
+}
+
+.discuss-check :deep(.el-checkbox__label) {
+  display: inline-flex;
+  align-items: center;
+  height: 14px;
+  padding-left: 6px;
+  line-height: 14px;
+  font-size: 12px;
 }
 
 .toggle {
@@ -854,7 +844,7 @@ onBeforeUnmount(() => {
 }
 
 .toggle.is-on .toggle-track {
-  background: #1677ff;
+  background: var(--color-primary);
 }
 
 .toggle-thumb {
@@ -923,8 +913,8 @@ onBeforeUnmount(() => {
   height: 32px;
   overflow: hidden;
   border-radius: 50%;
-  background: #e6f4ff;
-  color: #1677ff;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
   font-size: 13px;
   font-weight: 600;
 }
@@ -955,9 +945,9 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-/* 角色昵称色与角标同系：主持红 / 助理黄 / 嘉宾紫；观众保持默认灰 */
+/* 角色昵称色与角标同系：主持用主色（非危险红）/ 助理黄 / 嘉宾紫；观众保持默认灰 */
 .name.is-host {
-  color: #e54d42;
+  color: var(--color-primary);
 }
 
 .name.is-assistant {
@@ -978,7 +968,7 @@ onBeforeUnmount(() => {
 
 .badge.is-host {
   border-radius: 999px;
-  background: #e54d42;
+  background: var(--color-primary);
   color: #fff;
 }
 
@@ -993,8 +983,8 @@ onBeforeUnmount(() => {
 }
 
 .badge.is-question {
-  background: #e6f4ff;
-  color: #1677ff;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
 }
 
 .msg-text {
@@ -1121,22 +1111,6 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
-.ops {
-  height: 28px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: #666;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.ops:hover {
-  background: #eee;
-  color: #1677ff;
-}
-
 .input {
   box-sizing: border-box;
   width: 100%;
@@ -1154,11 +1128,15 @@ onBeforeUnmount(() => {
 }
 
 .input:focus {
-  border-color: #1677ff;
+  border-color: var(--color-primary);
 }
 
 .input:disabled {
   background: #f5f5f5;
+  color: #999;
+}
+
+.input::placeholder {
   color: #999;
 }
 
@@ -1180,14 +1158,14 @@ onBeforeUnmount(() => {
   padding: 0 16px;
   border: 0;
   border-radius: 4px;
-  background: #1677ff;
+  background: var(--color-primary);
   color: #fff;
   font-size: 13px;
   cursor: pointer;
 }
 
 .send:hover:not(:disabled) {
-  background: #4096ff;
+  background: var(--color-primary-hover);
 }
 
 .send:disabled {
@@ -1199,63 +1177,5 @@ onBeforeUnmount(() => {
   position: fixed;
   inset: 0;
   z-index: 15;
-}
-
-.verify-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.45);
-  padding: 16px;
-}
-
-.verify-card {
-  width: 100%;
-  max-width: 360px;
-  padding: 20px;
-  border-radius: 8px;
-  background: #fff;
-}
-
-.verify-card h3 {
-  margin: 0 0 6px;
-  font-size: 16px;
-}
-
-.verify-card p {
-  margin: 0 0 12px;
-  color: #666;
-  font-size: 13px;
-}
-
-.verify-card input {
-  box-sizing: border-box;
-  width: 100%;
-  height: 36px;
-  margin-bottom: 12px;
-  padding: 0 10px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  font-size: 13px;
-  outline: none;
-}
-
-.verify-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.ghost {
-  height: 32px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: #666;
-  cursor: pointer;
 }
 </style>

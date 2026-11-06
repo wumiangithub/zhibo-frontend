@@ -124,11 +124,9 @@ export function clearPasscodeStudioSession(): void {
   sessionStorage.removeItem(PASSCODE_STUDIO_SESSION_KEY);
 }
 
-/** 中控台地址（live-web）。token 为空时不带 query。 */
-export function buildConsoleUrl(activityId: string, accessToken: string): string {
+/** 中控台单场地址（admin-web 同源；D110，不再跳 live-web / 不带 ?token=）。 */
+export function buildConsoleUrl(activityId: string): string {
   const id = activityId.trim();
-  const token = accessToken.trim();
-  const base = `${liveWebOrigin()}/console/${id}`;
-  if (!token) return base;
-  return `${base}?token=${encodeURIComponent(token)}`;
+  const origin = window.location.origin.replace(/\/$/, "");
+  return `${origin}/live-console/${id}`;
 }

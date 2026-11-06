@@ -2,6 +2,9 @@
 /**
  * 直播 / 回放共用：主区小屏上下、PC 左右（视频槽 + 侧栏槽）。
  * 顶栏、公告等由父级放在 default 外的 header / notice 槽。
+ *
+ * media 槽：黑底井；小屏由播放器自身 width:100% + 16:9；
+ * PC 用 container-type:size，播放器按短边铺满保 16:9（余下黑边 letterbox/pillarbox）。
  */
 defineSlots<{
   /** 播放器（PlayerStage 或 NativeReplayPlayer） */
@@ -13,7 +16,30 @@ defineSlots<{
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col md:flex-row">
-    <slot name="media" />
+    <div class="media-well">
+      <slot name="media" />
+    </div>
     <slot name="side" />
   </div>
 </template>
+
+<style scoped>
+.media-well {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: 100%;
+  background: #000;
+}
+
+@media (min-width: 768px) {
+  .media-well {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    align-items: center;
+    justify-content: center;
+    container-type: size;
+  }
+}
+</style>

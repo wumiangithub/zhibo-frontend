@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch, type Ref } from "vue";
-import { listAttendees, type AttendeeItem, type AttendeeTab } from "@/api/attendees";
+import { listAttendees, type AttendeeItem, type AttendeeTab } from "./api/console";
 
 const PAGE_SIZE = 20;
 

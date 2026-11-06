@@ -1,6 +1,5 @@
 import { reactive } from "vue";
 import { splitEmojiText, normalizeEmojiText } from "@/constants/emoji";
-import { useToast } from "@/composables/useToast";
 
 /**
  * 自建弹幕：SDK 自带渲染器在本布局不绘制，且设置触发器 .v-c-right 被压成 0 宽（图标/面板都不可达），
@@ -44,7 +43,6 @@ export function useBarrage(
   /** 发送成功后回调（本站评论在此时入库，不等 chatMsg） */
   onSent?: (text: string) => void,
 ) {
-  const { toast } = useToast();
   const barrage = reactive({
     danmakuList: [] as DanmakuItem[],
     danmakuInput: "",
@@ -152,7 +150,6 @@ export function useBarrage(
   function toggleBarrage() {
     barrage.barrageOn = !barrage.barrageOn;
     if (!barrage.barrageOn) barrage.danmakuList = [];
-    toast(barrage.barrageOn ? "弹幕已开" : "弹幕已关");
   }
 
   return Object.assign(barrage, { attachLayerEl, spawnDanmaku, sendDanmaku, toggleBarrage });

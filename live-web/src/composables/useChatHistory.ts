@@ -3,10 +3,15 @@ import {
   fetchWatchChatHistory,
   toChatMessage,
 } from "@/api/chatHistory";
+import {
+  fetchWatchQuestionHistory,
+  toQuestionChatMessage,
+} from "@/api/questionHistory";
 import type { ChatController } from "@/composables/useChat";
 
 /**
- * 回放页只读聊天：拉 `/watch/chat-history`，形状对齐 ChatPanel 所需的 ChatController 子集。
+ * 回放页只读聊天：拉 `/watch/chat-history`（微吼）+ `/watch/question-history`（本站 room_comment），
+ * 形状对齐 ChatPanel 所需的 ChatController 子集。
  */
 export function useChatHistory(getActivityId: () => string) {
   const chat = reactive({
@@ -23,6 +28,8 @@ export function useChatHistory(getActivityId: () => string) {
   let loading = false;
   let exhausted = false;
   let loadMoreCooldown = false;
+  /** 本站提问缓存；聊天分页后重新并入，避免被 replace/prepend 冲掉 */
+  let questionItems: ChatMessage[] = [];
 
   function attachListEl(el: unknown) {
     listEl = (el as HTMLElement | null) || null;
@@ -43,11 +50,53 @@ export function useChatHistory(getActivityId: () => string) {
     });
   }
 
+  function mergeQuestionsIntoList(base: ChatMessage[]): ChatMessage[] {
+    if (!questionItems.length) return base;
+    const seen = new Set(
+      base.map((m) => m.msgId).filter((id): id is string => !!id),
+    );
+    const next = base.slice();
+    for (const item of questionItems) {
+      if (item.msgId && seen.has(item.msgId)) {
+        const idx = next.findIndex((m) => m.msgId === item.msgId);
+        if (idx >= 0) {
+          next[idx] = {
+            ...next[idx],
+            kind: "question",
+            answer: item.answer ?? next[idx].answer,
+          };
+        }
+        continue;
+      }
+      if (item.msgId) seen.add(item.msgId);
+      next.push(item);
+    }
+    next.sort((a, b) => a.timestamp - b.timestamp);
+    return next;
+  }
+
+  async function loadQuestions(activityId: string) {
+    try {
+      const res = await fetchWatchQuestionHistory(activityId);
+      questionItems = (res.list ?? [])
+        .map(toQuestionChatMessage)
+        .filter((m): m is ChatMessage => m != null);
+    } catch (e) {
+      console.warn("加载问答历史失败", e);
+      questionItems = [];
+    }
+  }
+
   async function loadFirstPage() {
     page = 0;
     total = 0;
     exhausted = false;
+    questionItems = [];
     chat.chatMessages = [];
+    const activityId = getActivityId()?.trim();
+    if (activityId) {
+      await loadQuestions(activityId);
+    }
     await loadMore({ replace: true });
   }
 
@@ -65,21 +114,26 @@ export function useChatHistory(getActivityId: () => string) {
       page = nextPage;
 
       if (opts?.replace) {
-        chat.chatMessages = items;
+        chat.chatMessages = mergeQuestionsIntoList(items);
         scrollChatToBottom();
       } else {
         const prevHeight = listEl?.scrollHeight ?? 0;
         const prevTop = listEl?.scrollTop ?? 0;
-        chat.chatMessages = [...items, ...chat.chatMessages];
+        // 先剥掉已并入的提问，再 prepend 聊天，最后重新 merge，避免提问重复
+        const chatOnly = chat.chatMessages.filter((m) => m.kind !== "question");
+        chat.chatMessages = mergeQuestionsIntoList([...items, ...chatOnly]);
         preserveScrollAfterPrepend(prevHeight, prevTop);
       }
 
-      if (items.length === 0 || chat.chatMessages.length >= total) {
+      const chatCount = chat.chatMessages.filter((m) => m.kind !== "question").length;
+      if (items.length === 0 || chatCount >= total) {
         exhausted = true;
       }
     } catch (e) {
       console.warn("加载聊天历史失败", e);
-      if (opts?.replace) chat.chatMessages = [];
+      if (opts?.replace) {
+        chat.chatMessages = mergeQuestionsIntoList([]);
+      }
       exhausted = true;
     } finally {
       loading = false;

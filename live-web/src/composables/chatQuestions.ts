@@ -13,6 +13,10 @@ import {
 } from "@/utils/vhallQuestion";
 import type { ReportCommentBody, UpsertQuestionAnswerBody } from "@/api/comments";
 import { CommentType } from "@/api/comments";
+import {
+  fetchWatchQuestionHistory,
+  toQuestionChatMessage,
+} from "@/api/questionHistory";
 
 const MAX_LEN = 140;
 /** 同一人两次提问的最短间隔 */
@@ -65,6 +69,8 @@ export function createChatQuestions(deps: {
   canSend: () => boolean;
   trimList: () => void;
   scrollChatToBottom: () => void;
+  /** 本站活动 UUID；微吼问答历史空/失败时拉本站提问列表 */
+  getActivityId?: () => string;
   /** 提问发送成功后上报本站（commentType=提问 + 云提问 id）。失败只打日志。 */
   onSent?: (text: string, questionId: string) => void;
   /** create 时若带 msg_id，幂等补写本站 msg_id。失败只打日志。 */
@@ -223,41 +229,69 @@ export function createChatQuestions(deps: {
     if (hit) hit.answer = undefined;
   }
 
+  function mergeQuestionItems(items: ChatMessage[]) {
+    if (!items.length) return;
+    const seen = new Set(
+      chat.chatMessages.map((m) => m.msgId).filter((id): id is string => !!id),
+    );
+    const next = chat.chatMessages.slice();
+    for (const item of items) {
+      if (item.msgId && seen.has(item.msgId)) {
+        const idx = next.findIndex((m) => m.msgId === item.msgId);
+        if (idx >= 0) {
+          next[idx] = {
+            ...next[idx],
+            kind: "question",
+            answer: item.answer ?? next[idx].answer,
+          };
+        }
+        continue;
+      }
+      if (item.msgId) seen.add(item.msgId);
+      next.push(item);
+    }
+    next.sort((a, b) => a.timestamp - b.timestamp);
+    chat.chatMessages = next;
+    scrollChatToBottom();
+  }
+
+  /** 微吼空/失败/无方法 → 本站 room_comment 提问行（复用回放 question-history） */
+  async function loadLocalHistory(): Promise<ChatMessage[]> {
+    const activityId = deps.getActivityId?.()?.trim() ?? "";
+    if (!activityId) return [];
+    try {
+      const res = await fetchWatchQuestionHistory(activityId);
+      return (res.list ?? [])
+        .map(toQuestionChatMessage)
+        .filter((m): m is ChatMessage => m != null);
+    } catch (e) {
+      console.warn("加载提问历史失败（本站）", e);
+      return [];
+    }
+  }
+
+  /**
+   * 先微吼 `vhall_get_live_history_question_msg`；方法缺失 / 抛错 / 无有效条 → 本站兜底。
+   * 与中控台同序；观看本站接口为 `/watch/question-history`（售卖门禁）。
+   */
   async function loadHistory(): Promise<void> {
+    let items: ChatMessage[] = [];
     const sdk = getSdk();
     const fn = sdk?.vhall_get_live_history_question_msg;
-    if (!sdk || typeof fn !== "function") return;
-    try {
-      const res = await fn.call(sdk);
-      const items = extractQuestionList(res)
-        .map(normalizeQuestionMessage)
-        .filter((m): m is ChatMessage => m != null);
-      if (!items.length) return;
-      const seen = new Set(
-        chat.chatMessages.map((m) => m.msgId).filter((id): id is string => !!id),
-      );
-      const next = chat.chatMessages.slice();
-      for (const item of items) {
-        if (item.msgId && seen.has(item.msgId)) {
-          const idx = next.findIndex((m) => m.msgId === item.msgId);
-          if (idx >= 0) {
-            next[idx] = {
-              ...next[idx],
-              kind: "question",
-              answer: item.answer ?? next[idx].answer,
-            };
-          }
-          continue;
-        }
-        if (item.msgId) seen.add(item.msgId);
-        next.push(item);
+    if (sdk && typeof fn === "function") {
+      try {
+        const res = await fn.call(sdk);
+        items = extractQuestionList(res)
+          .map(normalizeQuestionMessage)
+          .filter((m): m is ChatMessage => m != null);
+      } catch (e) {
+        console.warn("加载提问历史失败（微吼）", e);
       }
-      next.sort((a, b) => a.timestamp - b.timestamp);
-      chat.chatMessages = next;
-      scrollChatToBottom();
-    } catch (e) {
-      console.warn("加载提问历史失败", e);
     }
+    if (!items.length) {
+      items = await loadLocalHistory();
+    }
+    mergeQuestionItems(items);
   }
 
   return { sendQuestion, handleQuestion, handleQuestionBackout, loadHistory };

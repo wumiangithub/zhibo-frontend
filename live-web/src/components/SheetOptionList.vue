@@ -27,8 +27,8 @@ const emit = defineEmits<{
         class="sheet-option-item flex w-full items-center justify-center px-4 py-[14px] text-center text-[16px] leading-snug transition-colors active:bg-white/[0.06]"
         :class="
           opt.selected
-            ? 'font-medium text-[var(--lw-color-brand)]'
-            : 'font-normal text-[var(--lw-text-primary)]'
+            ? 'font-medium text-[var(--lw-text-primary)]'
+            : 'font-normal text-[var(--lw-text-secondary)]'
         "
         @click="emit('select', opt.key)"
       >

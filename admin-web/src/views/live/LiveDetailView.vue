@@ -11,7 +11,6 @@ import {
   type ActivityDetail,
   type ActivityId,
 } from "@/api/activity";
-import { getAccessToken } from "@/utils/authSession";
 import { buildAudienceWatchUrl, buildConsoleUrl, buildLiveStudioPath } from "@/utils/liveLinks";
 import { ActivityMemberRole } from "@/views/live/detail/role/roleTypes";
 import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
@@ -181,8 +180,7 @@ function goLive() {
 }
 
 function goConsole() {
-  const token = getAccessToken() ?? "";
-  window.open(buildConsoleUrl(id.value, token), "_blank", "noopener");
+  window.open(buildConsoleUrl(id.value), "_blank", "noopener");
 }
 
 onMounted(fetchDetail);

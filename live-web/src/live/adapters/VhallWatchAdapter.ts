@@ -51,7 +51,7 @@ export class VhallWatchAdapter implements WatchAdapter {
       // 签名里含 email。有观众 id 时已是 {id}@qkzb.com；换账号必须重新拉签名再 new，不能只改这一字段
       email: data.sdk.email,
       username: data.sdk.username,
-      // 无头像也要传空串，且必须与签名时的 head 一致
+      // 空串即可；后端仅非空 head 参与签名（与 JSSDK 真值才带 head 对齐）
       head: data.sdk.head ?? "",
       sign: data.sdk.sign,
       sign_type: data.sdk.signType ?? 0,
@@ -64,7 +64,7 @@ export class VhallWatchAdapter implements WatchAdapter {
       return;
     }
 
-    // 硬失败立刻提示；20005/20006 联调常为瞬时，交由上层重拉签名再 init
+    // 硬失败（含主持/嘉宾/助理不能进观看端）立刻提示；其余 20005/20006 交由上层决定是否重拉
     this.sdk.$on("error", (msg: unknown) => {
       const text = formatSdkError(msg);
       console.warn("SDK 运行时错误:", text, msg);

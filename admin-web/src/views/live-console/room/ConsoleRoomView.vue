@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import PlayerStage from "@/components/watch/PlayerStage.vue";
-import PreviewScreen from "@/components/watch/PreviewScreen.vue";
-import EndedScreen from "@/components/watch/EndedScreen.vue";
-import { fetchChatFilterPageUrl } from "@/api/chatFilter";
+import "./player-theme.css";
+import PlayerStage from "./components/PlayerStage.vue";
+import PreviewScreen from "./components/PreviewScreen.vue";
+import EndedScreen from "./components/EndedScreen.vue";
+import { fetchChatFilterPageUrl } from "./api/console";
 import { ApiError } from "@/api/http";
-import { useWatchSession } from "@/composables/useWatchSession";
-import { presenceUserIdFromMessage } from "@/utils/presenceEmail";
+import { useConsoleSession } from "./composables/useConsoleSession";
+import { presenceUserIdFromMessage } from "./utils/presenceEmail";
 import { useToast } from "@/composables/useToast";
+import { useAuthStore } from "@/stores/auth";
+import { buildAudienceWatchUrl } from "@/utils/liveLinks";
+import ShareDialog from "@/components/share/ShareDialog.vue";
 import AttendeePanel from "./AttendeePanel.vue";
 import ChatFilterPanel from "./ChatFilterPanel.vue";
 import DiscussPanel from "./DiscussPanel.vue";
@@ -16,17 +20,19 @@ import WatchDataPanel from "./WatchDataPanel.vue";
 
 const route = useRoute();
 const id = computed(() => String(route.params.id ?? ""));
-/** 预留：admin 跳转会带 ?token=，现阶段可空 */
-const adminToken = computed(() => String(route.query.token ?? ""));
+const auth = useAuthStore();
+const shareVisible = ref(false);
+const audienceWatchUrl = computed(() =>
+  buildAudienceWatchUrl(id.value, auth.user?.id),
+);
 
-const { toast } = useToast();
+/** 单场中控台不嵌 LiveConsoleLayout，须自挂 toast 宿主（提问失败等） */
+const { message, visible, toast } = useToast();
 const panelRef = ref<InstanceType<typeof AttendeePanel> | null>(null);
 const watchDataRef = ref<{
   refreshAndResetRange: () => Promise<void>;
 } | null>(null);
 const actions = ["数据", "评论审核", "商品", "优惠券"];
-
-const ASSISTANT_NICK = "助理";
 
 const chatFilterOpen = ref(false);
 /** 首次打开后保持挂载，关闭只隐藏以复用 iframe */
@@ -45,9 +51,9 @@ function presenceTime(raw: string | undefined): string | undefined {
   return /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text) ? text : undefined;
 }
 
-const session = useWatchSession({
+const session = useConsoleSession({
   activityId: () => id.value,
-  getNickname: () => ASSISTANT_NICK,
+  // 昵称/头像由 console/sdk-sign 按「本场成员 → 员工资料」解析，勿写死「助理」
   onPresenceOnline: (msg) => {
     // 结束态不再吃 Join（与 D30 / attendees 全员 offline 对齐；回调晚于 session 赋值）
     const state = session.data.value?.state;
@@ -91,10 +97,10 @@ const {
   sdkReady,
   load,
   enterLiveFromPreview,
-  shareWatch,
 } = session;
 
 const displayTitle = computed(() => data.value?.title || "直播中控台");
+const shareTitle = computed(() => data.value?.title ?? "");
 const activityEnded = computed(() => isEnded.value || isReplay.value);
 
 function hideChatFilter() {
@@ -133,7 +139,8 @@ async function openChatFilter() {
   const seq = ++chatFilterSeq;
   chatFilterLoading.value = true;
   try {
-    const res = await fetchChatFilterPageUrl(activityId, { name: ASSISTANT_NICK });
+    /** 省略 email/name：服务端用当前员工 e{id}@qkzb.com */
+    const res = await fetchChatFilterPageUrl(activityId);
     if (seq !== chatFilterSeq) return;
     const pageUrl = res.pageUrl?.trim() ?? "";
     if (!pageUrl) {
@@ -179,7 +186,6 @@ function onAction(label: string) {
 }
 
 async function boot() {
-  void adminToken.value;
   resetChatFilter();
   resetWatchData();
   await load();
@@ -226,7 +232,7 @@ onMounted(() => {
           type="button"
           class="share-btn"
           title="分享"
-          @click="shareWatch"
+          @click="shareVisible = true"
         >
           <svg
             class="share-btn-icon"
@@ -259,7 +265,10 @@ onMounted(() => {
         </button>
       </div>
 
-      <div class="player-area">
+      <div
+        class="player-area"
+        :class="{ 'is-shell': isPreview || isEnded || isReplay }"
+      >
         <div
           v-if="loading"
           class="player-state"
@@ -279,24 +288,26 @@ onMounted(() => {
             重试
           </button>
         </div>
-        <!-- 与观看页同：预告/直播/结束共挂 PlayerStage，结束不拆 SDK -->
+        <!-- 预告/直播/结束共挂 PlayerStage（#player 常在），结束不拆 SDK；历史靠 moduleReady → scheduleLoadHistory -->
         <div
           v-else-if="data && (isPreview || isLive || isEnded || isReplay)"
-          class="lw-theme relative flex min-h-0 flex-1 flex-col"
-          data-lw-theme="dark"
+          class="relative flex min-h-0 flex-1 flex-col"
+          :class="{ 'lw-theme': isLive }"
+          :data-lw-theme="isLive ? 'dark' : undefined"
         >
           <PreviewScreen
             v-if="isPreview"
-            class="absolute inset-0 z-20"
+            class="absolute inset-0 z-[100]"
             :data="data"
             :countdown="countdown"
             :show-live-start-popup="showLiveStartPopup"
             :host-player="false"
             @enter="enterLiveFromPreview"
           />
+          <!-- 结束壳只遮罩；host-player=false，勿抢走 #player（D108 保活 + 讨论区历史） -->
           <EndedScreen
             v-if="isEnded || isReplay"
-            class="absolute inset-0 z-20"
+            class="absolute inset-0 z-[100]"
             :data="data"
             :show-replay-entry="false"
             :show-live-start-popup="showLiveStartPopup"
@@ -351,9 +362,12 @@ onMounted(() => {
       />
     </section>
 
+    <!-- active=可发聊（仅直播）；shellReady=页壳在则展示 SDK 拉到的历史（含结束） -->
     <DiscussPanel
       :chat="chat"
+      :activity-id="id"
       :active="!!data && isLive"
+      :shell-ready="!!data"
     />
 
     <ChatFilterPanel
@@ -363,13 +377,26 @@ onMounted(() => {
       :loading="chatFilterLoading"
       @close="hideChatFilter"
     />
+
+    <ShareDialog
+      v-model="shareVisible"
+      :title="shareTitle"
+      :watch-url="audienceWatchUrl"
+    />
+
+    <div
+      v-if="visible"
+      class="pointer-events-none fixed bottom-10 left-1/2 z-50 -translate-x-1/2 rounded-md bg-[#1f2329]/90 px-4 py-2 text-sm text-white shadow-lg"
+    >
+      {{ message }}
+    </div>
   </div>
 </template>
 
 <style scoped>
 .console {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 300px;
+  grid-template-columns: 300px minmax(300px, 1fr) 300px;
   gap: 12px;
   box-sizing: border-box;
   height: 100dvh;
@@ -496,11 +523,27 @@ onMounted(() => {
   display: flex;
   flex: none;
   flex-direction: column;
-  height: 200px;
+  /* 宽铺满内容区，高由 16:9 推出（替代旧固定 200/320px） */
+  aspect-ratio: 16 / 9;
+  width: auto;
+  height: auto;
   margin: 12px 16px 0;
+  /* visible：勿裁清晰度/音量飞出层；画面圆角裁切交给内部 #player */
+  overflow: visible;
+  border: 1px solid var(--color-border, #e4e7ed);
+  border-radius: 8px;
+  /* 浅色中控壳内仍用黑井，letterbox/pillarbox 一致 */
+  background: #000;
+}
+
+.player-area :deep(#player) {
   overflow: hidden;
   border-radius: 8px;
-  background: #111;
+}
+
+/** 预告 / 结束壳：跟管理端浅色一致，不要黑底 */
+.player-area.is-shell {
+  background: var(--color-bg-muted, #fafafa);
 }
 
 .player-area :deep(.relative) {
@@ -550,13 +593,13 @@ onMounted(() => {
 }
 
 .action:hover {
-  color: #1677ff;
-  border-color: #91caff;
+  color: var(--color-primary);
+  border-color: var(--color-primary-border);
 }
 
 .action.is-active {
-  color: #1677ff;
-  border-color: #1677ff;
-  background: #e6f4ff;
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-primary-bg);
 }
 </style>

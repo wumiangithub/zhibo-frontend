@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { toRef } from "vue";
-import type { AttendeeTab } from "@/api/attendees";
+import type { AttendeeTab } from "./api/console";
 import { useToast } from "@/composables/useToast";
 import { useAttendeeList } from "./useAttendeeList";
 
@@ -185,8 +185,8 @@ function shell(label: string) {
 }
 
 .tab.is-active {
-  border-bottom-color: #1677ff;
-  color: #1677ff;
+  border-bottom-color: var(--color-primary);
+  color: var(--color-primary);
   font-weight: 600;
 }
 
@@ -209,7 +209,7 @@ function shell(label: string) {
 }
 
 .search-input:focus {
-  border-color: #1677ff;
+  border-color: var(--color-primary);
 }
 
 .list {
@@ -247,8 +247,8 @@ function shell(label: string) {
   height: 36px;
   overflow: hidden;
   border-radius: 50%;
-  background: #e6f4ff;
-  color: #1677ff;
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
   font-size: 14px;
   font-weight: 600;
 }
@@ -310,7 +310,7 @@ function shell(label: string) {
 .text-btn {
   flex: none;
   padding: 0;
-  color: #1677ff;
+  color: var(--color-primary);
   font-size: 12px;
 }
 
@@ -333,6 +333,6 @@ function shell(label: string) {
 
 .text-btn:hover,
 .more:hover:not(:disabled) {
-  color: #1677ff;
+  color: var(--color-primary);
 }
 </style>

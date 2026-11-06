@@ -10,7 +10,7 @@ const props = withDefaults(
     speedAllow?: boolean;
     fastForwardAllow?: boolean;
     /**
-     * 嵌入 WatchRoomShell：小屏 16:9 顶置、PC 占满视频槽（对齐 PlayerStage）。
+     * 嵌入 WatchRoomShell：舞台始终 16:9（小屏 width 100%；PC 短边铺满，对齐 PlayerStage）。
      * 单独全页居中时勿开。
      */
     embedInRoom?: boolean;
@@ -403,19 +403,15 @@ onBeforeUnmount(() => {
   <div
     class="relative flex w-full flex-col bg-black"
     :class="[
-      embedInRoom
-        ? 'flex-none md:min-h-0 md:min-w-0 md:flex-1'
-        : '',
+      embedInRoom ? 'replay-embed flex-none' : '',
       { 'replay-pseudo-fs': pseudoFullscreen },
     ]"
   >
     <div
       ref="stageRef"
-      class="relative w-full overflow-hidden bg-black"
+      class="relative w-full overflow-hidden bg-black aspect-video flex-none"
       :class="[
-        embedInRoom
-          ? 'aspect-video flex-none md:aspect-auto md:min-h-0 md:flex-1'
-          : 'aspect-video md:mx-auto md:max-w-5xl',
+        embedInRoom ? 'replay-embed-stage' : 'md:mx-auto md:max-w-5xl',
         { 'replay-stage-fs': pseudoFullscreen },
       ]"
       @click="togglePlay"
@@ -593,10 +589,32 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/*
+ * 嵌入房间 PC：在 WatchRoomShell `.media-well` 内短边铺满，舞台 16:9。
+ * 小屏走 width:100% + aspect-video（与 PlayerStage 一致）。
+ */
+@media (min-width: 768px) {
+  .replay-embed:not(.replay-pseudo-fs) {
+    width: min(100cqw, calc(100cqh * 16 / 9));
+    max-width: 100%;
+    flex: none;
+  }
+
+  .replay-embed:not(.replay-pseudo-fs) .replay-embed-stage {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+    aspect-ratio: 16 / 9;
+  }
+}
+
 .replay-pseudo-fs {
   position: fixed;
   inset: 0;
   z-index: 100;
+  width: 100vw !important;
+  height: 100dvh !important;
+  max-width: none;
   justify-content: center;
   background: #000;
 }
@@ -747,7 +765,7 @@ onBeforeUnmount(() => {
 }
 
 .bar-btn:hover {
-  color: var(--lw-color-brand);
+  color: #fff;
 }
 
 .bar-icon {
@@ -809,13 +827,14 @@ onBeforeUnmount(() => {
   line-height: 44px;
   text-align: center;
   font-size: 14px;
-  color: #fff;
+  color: var(--lw-text-secondary);
   cursor: pointer;
 }
 
 .speed-item:hover,
 .speed-item.is-active {
-  color: var(--lw-color-brand);
+  color: var(--lw-text-primary);
+  font-weight: 500;
 }
 
 .seek-tip {

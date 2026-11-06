@@ -50,7 +50,7 @@ function roleBadge(msg: ChatMessage): string | undefined {
 }
 
 function nameClass(msg: ChatMessage): string {
-  // 昵称用次级字色保证暗底可读；身份靠角标，不整名刷品牌色
+  // 主持人昵称用主文字白；身份靠角标，不整名刷蓝。助理黄 / 嘉宾紫；观众次级字色
   if (msg.role_name === 1) return "text-[var(--lw-text-primary)]";
   if (msg.role_name === 3) return "text-[var(--lw-color-assistant)]";
   if (msg.role_name === 4) return "text-[var(--lw-color-guest)]";

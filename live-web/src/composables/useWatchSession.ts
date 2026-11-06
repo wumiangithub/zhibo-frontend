@@ -23,17 +23,14 @@ export interface WatchSessionOptions {
   activityId: MaybeRefOrGetter<string>;
   /** SDK 昵称 */
   getNickname: () => string;
-  /** SDK 进出推送（中控台名单本地改在线态）。不写库，落库只走微吼回调。 */
+  /** SDK 进出推送（名单本地改在线态；admin 中控台对照用）。不写库，落库只走微吼回调。 */
   onPresenceOnline?: (msg: VhallUserPresenceMessage) => void;
   onPresenceOffline?: (msg: VhallUserPresenceMessage) => void;
-  /**
-   * 观看页：无 viewerId 时点聊天跳登录。
-   * 中控台不传，继续假验证弹窗。
-   */
+  /** 观看页：无 viewerId 时点聊天跳登录。 */
   onUnauthenticatedChat?: () => void;
   /**
    * summary / sdk-sign 判定需登录（含「请先登录」业务 400）时回调。
-   * 观看页：refresh 或清票跳 /login；中控台不传则仍展示 error。
+   * 观看页：refresh 或清票跳 /login。
    */
   onViewerAuthRequired?: () => void | Promise<void>;
 }
@@ -43,7 +40,8 @@ function resolveId(id: MaybeRefOrGetter<string>): string {
 }
 
 /**
- * 观看页与中控台共用：先 /summary 定页壳，再 /sdk-sign + init（含结束壳，便于听 live_start）。
+ * 观看页会话：先 /summary 定页壳，再 /sdk-sign + init（含结束壳，便于听 live_start）。
+ * 中控台已迁 admin-web（D110，对照本文件 + console API）。
  * 观众上下线落库不在这里：生产靠微吼回调，本地靠观看页按钮模拟回调。
  */
 export function useWatchSession(opts: WatchSessionOptions) {
@@ -110,7 +108,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
   const canPlayReplay = computed(() => false);
   const sdkReady = computed(() => !!adapter?.getSdk() && !sdkFailed.value && isLive.value);
 
-  /** 主观看页 / 中控台：预告、直播、结束类都挂 SDK，才能立刻收到 live_start / live_over */
+  /** 预告、直播、结束类都挂 SDK，才能立刻收到 live_start / live_over */
   function shouldInitSdk(res: WatchSummaryData): boolean {
     return res.state === 1 || res.state === 2 || res.state === 3 || res.state === 4 || res.state === 5;
   }
