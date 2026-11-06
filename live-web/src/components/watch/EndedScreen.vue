@@ -10,8 +10,6 @@ withDefaults(
     playbackExpired?: boolean;
     /** 正在拉回放列表 */
     replayLoading?: boolean;
-    /** 再开播引导（与预告页同形；主页挂 SDK 时才能收到 live_start） */
-    showLiveStartPopup?: boolean;
     /** false：由外层 PlayerStage 提供 #player/#docWrap，本组件只做遮罩 */
     hostPlayer?: boolean;
   }>(),
@@ -19,14 +17,12 @@ withDefaults(
     showReplayEntry: false,
     playbackExpired: false,
     replayLoading: false,
-    showLiveStartPopup: false,
     hostPlayer: true,
   },
 );
 
 const emit = defineEmits<{
   replay: [];
-  enter: [];
 }>();
 </script>
 
@@ -91,29 +87,6 @@ const emit = defineEmits<{
       >
         {{ replayLoading ? "加载中…" : "查看回放" }}
       </button>
-    </div>
-
-    <!-- 再开播引导（与 PreviewScreen 同形） -->
-    <div
-      v-if="showLiveStartPopup"
-      class="absolute inset-0 z-20 flex items-center justify-center bg-black/70 p-4"
-    >
-      <div class="w-full max-w-sm rounded-lg bg-gray-800 p-6 text-center">
-        <div class="mb-4 flex justify-center">
-          <span class="inline-flex items-center gap-2 rounded-full bg-[var(--lw-color-danger-muted)] px-3 py-1 text-sm font-medium text-[var(--lw-color-live)]">
-            <span class="h-2 w-2 animate-pulse rounded-full bg-[var(--lw-color-live)]"></span>
-            直播已开始
-          </span>
-        </div>
-        <h3 class="mb-2 text-lg font-semibold text-white">直播已开始，请观看直播吧</h3>
-        <p class="mb-6 text-sm text-gray-400">点击下方按钮进入直播</p>
-        <button
-          class="w-full rounded-md bg-green-600 px-6 py-3 text-sm font-medium text-white hover:bg-green-700"
-          @click="emit('enter')"
-        >
-          立即观看
-        </button>
-      </div>
     </div>
 
     <template v-if="hostPlayer">

@@ -176,14 +176,6 @@ function onShare(item: CourseListItem) {
   shareVisible.value = true;
 }
 
-function openAuditRecords(item: CourseListItem) {
-  auditDrawerTitle.value = item.title;
-  auditDrawerId.value = item.id;
-  auditDrawerCover.value = item.coverUrl || "";
-  auditDrawerCreatedTime.value = item.createdTime || "";
-  auditDrawerVisible.value = true;
-}
-
 async function onShelf(item: CourseListItem, listed: boolean) {
   const action = listed ? "上架" : "下架";
   try {

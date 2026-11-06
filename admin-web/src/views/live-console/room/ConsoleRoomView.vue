@@ -81,7 +81,6 @@ const {
   loading,
   error,
   data,
-  showLiveStartPopup,
   countdown,
   barrage,
   chat,
@@ -96,7 +95,6 @@ const {
   sdkFailed,
   sdkReady,
   load,
-  enterLiveFromPreview,
 } = session;
 
 const displayTitle = computed(() => data.value?.title || "直播中控台");
@@ -265,69 +263,71 @@ onMounted(() => {
         </button>
       </div>
 
+      <!-- 黑井高 300px、宽铺满；画面仍在 .player-area 内 16:9 居中 -->
       <div
-        class="player-area"
+        class="player-well"
         :class="{ 'is-shell': isPreview || isEnded || isReplay }"
       >
         <div
-          v-if="loading"
-          class="player-state"
+          class="player-area"
+          :class="{ 'is-shell': isPreview || isEnded || isReplay }"
         >
-          加载中…
-        </div>
-        <div
-          v-else-if="error && !data"
-          class="player-state is-err"
-        >
-          <p>{{ error }}</p>
-          <button
-            type="button"
-            class="action"
-            @click="load"
+          <div
+            v-if="loading"
+            class="player-state"
           >
-            重试
-          </button>
-        </div>
-        <!-- 预告/直播/结束共挂 PlayerStage（#player 常在），结束不拆 SDK；历史靠 moduleReady → scheduleLoadHistory -->
-        <div
-          v-else-if="data && (isPreview || isLive || isEnded || isReplay)"
-          class="relative flex min-h-0 flex-1 flex-col"
-          :class="{ 'lw-theme': isLive }"
-          :data-lw-theme="isLive ? 'dark' : undefined"
-        >
-          <PreviewScreen
-            v-if="isPreview"
-            class="absolute inset-0 z-[100]"
-            :data="data"
-            :countdown="countdown"
-            :show-live-start-popup="showLiveStartPopup"
-            :host-player="false"
-            @enter="enterLiveFromPreview"
-          />
-          <!-- 结束壳只遮罩；host-player=false，勿抢走 #player（D108 保活 + 讨论区历史） -->
-          <EndedScreen
-            v-if="isEnded || isReplay"
-            class="absolute inset-0 z-[100]"
-            :data="data"
-            :show-replay-entry="false"
-            :show-live-start-popup="showLiveStartPopup"
-            :host-player="false"
-            @enter="enterLiveFromPreview"
-          />
-          <PlayerStage
-            :player="player"
-            :barrage="barrage"
-            :stats="stats"
-            :title="data.title"
-            :is-audio-live="isAudioLive"
-            @retry="load"
-          />
-        </div>
-        <div
-          v-else
-          class="player-state"
-        >
-          暂无可播放内容
+            加载中…
+          </div>
+          <div
+            v-else-if="error && !data"
+            class="player-state is-err"
+          >
+            <p>{{ error }}</p>
+            <button
+              type="button"
+              class="action"
+              @click="load"
+            >
+              重试
+            </button>
+          </div>
+          <!-- 预告/直播/结束共挂 PlayerStage（#player 常在），结束不拆 SDK；历史靠 moduleReady → scheduleLoadHistory -->
+          <div
+            v-else-if="data && (isPreview || isLive || isEnded || isReplay)"
+            class="relative flex min-h-0 flex-1 flex-col"
+            :class="{ 'lw-theme': isLive }"
+            :data-lw-theme="isLive ? 'dark' : undefined"
+          >
+            <PreviewScreen
+              v-if="isPreview"
+              class="absolute inset-0 z-[100]"
+              :data="data"
+              :countdown="countdown"
+              :host-player="false"
+            />
+            <!-- 结束壳只遮罩；host-player=false，勿抢走 #player（D108 保活 + 讨论区历史） -->
+            <EndedScreen
+              v-if="isEnded || isReplay"
+              class="absolute inset-0 z-[100]"
+              :data="data"
+              :show-replay-entry="false"
+              :host-player="false"
+            />
+            <PlayerStage
+              :player="player"
+              :barrage="barrage"
+              :stats="stats"
+              :title="data.title"
+              :is-audio-live="isAudioLive"
+              @retry="load"
+            />
+          </div>
+          <div
+            v-else
+            class="player-state"
+          >
+            暂无可播放内容
+          </div>
         </div>
       </div>
 
@@ -519,6 +519,24 @@ onMounted(() => {
   cursor: pointer;
 }
 
+/* 与画面同高 300px、横向铺满；黑底吞两侧留白，预告/结束走浅底 */
+.player-well {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 300px;
+  max-height: 300px;
+  border: 1px solid #000;
+  background: #000;
+}
+
+.player-well.is-shell {
+  border-color: transparent;
+  background: var(--color-bg-muted, #fafafa);
+}
+
 .player-area {
   display: flex;
   flex: none;
@@ -528,19 +546,17 @@ onMounted(() => {
   width: min(100%, calc(300px * 16 / 9));
   max-height: 300px;
   height: auto;
-  align-self: center;
-  margin: 12px 16px 0;
-  /* visible：勿裁清晰度/音量飞出层；画面圆角裁切交给内部 #player */
+  margin: 0;
+  /* visible：勿裁清晰度/音量飞出层 */
   overflow: visible;
-  border: 1px solid var(--color-border, #e4e7ed);
-  border-radius: 8px;
-  /* 浅色中控壳内仍用黑井，letterbox/pillarbox 一致 */
+  border: 0;
+  border-radius: 0;
   background: #000;
 }
 
 .player-area :deep(#player) {
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 0;
 }
 
 /** 预告 / 结束壳：跟管理端浅色一致，不要黑底 */

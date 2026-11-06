@@ -87,6 +87,7 @@ export interface LearningSummaryResult {
   list: LearningSummaryItem[];
 }
 
+/** 学习统计·课程数据行（D112：小节维度） */
 export interface LearningCourseItem {
   id: number;
   viewerId: number;
@@ -95,13 +96,16 @@ export interface LearningCourseItem {
   tagIds: number[];
   tagLabels: string[];
   courseId?: string;
-  courseName?: string;
+  lessonNodeId: number;
+  lessonName?: string;
   totalLearnDurationSec: number;
   progressPercent: number;
   firstLearnTime?: string;
   completedTime?: string;
-  courseType?: string;
-  courseDurationSec: number;
+  /** 直播 / 图片 / 视频 / 文档 / 文章 */
+  lessonType?: string;
+  /** 视频资源时长秒；非视频或未知为 0 */
+  lessonDurationSec: number;
 }
 
 export interface LearningCourseResult {

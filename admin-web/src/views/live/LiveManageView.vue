@@ -213,13 +213,6 @@ function openShare(item: ActivityListItem) {
   shareVisible.value = true;
 }
 
-/** 审核记录侧栏：仅 UI Mock，后续接风控审核流 */
-function openAuditRecords(item: ActivityListItem) {
-  auditDrawerTitle.value = item.title;
-  auditDrawerId.value = item.id;
-  auditDrawerVisible.value = true;
-}
-
 async function onShelf(item: ActivityListItem, listed: boolean) {
   const action = listed ? "上架" : "下架";
   try {

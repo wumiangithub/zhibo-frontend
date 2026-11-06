@@ -559,11 +559,15 @@ onMounted(async () => {
           width="100"
         />
         <ElTableColumn
-          label="课程名称"
-          prop="courseName"
+          label="小节名称"
+          prop="lessonName"
           min-width="200"
           show-overflow-tooltip
-        />
+        >
+          <template #default="{ row }">
+            {{ row.lessonName || "—" }}
+          </template>
+        </ElTableColumn>
         <ElTableColumn
           label="标签"
           min-width="140"
@@ -610,15 +614,19 @@ onMounted(async () => {
         />
         <ElTableColumn
           label="课程类型"
-          prop="courseType"
+          prop="lessonType"
           width="100"
-        />
+        >
+          <template #default="{ row }">
+            {{ row.lessonType || "—" }}
+          </template>
+        </ElTableColumn>
         <ElTableColumn
           label="课程资源时长"
           min-width="130"
         >
           <template #default="{ row }">
-            {{ formatLearnDurationSec(row.courseDurationSec) }}
+            {{ formatLearnDurationSec(row.lessonDurationSec) }}
           </template>
         </ElTableColumn>
       </ElTable>

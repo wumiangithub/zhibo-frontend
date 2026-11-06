@@ -53,7 +53,6 @@ export function useWatchSession(opts: WatchSessionOptions) {
   /** 最近一次签名（init 时有） */
   const sign = ref<WatchSdkSignData | null>(null) as Ref<WatchSdkSignData | null>;
   const sdkFailed = ref(false);
-  const showLiveStartPopup = ref(false);
 
   let adapter: WatchAdapter | null = null;
   const getSdk = () => adapter?.getSdk() ?? null;
@@ -69,6 +68,17 @@ export function useWatchSession(opts: WatchSessionOptions) {
   let initEpoch = 0;
   /** 同一 epoch 内 moduleReady 只跑一次侧效（SDK 可能重复推送） */
   let moduleReadyEpoch = -1;
+  /**
+   * 页壳意图世代：live_over / live_start / 自动进房 各 ++。
+   * 用于作废 in-flight 的 switchToEndedFromLive（await summary 后勿再强制 state=3）。
+   */
+  let roomUiEpoch = 0;
+  /** 进房 recreate 进行中：防 live_start 与 summary 兜底并发双进 */
+  let enterLiveInFlight = false;
+  /** 预告/结束壳轻量 summary 对账（live_start 偶发丢失兜底，D108） */
+  const SHELL_SUMMARY_POLL_MS = 20_000;
+  let shellSummaryTimer: ReturnType<typeof setInterval> | null = null;
+  let shellSummaryInFlight = false;
 
   const { countdown, start: startCountdown, stop: stopCountdown } = useCountdown();
   let reportSentChat: (text: string) => void = () => {};
@@ -117,10 +127,6 @@ export function useWatchSession(opts: WatchSessionOptions) {
     return state === 3 || state === 4 || state === 5;
   }
 
-  function hasLiveSdk(): boolean {
-    return !!adapter?.getSdk() && !sdkFailed.value;
-  }
-
   /** 本次 SDK 实例用的观众 id。undefined 表示还没拉过签名 */
   let sdkViewerId: number | null | undefined;
   let accountTimer: ReturnType<typeof setInterval> | null = null;
@@ -149,16 +155,91 @@ export function useWatchSession(opts: WatchSessionOptions) {
     reloadIfViewerChanged();
   }
 
+  function isShellState(): boolean {
+    return isPreview.value || isEnded.value || isReplay.value;
+  }
+
+  function stopShellSummaryPoll() {
+    if (shellSummaryTimer) {
+      clearInterval(shellSummaryTimer);
+      shellSummaryTimer = null;
+    }
+  }
+
+  function startShellSummaryPoll() {
+    stopShellSummaryPoll();
+    if (!isShellState()) return;
+    shellSummaryTimer = setInterval(() => {
+      void reconcileShellSummary("interval");
+    }, SHELL_SUMMARY_POLL_MS);
+  }
+
+  function syncShellSummaryPoll() {
+    if (isShellState()) startShellSummaryPoll();
+    else stopShellSummaryPoll();
+  }
+
+  /**
+   * 预告/结束壳轻量 summary 对账：仅页可见时；失败不挡 UI。
+   * 发现 state===1 则走与 live_start 相同的自动进房（D108）。
+   */
+  async function reconcileShellSummary(_reason: "interval" | "visibility" | "focus") {
+    if (!isShellState() || loading.value || enterLiveInFlight || shellSummaryInFlight) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    const epoch = roomUiEpoch;
+    const id = resolveId(opts.activityId);
+    shellSummaryInFlight = true;
+    try {
+      const summary = await getWatchSummary(id);
+      if (epoch !== roomUiEpoch) return;
+      if (resolveId(opts.activityId) !== id) return;
+      if (!isShellState()) return;
+      if (summary.state !== 1) return;
+      await enterLiveFromPreview();
+    } catch (e) {
+      console.warn("[watch] shell summary 对账失败（忽略）", e);
+    } finally {
+      shellSummaryInFlight = false;
+    }
+  }
+
+  function onShellVisibility() {
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    void reconcileShellSummary("visibility");
+  }
+
+  function onShellFocus() {
+    void reconcileShellSummary("focus");
+  }
+
   window.addEventListener("storage", onViewerStorage);
   window.addEventListener("focus", reloadIfViewerChanged);
+  window.addEventListener("focus", onShellFocus);
+  document.addEventListener("visibilitychange", onShellVisibility);
   if (import.meta.env.DEV) {
     accountTimer = setInterval(reloadIfViewerChanged, 1000);
   }
 
-  function handleLiveStart() {
-    if (isPreview.value || isEnded.value || isReplay.value) {
-      showLiveStartPopup.value = true;
+  /**
+   * SDK live_start：预告/结束壳 → summary 对账 → 直接进房（无弹窗，D108）。
+   * 进房走 destroy + 重新 sdk-sign/init（结束保活后 TXLivePlayer 易挂死，勿只 resume）。
+   */
+  async function handleLiveStart() {
+    if (!isShellState() || enterLiveInFlight) return;
+    const epoch = ++roomUiEpoch;
+    const id = resolveId(opts.activityId);
+    try {
+      const summary = await getWatchSummary(id);
+      if (epoch !== roomUiEpoch) return;
+      if (resolveId(opts.activityId) !== id) return;
+      // 对账字段写回；进房路径会翻 state=1
+      data.value = summary;
+    } catch (e) {
+      console.warn("[watch] live_start summary 对账失败，仍自动进房", e);
     }
+    if (epoch !== roomUiEpoch) return;
+    if (!isShellState() && data.value?.state !== 1) return;
+    await enterLiveFromPreview();
   }
 
   function destroySdk() {
@@ -328,46 +409,84 @@ export function useWatchSession(opts: WatchSessionOptions) {
   }
 
   /**
-   * live_over / streamOver：只切结束 UI，不 destroySdk。
+   * live_over / streamOver：只切结束 UI，**绝不** destroySdk。
    * 保留实例才能立刻收到再开播的 live_start（D108）。
+   * await summary 返回后若 roomUiEpoch 已前进（已收到 live_start / 已自动进房），勿再盖回 state=3。
    */
   async function switchToEndedFromLive() {
+    const epoch = ++roomUiEpoch;
     stats.markLiveEnded();
-    showLiveStartPopup.value = false;
     player.pausePlayback();
+    // 刻意不调用 destroySdk / adapter.destroy
     const id = resolveId(opts.activityId);
+    // 先同步出结束壳，便于紧随其后的 live_start / 兜底对账能命中 isShellState
+    if (data.value) {
+      data.value = { ...data.value, state: 3 };
+    } else {
+      data.value = { id, state: 3, title: "", type: 2 };
+    }
+    loading.value = false;
+    syncShellSummaryPoll();
     try {
       const summary = await getWatchSummary(id);
+      if (epoch !== roomUiEpoch) return;
       // 强制 state=3 出 EndedScreen 壳；云侧 4/5 仍当结束壳，回放走独立路由
       data.value = { ...summary, state: 3 };
+      syncShellSummaryPoll();
     } catch {
+      if (epoch !== roomUiEpoch) return;
       if (data.value) {
         data.value = { ...data.value, state: 3 };
       } else {
         data.value = { id, state: 3, title: "", type: 2 };
       }
+      syncShellSummaryPoll();
     }
-    loading.value = false;
   }
 
   /**
-   * 预告/结束壳上点「立即观看」：SDK 已在则只翻 state + 起播，避免 destroy+recreate。
+   * 预告/结束壳 → 直播 UI：翻 state=1，并 destroy + 重新 sdk-sign/init。
+   * 结束保活后 TXLivePlayer DOM 可能已挂死，仅 resume 易 removeChild/startReport null；
+   * live_start / summary 兜底进房均走 recreate，结束时仍不主动拆（D108）。
    */
-  function enterLiveFromPreview() {
-    showLiveStartPopup.value = false;
-    if (hasLiveSdk() && data.value) {
-      stats.resetLiveEnded();
+  async function enterLiveFromPreview() {
+    if (enterLiveInFlight) return;
+    enterLiveInFlight = true;
+    roomUiEpoch += 1;
+    stopShellSummaryPoll();
+    stats.resetLiveEnded();
+    try {
+      if (!data.value) {
+        void load();
+        return;
+      }
       data.value = { ...data.value, state: 1 };
       player.resetPlayback();
       player.waitingForMedia = true;
-      player.startPlayPoll();
-      void player.resumePlayback();
-      return;
+      destroySdk();
+      try {
+        await fetchSignAndInit();
+      } catch (e) {
+        if (isViewerLoginRequiredError(e) && opts.onViewerAuthRequired) {
+          error.value = "";
+          loading.value = false;
+          await opts.onViewerAuthRequired();
+          return;
+        }
+        sdkFailed.value = true;
+        error.value = e instanceof Error ? e.message : "进入直播失败";
+        loading.value = false;
+        syncShellSummaryPoll();
+      }
+    } finally {
+      enterLiveInFlight = false;
     }
-    void load();
   }
 
   async function load() {
+    roomUiEpoch += 1;
+    enterLiveInFlight = false;
+    stopShellSummaryPoll();
     const requestedViewerId = getViewerId();
     sdkViewerId = requestedViewerId;
     loading.value = true;
@@ -376,7 +495,6 @@ export function useWatchSession(opts: WatchSessionOptions) {
     sdkRetryCount = 0;
     data.value = null;
     sign.value = null;
-    showLiveStartPopup.value = false;
     stopCountdown();
     stats.resetLiveEnded();
     destroySdk();
@@ -402,6 +520,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
           if (isEndedLikeState(summary.state)) {
             console.warn("[watch] ended-like sdk init failed, keep ended shell", e);
             loading.value = false;
+            syncShellSummaryPoll();
             return;
           }
           throw e;
@@ -409,6 +528,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
       } else {
         loading.value = false;
       }
+      syncShellSummaryPoll();
     } catch (e) {
       if (isViewerLoginRequiredError(e) && opts.onViewerAuthRequired) {
         error.value = "";
@@ -440,10 +560,13 @@ export function useWatchSession(opts: WatchSessionOptions) {
   function dispose() {
     window.removeEventListener("storage", onViewerStorage);
     window.removeEventListener("focus", reloadIfViewerChanged);
+    window.removeEventListener("focus", onShellFocus);
+    document.removeEventListener("visibilitychange", onShellVisibility);
     if (accountTimer) {
       clearInterval(accountTimer);
       accountTimer = null;
     }
+    stopShellSummaryPoll();
     stopCountdown();
     destroySdk();
   }
@@ -456,7 +579,6 @@ export function useWatchSession(opts: WatchSessionOptions) {
     data,
     sign,
     sdkFailed,
-    showLiveStartPopup,
     countdown,
     barrage,
     chat,

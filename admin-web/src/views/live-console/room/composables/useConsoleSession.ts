@@ -44,7 +44,6 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
   const data = ref<ConsoleSummaryData | null>(null) as Ref<ConsoleSummaryData | null>;
   const sign = ref<ConsoleSdkSignData | null>(null) as Ref<ConsoleSdkSignData | null>;
   const sdkFailed = ref(false);
-  const showLiveStartPopup = ref(false);
 
   let adapter: WatchAdapter | null = null;
   const getSdk = () => adapter?.getSdk() ?? null;
@@ -54,6 +53,17 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
   let sdkRetryTimer: ReturnType<typeof setTimeout> | null = null;
   let initEpoch = 0;
   let moduleReadyEpoch = -1;
+  /**
+   * 页壳意图世代：live_over / live_start / 自动进房 各 ++。
+   * 用于作废 in-flight 的 switchToEndedFromLive（await summary 后勿再强制 state=3）。
+   */
+  let roomUiEpoch = 0;
+  /** 进房 recreate 进行中：防 live_start 与 summary 兜底并发双进 */
+  let enterLiveInFlight = false;
+  /** 预告/结束壳轻量 summary 对账（live_start 偶发丢失兜底，D108） */
+  const SHELL_SUMMARY_POLL_MS = 20_000;
+  let shellSummaryTimer: ReturnType<typeof setInterval> | null = null;
+  let shellSummaryInFlight = false;
 
   const { countdown, start: startCountdown, stop: stopCountdown } = useCountdown();
   let reportSentChat: (text: string) => void = () => {};
@@ -105,10 +115,6 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
     return state === 3 || state === 4 || state === 5;
   }
 
-  function hasLiveSdk(): boolean {
-    return !!adapter?.getSdk() && !sdkFailed.value;
-  }
-
   function buildSignParams(): ConsoleSdkSignParams {
     const params: ConsoleSdkSignParams = {};
     const nickname = opts.getNickname?.()?.trim() ?? "";
@@ -116,10 +122,85 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
     return params;
   }
 
-  function handleLiveStart() {
-    if (isPreview.value || isEnded.value || isReplay.value) {
-      showLiveStartPopup.value = true;
+  function isShellState(): boolean {
+    return isPreview.value || isEnded.value || isReplay.value;
+  }
+
+  function stopShellSummaryPoll() {
+    if (shellSummaryTimer) {
+      clearInterval(shellSummaryTimer);
+      shellSummaryTimer = null;
     }
+  }
+
+  function startShellSummaryPoll() {
+    stopShellSummaryPoll();
+    if (!isShellState()) return;
+    shellSummaryTimer = setInterval(() => {
+      void reconcileShellSummary("interval");
+    }, SHELL_SUMMARY_POLL_MS);
+  }
+
+  function syncShellSummaryPoll() {
+    if (isShellState()) startShellSummaryPoll();
+    else stopShellSummaryPoll();
+  }
+
+  /**
+   * 预告/结束壳轻量 summary 对账：仅页可见时；失败不挡 UI。
+   * 发现 state===1 则走与 live_start 相同的自动进房（D108）。
+   */
+  async function reconcileShellSummary(_reason: "interval" | "visibility" | "focus") {
+    if (!isShellState() || loading.value || enterLiveInFlight || shellSummaryInFlight) return;
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+    const epoch = roomUiEpoch;
+    const id = resolveId(opts.activityId);
+    shellSummaryInFlight = true;
+    try {
+      const summary = await getConsoleSummary(id);
+      if (epoch !== roomUiEpoch) return;
+      if (resolveId(opts.activityId) !== id) return;
+      if (!isShellState()) return;
+      if (summary.state !== 1) return;
+      await enterLiveFromPreview();
+    } catch (e) {
+      console.warn("[console] shell summary 对账失败（忽略）", e);
+    } finally {
+      shellSummaryInFlight = false;
+    }
+  }
+
+  function onShellVisibility() {
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    void reconcileShellSummary("visibility");
+  }
+
+  function onShellFocus() {
+    void reconcileShellSummary("focus");
+  }
+
+  window.addEventListener("focus", onShellFocus);
+  document.addEventListener("visibilitychange", onShellVisibility);
+
+  /**
+   * SDK live_start：预告/结束壳 → summary 对账 → 直接进房（无弹窗，D108）。
+   * 进房走 destroy + 重新 sdk-sign/init（结束保活后 TXLivePlayer 易挂死，勿只 resume）。
+   */
+  async function handleLiveStart() {
+    if (!isShellState() || enterLiveInFlight) return;
+    const epoch = ++roomUiEpoch;
+    const id = resolveId(opts.activityId);
+    try {
+      const summary = await getConsoleSummary(id);
+      if (epoch !== roomUiEpoch) return;
+      if (resolveId(opts.activityId) !== id) return;
+      data.value = summary;
+    } catch (e) {
+      console.warn("[console] live_start summary 对账失败，仍自动进房", e);
+    }
+    if (epoch !== roomUiEpoch) return;
+    if (!isShellState() && data.value?.state !== 1) return;
+    await enterLiveFromPreview();
   }
 
   function destroySdk() {
@@ -313,50 +394,87 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
     }
   }
 
+  /**
+   * live_over / streamOver：只切结束 UI，**绝不** destroySdk（D108）。
+   * await summary 返回后若 roomUiEpoch 已前进（已收到 live_start / 已自动进房），勿再盖回 state=3。
+   */
   async function switchToEndedFromLive() {
+    const epoch = ++roomUiEpoch;
     stats.markLiveEnded();
-    showLiveStartPopup.value = false;
     player.pausePlayback();
     player.waitingForMedia = false;
     player.mediaFailed = false;
     player.failReason = "";
     player.needsTapToPlay = false;
+    // 刻意不调用 destroySdk / adapter.destroy
     const id = resolveId(opts.activityId);
+    // 先同步出结束壳，便于紧随其后的 live_start / 兜底对账能命中 isShellState
+    if (data.value) {
+      data.value = { ...data.value, state: 3 };
+    } else {
+      data.value = { id, state: 3, title: "", type: 2 };
+    }
+    loading.value = false;
+    syncShellSummaryPoll();
     try {
       const summary = await getConsoleSummary(id);
+      if (epoch !== roomUiEpoch) return;
       data.value = { ...summary, state: 3 };
+      syncShellSummaryPoll();
     } catch {
+      if (epoch !== roomUiEpoch) return;
       if (data.value) {
         data.value = { ...data.value, state: 3 };
       } else {
         data.value = { id, state: 3, title: "", type: 2 };
       }
+      syncShellSummaryPoll();
     }
-    loading.value = false;
   }
 
-  function enterLiveFromPreview() {
-    showLiveStartPopup.value = false;
-    if (hasLiveSdk() && data.value) {
-      stats.resetLiveEnded();
+  /**
+   * 预告/结束壳 → 直播 UI：翻 state=1，并 destroy + 重新 sdk-sign/init。
+   * 结束保活后 TXLivePlayer DOM 可能已挂死，仅 resume 易 removeChild/startReport null；
+   * live_start / summary 兜底进房均走 recreate，结束时仍不主动拆（D108）。
+   */
+  async function enterLiveFromPreview() {
+    if (enterLiveInFlight) return;
+    enterLiveInFlight = true;
+    roomUiEpoch += 1;
+    stopShellSummaryPoll();
+    stats.resetLiveEnded();
+    try {
+      if (!data.value) {
+        void load();
+        return;
+      }
       data.value = { ...data.value, state: 1 };
       player.resetPlayback();
       player.waitingForMedia = true;
-      player.startPlayPoll();
-      void player.resumePlayback();
-      return;
+      destroySdk();
+      try {
+        await fetchSignAndInit();
+      } catch (e) {
+        sdkFailed.value = true;
+        error.value = e instanceof Error ? e.message : "进入直播失败";
+        loading.value = false;
+        syncShellSummaryPoll();
+      }
+    } finally {
+      enterLiveInFlight = false;
     }
-    void load();
   }
 
   async function load() {
+    roomUiEpoch += 1;
+    enterLiveInFlight = false;
+    stopShellSummaryPoll();
     loading.value = true;
     error.value = "";
     sdkFailed.value = false;
     sdkRetryCount = 0;
     data.value = null;
     sign.value = null;
-    showLiveStartPopup.value = false;
     stopCountdown();
     stats.resetLiveEnded();
     chat.chatMessages = [];
@@ -378,6 +496,7 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
           if (isEndedLikeState(summary.state)) {
             console.warn("[console] ended-like sdk init failed, keep ended shell", e);
             loading.value = false;
+            syncShellSummaryPoll();
             return;
           }
           throw e;
@@ -385,6 +504,7 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
       } else {
         loading.value = false;
       }
+      syncShellSummaryPoll();
     } catch (e) {
       sdkFailed.value = true;
       error.value = e instanceof Error ? e.message : "加载失败";
@@ -393,6 +513,9 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
   }
 
   function dispose() {
+    window.removeEventListener("focus", onShellFocus);
+    document.removeEventListener("visibilitychange", onShellVisibility);
+    stopShellSummaryPoll();
     stopCountdown();
     destroySdk();
   }
@@ -405,7 +528,6 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
     data,
     sign,
     sdkFailed,
-    showLiveStartPopup,
     countdown,
     barrage,
     chat,

@@ -10,8 +10,6 @@ withDefaults(
     playbackExpired?: boolean;
     /** 正在拉回放列表 */
     replayLoading?: boolean;
-    /** 再开播引导（主页挂 SDK 时才能收到 live_start） */
-    showLiveStartPopup?: boolean;
     /** false：由外层 PlayerStage 提供 #player/#docWrap，本组件只做遮罩 */
     hostPlayer?: boolean;
   }>(),
@@ -19,14 +17,12 @@ withDefaults(
     showReplayEntry: false,
     playbackExpired: false,
     replayLoading: false,
-    showLiveStartPopup: false,
     hostPlayer: true,
   },
 );
 
 const emit = defineEmits<{
   replay: [];
-  enter: [];
 }>();
 </script>
 
@@ -78,31 +74,6 @@ const emit = defineEmits<{
       >
         {{ replayLoading ? "加载中…" : "查看回放" }}
       </button>
-    </div>
-
-    <div
-      v-if="showLiveStartPopup"
-      class="ended-popup-mask absolute inset-0 z-20 flex items-center justify-center p-4"
-    >
-      <div class="ended-popup">
-        <span class="ended-live-badge">
-          <span class="ended-live-dot" />
-          直播已开始
-        </span>
-        <h3 class="ended-popup-title">
-          直播已开始
-        </h3>
-        <p class="ended-popup-desc">
-          点击下方按钮进入直播画面
-        </p>
-        <button
-          type="button"
-          class="ended-btn is-block"
-          @click="emit('enter')"
-        >
-          立即观看
-        </button>
-      </div>
     </div>
 
     <template v-if="hostPlayer">
@@ -203,72 +174,10 @@ const emit = defineEmits<{
   background: var(--color-primary-hover, #1d39c4);
 }
 
-.ended-btn.is-block {
-  width: 100%;
-}
-
 .ended-btn.is-disabled,
 .ended-btn:disabled {
   background: var(--color-border, #e4e7ed);
   color: var(--color-text-disabled, #bfbfbf);
   cursor: not-allowed;
-}
-
-.ended-popup-mask {
-  background: rgba(0, 0, 0, 0.35);
-}
-
-.ended-popup {
-  width: 100%;
-  max-width: 320px;
-  padding: 20px;
-  border-radius: 10px;
-  background: var(--color-bg-card, #fff);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  text-align: center;
-}
-
-.ended-live-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: #fff1f0;
-  color: var(--color-danger, #f5222d);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.ended-live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-danger, #f5222d);
-  animation: ended-pulse 1.2s ease-in-out infinite;
-}
-
-.ended-popup-title {
-  margin: 0 0 6px;
-  color: var(--color-text, #333);
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.ended-popup-desc {
-  margin: 0 0 16px;
-  color: var(--color-text-secondary, #666);
-  font-size: 13px;
-}
-
-@keyframes ended-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
 }
 </style>

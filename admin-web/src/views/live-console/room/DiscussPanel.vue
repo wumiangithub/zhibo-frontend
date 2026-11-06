@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef } from "vue";
-import { ElCheckbox } from "element-plus";
+import { ElCheckbox, ElIcon } from "element-plus";
+import { ArrowDown } from "@element-plus/icons-vue";
 import EmojiPanel from "./components/EmojiPanel.vue";
 import { insertEmojiAtCursor } from "./composables/useEmojiInsert";
 import { useDiscussFollowers } from "./composables/useDiscussFollowers";
@@ -28,7 +29,7 @@ const props = defineProps<{
 
 const { toast } = useToast();
 const auth = useAuthStore();
-const { followers, followerIdOfViewer } = useDiscussFollowers(toRef(props, "activityId"));
+const { followers, followerIdOfChatSender } = useDiscussFollowers(toRef(props, "activityId"));
 
 const tab = ref<DiscussTab>("all");
 const onlyQa = ref(false);
@@ -78,7 +79,8 @@ function isLecturerRole(role: ChatMessage["role_name"]): boolean {
 
 const filteredMessages = computed(() => {
   let list = props.chat.chatMessages as ChatMessage[];
-  const myId = auth.user?.id;
+  /** 与 importerId / employeeInviterId 比：统一成 number，避免本地会话 id 偶发字符串 */
+  const myId = auth.user?.id != null ? Number(auth.user.id) : NaN;
 
   switch (tab.value) {
     case "user":
@@ -89,14 +91,23 @@ const filteredMessages = computed(() => {
       break;
     case "mine":
       list = list.filter((m) => {
-        if (myId == null) return false;
-        return followerIdOfViewer(m.viewerUserId) === myId;
+        if (!Number.isFinite(myId)) return false;
+        return followerIdOfChatSender({
+          viewerUserId: m.viewerUserId,
+          nickname: m.sender_name,
+        }) === myId;
       });
       break;
     case "follower": {
       const fid = selectedFollower.value?.id;
       if (fid == null) return [];
-      list = list.filter((m) => followerIdOfViewer(m.viewerUserId) === fid);
+      list = list.filter(
+        (m) =>
+          followerIdOfChatSender({
+            viewerUserId: m.viewerUserId,
+            nickname: m.sender_name,
+          }) === fid,
+      );
       break;
     }
     default:
@@ -281,11 +292,14 @@ onBeforeUnmount(() => {
             @click="setTab(item.key)"
           >
             {{ item.key === 'follower' ? followerTabLabel : item.label }}
-            <span
+            <ElIcon
               v-if="item.dropdown"
               class="caret"
               :class="{ 'is-open': followerOpen }"
-            >▾</span>
+              :size="12"
+            >
+              <ArrowDown />
+            </ElIcon>
           </button>
         </div>
         <button
@@ -687,10 +701,9 @@ onBeforeUnmount(() => {
 }
 
 .caret {
-  display: inline-block;
   margin-left: 2px;
-  font-size: 10px;
-  transition: transform 0.15s;
+  vertical-align: -1px;
+  transition: transform 0.15s ease;
 }
 
 .caret.is-open {

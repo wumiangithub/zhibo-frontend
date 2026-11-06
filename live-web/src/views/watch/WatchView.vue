@@ -146,7 +146,6 @@ const {
   error,
   data,
   sign,
-  showLiveStartPopup,
   countdown,
   barrage,
   chat,
@@ -159,7 +158,6 @@ const {
   isReplay,
   isAudioLive,
   load,
-  enterLiveFromPreview,
   shareWatch,
 } = session;
 
@@ -490,9 +488,7 @@ onMounted(() => {
             class="absolute inset-0 z-20"
             :data="data"
             :countdown="countdown"
-            :show-live-start-popup="showLiveStartPopup"
             :host-player="false"
-            @enter="enterLiveFromPreview"
           />
 
           <EndedScreen
@@ -502,10 +498,8 @@ onMounted(() => {
             :show-replay-entry="showReplayEntry"
             :playback-expired="playbackExpired"
             :replay-loading="replayLoading"
-            :show-live-start-popup="showLiveStartPopup"
             :host-player="false"
             @replay="onViewReplay"
-            @enter="enterLiveFromPreview"
           />
 
           <div
