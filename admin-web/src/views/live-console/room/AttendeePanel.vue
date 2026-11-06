@@ -3,6 +3,8 @@ import { toRef } from "vue";
 import type { AttendeeTab } from "./api/console";
 import { useToast } from "@/composables/useToast";
 import { useAttendeeList } from "./useAttendeeList";
+import { nicknameInitial } from "./utils/nicknameInitial";
+
 
 const props = defineProps<{
   activityId: string;
@@ -106,7 +108,7 @@ function shell(label: string) {
               alt=""
               @error="markAvatarBroken(item.userId)"
             >
-            <template v-else>{{ displayName(item).charAt(0) }}</template>
+            <template v-else>{{ nicknameInitial(displayName(item)) }}</template>
           </span>
           <div class="row-main">
             <div class="row-top">
@@ -247,8 +249,8 @@ function shell(label: string) {
   height: 36px;
   overflow: hidden;
   border-radius: 50%;
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
+  background: #f5f6f8;
+  color: #333;
   font-size: 14px;
   font-weight: 600;
 }

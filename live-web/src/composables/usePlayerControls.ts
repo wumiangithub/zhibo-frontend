@@ -34,18 +34,24 @@ function inspectPlayerMediaPresence() {
   };
 }
 
-/** same=原画、a=音频，其余数字档按从高到低叫 高清/标清/流畅 */
+/** 音频清晰度（菜单不展示；已在音频档时仍可保持 currentQualityCode） */
+function isAudioQualityCode(code: string): boolean {
+  const c = code.trim().toLowerCase();
+  return c === "a" || c === "as";
+}
+
+/** same=原画；过滤 a/as；其余数字档按从高到低叫 高清/标清/流畅 */
 function codesToQualityOptions(list: string[]): QualityOption[] {
-  const numeric = list
+  const visible = list.filter((code) => !isAudioQualityCode(code));
+  const numeric = visible
     .map((c) => c.replace(/\D/g, ""))
     .filter((n) => n !== "")
     .sort((a, b) => Number(b) - Number(a));
   const rankNames = ["高清", "标清", "流畅"];
-  return list.map((code) => {
+  return visible.map((code) => {
     const digits = code.replace(/\D/g, "");
     let label: string;
     if (code === "same") label = "原画";
-    else if (code === "a") label = "音频";
     else if (digits) label = rankNames[numeric.indexOf(digits)] || `${digits}p`;
     else label = code;
     return { code, label };
@@ -58,7 +64,9 @@ function codesToQualityOptions(list: string[]): QualityOption[] {
  * - 播控/播态对齐官方 demo：优先 `playerServer.play/pause` + `playerServer.state.isPlaying`；
  *   其次文档 `player.play/pause`；再才 HTMLMediaElement
  * - DOM：仅短 burst 找 `<video>` 并绑 play/pause/ended；**无**常驻 500ms 扫 DOM
- * - 清晰度走文档 `player` API；音量/静音只走 HTMLMediaElement
+ * - 清晰度优先 demo `playerServer.getQualitys/setQuality`（自建底栏已拆原生条）；
+ *   无则回退文档 `canPlayDefinitions/setPlayerDefinition`（须 try/catch）
+ * - 音量/静音只走 HTMLMediaElement
  * - 全屏优先舞台 requestFullscreen，失败伪全屏
  */
 export function usePlayerControls(options: PlayerControlsOptions) {
@@ -95,6 +103,8 @@ export function usePlayerControls(options: PlayerControlsOptions) {
   /** demo 式：已挂上 playerServer.state.isPlaying 时，media 事件不再抢播态 UI */
   let preferSdkPlaying = false;
   let stopSdkPlayingWatch: WatchStopHandle | null = null;
+  /** playerServer.setQuality 需要整对象，按 def 缓存 getQualitys 结果 */
+  let qualityRawByCode = new Map<string, VhallQualityItem>();
 
   function applyPausedUi(paused: boolean) {
     if (player.waitingForMedia || player.mediaFailed) {
@@ -298,20 +308,56 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     }
   }
 
+  function applyQualityCodes(list: string[], preferred?: string) {
+    if (list.length === 0) return;
+    player.qualityOptions = codesToQualityOptions(list);
+    if (!player.currentQualityCode || !list.includes(player.currentQualityCode)) {
+      player.currentQualityCode =
+        preferred && list.includes(preferred)
+          ? preferred
+          : list.includes("same")
+            ? "same"
+            : list[0];
+    }
+  }
+
+  function loadQualitiesFromPlayerServer(): boolean {
+    const ps = getSdk()?.playerServer;
+    if (typeof ps?.getQualitys !== "function") return false;
+    const rawList = ps.getQualitys() || [];
+    if (!Array.isArray(rawList) || rawList.length === 0) return false;
+    const next = new Map<string, VhallQualityItem>();
+    const codes: string[] = [];
+    for (const item of rawList) {
+      if (!item || typeof item !== "object") continue;
+      const def = String(item.def || "").trim();
+      if (!def) continue;
+      next.set(def, item);
+      codes.push(def);
+    }
+    if (codes.length === 0) return false;
+    qualityRawByCode = next;
+    const cur = ps.getCurrentQuality?.();
+    const preferred =
+      cur && typeof cur === "object" ? String(cur.def || "").trim() : "";
+    applyQualityCodes(codes, preferred || undefined);
+    return true;
+  }
+
   function loadQualities() {
+    // 自建底栏对齐 demo：优先 playerServer（不依赖已拆的 .vh-player-controller）
+    if (loadQualitiesFromPlayerServer()) return;
     const playerMod = getSdk()?.player;
     if (!playerMod?.canPlayDefinitions) return;
     playerMod.canPlayDefinitions((list: string[]) => {
       if (!Array.isArray(list) || list.length === 0) return;
-      player.qualityOptions = codesToQualityOptions(list);
-      if (!player.currentQualityCode || !list.includes(player.currentQualityCode)) {
-        player.currentQualityCode = list.includes("same") ? "same" : list[0];
-      }
+      qualityRawByCode = new Map();
+      applyQualityCodes(list);
     });
   }
 
   /**
-   * 播放器就绪前 canPlayDefinitions 会抛错/不回调，轮询重试。
+   * 播放器就绪前清晰度 API 会抛错/不回调，轮询重试。
    * moduleReady 可先调；playerReady 后再调一次（中控台常更晚才有 player 模块）。
    */
   function scheduleQualityLabels(tries = 0, delayMs = 1500) {
@@ -330,10 +376,33 @@ export function usePlayerControls(options: PlayerControlsOptions) {
   }
 
   function setQuality(code: string) {
-    const playerMod = getSdk()?.player;
+    const sdk = getSdk();
+    const ps = sdk?.playerServer;
+    // demo 竖屏路径：整对象交给 playerServer，不碰原生控制条 DOM
+    if (typeof ps?.setQuality === "function") {
+      if (!qualityRawByCode.has(code)) {
+        try {
+          loadQualitiesFromPlayerServer();
+        } catch {
+          /* 忽略，下面用 stub */
+        }
+      }
+      const raw = qualityRawByCode.get(code) ?? ({ def: code } as VhallQualityItem);
+      ps.setQuality(raw, (err) => {
+        console.warn("设置清晰度失败", err);
+      });
+      player.currentQualityCode = code;
+      return;
+    }
+    // 文档 API 会写原生清晰度文案；控制条已 removeChild 时易 NPE
+    const playerMod = sdk?.player;
     if (!playerMod?.setPlayerDefinition) return;
-    playerMod.setPlayerDefinition(code);
-    player.currentQualityCode = code;
+    try {
+      playerMod.setPlayerDefinition(code);
+      player.currentQualityCode = code;
+    } catch (e) {
+      console.warn("setPlayerDefinition 失败（原生控制条可能已拆）", e);
+    }
   }
 
   function handleFullscreenChange() {
@@ -618,6 +687,7 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     player.pseudoFullscreen = false;
     player.qualityOptions = [];
     player.currentQualityCode = "";
+    qualityRawByCode = new Map();
   }
 
   onMounted(() => {

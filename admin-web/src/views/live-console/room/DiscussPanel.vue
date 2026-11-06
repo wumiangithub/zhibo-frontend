@@ -9,8 +9,10 @@ import type { ChatController } from "./composables/useChat";
 import { useAuthStore } from "@/stores/auth";
 import { useToast } from "@/composables/useToast";
 import { formatChatShowTime } from "./utils/formatChatShowTime";
+import { nicknameInitial } from "./utils/nicknameInitial";
 import { vhallChatRoleBadge } from "./utils/vhallChatRole";
 import { questionAnswerText } from "./utils/vhallQuestion";
+
 
 type DiscussTab = "all" | "user" | "mine" | "host" | "follower";
 
@@ -404,14 +406,17 @@ onBeforeUnmount(() => {
             {{ messageShowTimes[idx] }}
           </div>
           <article class="msg">
-            <span class="avatar">
+            <span
+              class="avatar"
+              :class="nameToneClass(msg)"
+            >
               <img
                 v-if="avatarSrc(msg)"
                 :src="avatarSrc(msg)"
                 alt=""
                 @error="onAvatarError(msg.avatar)"
               >
-              <template v-else>{{ (msg.sender_name || "?").charAt(0) }}</template>
+              <template v-else>{{ nicknameInitial(msg.sender_name) }}</template>
             </span>
             <div class="msg-body">
               <div class="msg-meta">
@@ -913,10 +918,23 @@ onBeforeUnmount(() => {
   height: 32px;
   overflow: hidden;
   border-radius: 50%;
-  background: var(--color-primary-bg);
-  color: var(--color-primary);
+  background: #f5f6f8;
+  color: #666;
   font-size: 13px;
   font-weight: 600;
+}
+
+/* 文字头像字色与昵称同色：主持主色 / 助理黄 / 嘉宾紫 / 观众灰 */
+.avatar.is-host {
+  color: var(--color-primary);
+}
+
+.avatar.is-assistant {
+  color: #d48806;
+}
+
+.avatar.is-guest {
+  color: #722ed1;
 }
 
 .avatar img {

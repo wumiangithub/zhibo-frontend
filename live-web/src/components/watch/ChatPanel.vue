@@ -5,6 +5,7 @@ import { insertEmojiAtCursor } from "@/composables/useEmojiInsert";
 import { splitEmojiText } from "@/constants/emoji";
 import type { ChatController } from "@/composables/useChat";
 import { formatChatShowTime } from "@/utils/formatChatShowTime";
+import { nicknameInitial } from "@/utils/nicknameInitial";
 import { vhallChatRoleBadge } from "@/utils/vhallChatRole";
 import { questionAnswerText } from "@/utils/vhallQuestion";
 import cartYellowUrl from "@/assets/images/cart-yellow.png";
@@ -31,7 +32,7 @@ const emit = defineEmits<{ cart: []; like: []; listScroll: [e: Event] }>();
 const pcComposerRef = ref<{ inputEl: HTMLInputElement | null } | null>(null);
 const mobileComposerRef = ref<{ inputEl: HTMLInputElement | null } | null>(null);
 const showEmoji = ref(false);
-/** 加载失败的头像 URL，回退灰圆 */
+/** 加载失败的头像 URL，回退文字头像 */
 const brokenAvatars = reactive<Record<string, true>>({});
 
 function avatarSrc(msg: ChatMessage): string {
@@ -222,7 +223,10 @@ function onChatInputUpdate(value: string) {
           {{ messageShowTimes[idx] }}
         </div>
         <div class="mb-3 flex gap-2">
-          <div class="h-8 w-8 flex-shrink-0 overflow-hidden rounded-full bg-[var(--lw-bg-elevated)]">
+          <div
+            class="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--lw-bg-elevated)] text-[13px] font-semibold"
+            :class="nameClass(msg)"
+          >
             <img
               v-if="avatarSrc(msg)"
               :src="avatarSrc(msg)"
@@ -230,6 +234,7 @@ function onChatInputUpdate(value: string) {
               class="h-full w-full object-cover"
               @error="onAvatarError(msg.avatar)"
             >
+            <template v-else>{{ nicknameInitial(msg.sender_name) }}</template>
           </div>
           <div class="min-w-0 flex-1">
             <!-- 昵称在前，角色角标紧跟其后 -->

@@ -109,17 +109,27 @@ interface VhallPlayerModule {
 
 /**
  * 官方 demo 竖屏播控用的内部模块（未全文档化）。
- * 本站仅取 play/pause + state.isPlaying；清晰度仍走文档 `player.*`。
+ * 本站：play/pause + state.isPlaying；清晰度优先 getQualitys/setQuality
+ *（原生控制条已 removeChild，文档 setPlayerDefinition 会写空 DOM）。
  */
 interface VhallPlayerServerState {
   isPlaying?: boolean;
   isMuted?: boolean;
 }
 
+/** playerServer.getQualitys / setQuality 项；至少含 def（same / 720p / a …） */
+interface VhallQualityItem {
+  def: string;
+  [key: string]: unknown;
+}
+
 interface VhallPlayerServer {
   state?: VhallPlayerServerState;
   play?(): void;
   pause?(): void;
+  getQualitys?(): VhallQualityItem[];
+  getCurrentQuality?(): VhallQualityItem | null | undefined;
+  setQuality?(item: VhallQualityItem, onError?: (err: unknown) => void): void;
 }
 
 /** 微吼进出房推送的分组上下文 */

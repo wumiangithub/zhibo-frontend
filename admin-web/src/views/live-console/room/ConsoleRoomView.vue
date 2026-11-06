@@ -444,7 +444,6 @@ onMounted(() => {
 
 .sdk-tag {
   flex: none;
-  margin-left: auto;
   padding: 2px 8px;
   border-radius: 999px;
   background: #f0f0f0;
@@ -459,17 +458,18 @@ onMounted(() => {
   justify-content: center;
   width: 28px;
   height: 28px;
+  margin-left: auto;
   padding: 0;
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: #666;
+  color: var(--color-text-secondary, #666);
   cursor: pointer;
 }
 
 .share-btn:hover {
-  color: #ef4444;
-  background: #f5f5f5;
+  color: var(--color-text, #333);
+  background: #eee;
 }
 
 .share-btn-icon {
@@ -523,10 +523,12 @@ onMounted(() => {
   display: flex;
   flex: none;
   flex-direction: column;
-  /* 宽铺满内容区，高由 16:9 推出（替代旧固定 200/320px） */
+  /* 16:9；高封顶 300px 时宽同步收窄，避免只压高破比例 */
   aspect-ratio: 16 / 9;
-  width: auto;
+  width: min(100%, calc(300px * 16 / 9));
+  max-height: 300px;
   height: auto;
+  align-self: center;
   margin: 12px 16px 0;
   /* visible：勿裁清晰度/音量飞出层；画面圆角裁切交给内部 #player */
   overflow: visible;
