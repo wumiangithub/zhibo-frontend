@@ -22,7 +22,7 @@ export interface ChatOptions {
   getSender: () => { id: string; name: string; avatar?: string };
   /** 消息落地后回调，用于把聊天同步成弹幕 */
   onIncoming?: (msg: ChatMessage) => void;
-  /** 本站活动 UUID；有则把聊天上报本站库（D77） */
+  /** 本站活动 UUID；仅本地 DEV 聊天/提问上报用（D104 / D105） */
   getActivityId?: () => string;
   /** 可选 viewer.id（已登录观众） */
   getViewerId?: () => number | null;
@@ -269,10 +269,12 @@ export function useChat(options: ChatOptions) {
   }
 
   /**
-   * 发送成功后立刻上报本人评论（须观众 JWT）。
-   * 不等 chatMsg 回声，不传微吼 msgId。他人消息不入库。
+   * 仅本地开发：发送成功后立刻上报本人聊天（须观众 JWT）。
+   * 测试/生产由微吼回调落库，前端不再调 report（对齐进出 D32）。
+   * 中控台无观众 JWT 时 comments API 已 soft-skip；此处同样只 DEV 才尝试。
    */
   function reportSentMessage(text: string) {
+    if (!import.meta.env.DEV) return;
     const activityId = options.getActivityId?.()?.trim() ?? "";
     if (!activityId) return;
     if (options.getViewerId?.() == null) return;
@@ -308,11 +310,11 @@ export function useChat(options: ChatOptions) {
   }
 
   /**
-   * 提问发送成功后上报。与聊天同一张表，类型为提问。
-   * 须已拿到云提问 id（sendQuestion data.id）→ questionId；此时尚无 msg_id。
-   * 不等问答回声，他人提问不入库。
+   * 仅本地开发：提问发送成功后上报（与聊天同表，commentType=提问）。
+   * 测试/生产由微吼回调落库。须已拿到云提问 id → questionId；此时尚无 msg_id。
    */
   function reportSentQuestion(text: string, questionId: string) {
+    if (!import.meta.env.DEV) return;
     const activityId = options.getActivityId?.()?.trim() ?? "";
     if (!activityId) return;
     if (options.getViewerId?.() == null) return;
@@ -333,8 +335,9 @@ export function useChat(options: ChatOptions) {
     });
   }
 
-  /** create 携带 msg_id 时幂等补写；行已存在则只补 msg，不改 viewer。 */
+  /** 仅本地：create 携带 msg_id 时幂等补写；行已存在则只补 msg，不改 viewer。 */
   function reportQuestionMsgBackfill(body: ReportCommentBody) {
+    if (!import.meta.env.DEV) return;
     const activityId = options.getActivityId?.()?.trim() ?? "";
     if (!activityId) return;
     if (options.getViewerId?.() == null) return;
@@ -344,8 +347,9 @@ export function useChat(options: ChatOptions) {
     });
   }
 
-  /** commit 后把主持人回复 upsert 到同一提问行（多观众重复 POST，后端幂等）。 */
+  /** 仅本地：commit 后把主持人回复 upsert 到同一提问行（多观众重复 POST，后端幂等）。 */
   function reportQuestionAnswer(body: UpsertQuestionAnswerBody) {
+    if (!import.meta.env.DEV) return;
     const activityId = options.getActivityId?.()?.trim() ?? "";
     if (!activityId) return;
     if (options.getViewerId?.() == null) return;

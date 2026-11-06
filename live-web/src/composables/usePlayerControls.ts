@@ -17,20 +17,56 @@ export interface QualityOption {
   label: string;
 }
 
+/** 微吼 H5 常把 video 放进 open shadow（`.vhallPlayerh5-shadow`），light DOM query 找不到 */
+function findMediaInShadowTree(root: Element): HTMLMediaElement | null {
+  const shadow = (root as HTMLElement).shadowRoot;
+  if (shadow) {
+    const inShadow =
+      shadow.querySelector("video") ||
+      shadow.querySelector("audio") ||
+      shadow.querySelector("#player-vhall-video");
+    if (inShadow instanceof HTMLMediaElement) return inShadow;
+    for (const child of shadow.querySelectorAll("*")) {
+      const nested = findMediaInShadowTree(child);
+      if (nested) return nested;
+    }
+  }
+  for (const child of root.children) {
+    const nested = findMediaInShadowTree(child);
+    if (nested) return nested;
+  }
+  return null;
+}
+
 function findPlayerMedia(): HTMLMediaElement | null {
-  return (
+  const light =
     document.querySelector<HTMLMediaElement>("#player video") ||
     document.querySelector<HTMLMediaElement>("#player audio") ||
-    document.querySelector<HTMLMediaElement>("#player-vhall-video")
+    document.querySelector<HTMLMediaElement>("#player-vhall-video");
+  if (light) return light;
+  const host = document.querySelector("#player");
+  return host ? findMediaInShadowTree(host) : null;
+}
+
+/** #player 里已有微吼壳 / canvas / media：画面或壳已到，勿再标「长时间未就绪」 */
+function hasPlayerShellOrMedia(): boolean {
+  if (findPlayerMedia()) return true;
+  return !!(
+    document.querySelector("#player .vhallPlayer-container") ||
+    document.querySelector("#player .vhallPlayerh5-shadow") ||
+    document.querySelector("#player canvas")
   );
 }
 
-/** 联调日志用：分别探测 #player 内 video / audio / #player-vhall-video */
+/** 联调日志用：分别探测 #player 内 video / audio / #player-vhall-video（含 shadow） */
 function inspectPlayerMediaPresence() {
+  const deep = findPlayerMedia();
   return {
     video: !!document.querySelector("#player video"),
     audio: !!document.querySelector("#player audio"),
     vhallVideo: !!document.querySelector("#player-vhall-video"),
+    deepMedia: !!deep,
+    shell: hasPlayerShellOrMedia(),
   };
 }
 
@@ -190,6 +226,13 @@ export function usePlayerControls(options: PlayerControlsOptions) {
       (playing) => {
         if (disposed || playing == null) return;
         if (playing) {
+          // SDK 已在播：清掉「加载中 / 长时间未就绪」假失败（画面常已出，仅 DOM 探测晚）
+          if (player.waitingForMedia || player.mediaFailed) {
+            player.waitingForMedia = false;
+            player.mediaFailed = false;
+            player.failReason = "";
+            stopPlayPoll();
+          }
           if (!playRequested) {
             applyPausedUi(true);
             return;
@@ -526,8 +569,28 @@ export function usePlayerControls(options: PlayerControlsOptions) {
   }
 
   /**
+   * 官方 playerReady / 壳已到但 light DOM 尚无 media：仍清遮罩。
+   * media 仅用于音量/ended，用 burst 继续找；勿因此标「长时间未就绪」。
+   */
+  function advanceReadyWithoutMedia() {
+    stopPlayPoll();
+    player.mediaFailed = false;
+    player.failReason = "";
+    if (!playRequested) {
+      showTapOverlay();
+      return;
+    }
+    player.waitingForMedia = false;
+    const playing = preferSdkPlaying
+      ? !!getSdk()?.playerServer?.state?.isPlaying
+      : false;
+    applyPausedUi(!playing);
+    startMediaBindBurst();
+  }
+
+  /**
    * DOM 兜底轮询：仅在官方事件未推进就绪、或事件后尚无 media 节点时使用。
-   * 硬上限；找到 media 即停。
+   * 硬上限；找到 media 即停。壳/SDK 已到则勿假失败。
    */
   function startPlayPoll(maxTries = 20) {
     stopPlayPoll();
@@ -541,18 +604,29 @@ export function usePlayerControls(options: PlayerControlsOptions) {
       tries += 1;
       const media = findPlayerMedia();
       if (media && tryAdvanceMediaReady(media)) return;
+      // SDK 已在播：即使还没抠到 media，也别盖错误层
+      if (getSdk()?.playerServer?.state?.isPlaying) {
+        advanceReadyWithoutMedia();
+        return;
+      }
       if (tries >= maxTries) {
-        if (!findPlayerMedia()) {
-          markMediaFailed("播放器长时间未就绪");
-        } else {
+        if (findPlayerMedia()) {
           showTapOverlay();
+        } else if (getSdk()?.playerServer || hasPlayerShellOrMedia()) {
+          console.warn(
+            "[player] 轮询超时但 SDK/壳已就绪，按就绪收尾（不标长时间未就绪）",
+            inspectPlayerMediaPresence(),
+          );
+          advanceReadyWithoutMedia();
+        } else {
+          markMediaFailed("播放器长时间未就绪");
         }
         stopPlayPoll();
       }
     }, 500);
   }
 
-  /** 官方/事件推进：绑 isPlaying；有 media 则结束等待；无则短轮询找节点 */
+  /** 官方/事件推进：绑 isPlaying；有 media 则结束等待；无 media 也清遮罩，burst 再找节点 */
   function advanceFromSdkEvent(source: "playerReady" | "vhallplay_LOADED") {
     const at = new Date().toISOString();
     const presence = inspectPlayerMediaPresence();
@@ -562,10 +636,10 @@ export function usePlayerControls(options: PlayerControlsOptions) {
     const media = findPlayerMedia();
     if (!media) {
       console.warn(
-        `[player] ${source} @ ${at} 已回调但 #player 内未找到 video/audio/#player-vhall-video，短轮询兜底`,
+        `[player] ${source} @ ${at} 已回调但尚未找到 media（可能在 shadow），按 SDK 就绪收尾`,
         presence,
       );
-      if (!playPollTimer) startPlayPoll(16);
+      advanceReadyWithoutMedia();
       return;
     }
     if (tryAdvanceMediaReady(media)) {
