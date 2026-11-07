@@ -33,8 +33,6 @@ export default defineConfig(({ mode }) => {
     VITE_APP_TOS_CDN_URL,
     VITE_ORDER_CENTER_BASE_URL,
   } = viteEnv
-  const orderCenterTarget =
-    VITE_ORDER_CENTER_BASE_URL || "http://oms-api.scqkxx.com"
   return {
     define: {
       __APP_BUILD_TIME__: JSON.stringify(formatBuildTime()),
@@ -80,9 +78,9 @@ export default defineConfig(({ mode }) => {
           secure: false,
           rewrite: (p) => p.replace(/^\/cdn-media/, ""),
         },
-        // 新建页商品列表：开发态走同源 /order-center，避免直连跨域
+        // 新建页商品列表：开发态走同源 /order-center，避免直连跨域；目标见 VITE_ORDER_CENTER_BASE_URL
         "/order-center": {
-          target: orderCenterTarget,
+          target: VITE_ORDER_CENTER_BASE_URL,
           changeOrigin: true,
           secure: false,
         },

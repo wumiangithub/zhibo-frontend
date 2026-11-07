@@ -358,7 +358,6 @@ watch(id, () => {
       hint="给用户分享这个课程："
       watch-verb="点击学习"
       title-fallback="课程"
-      payload-hint="c 含：kind（1=员工邀请）、inviterId；courseId 在路径。URL 同名 query 仅提示，业务只信 c"
     />
   </div>
 </template>

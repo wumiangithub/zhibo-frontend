@@ -16,3 +16,23 @@ export function buildCourseShareUrl(courseId: string, employeeInviterId?: number
     inviterId: employeeInviterId,
   });
 }
+
+/**
+ * 小节分享链接：进 live-web `/course/{courseId}/lesson/{lessonNodeId}`。
+ * `c` 与课程分享同构（kind+inviterId+sig）；学员端只解密 `c` 后 enroll，再按小节类型打开观看页。
+ */
+export function buildCourseLessonShareUrl(
+  courseId: string,
+  lessonNodeId: number,
+  employeeInviterId?: number,
+): string {
+  const id = courseId.trim();
+  const nodeId = Number(lessonNodeId);
+  if (!id || !Number.isFinite(nodeId) || nodeId <= 0) return "";
+  const base = `${liveWebOrigin()}/course/${id}/lesson/${nodeId}`;
+  if (!employeeInviterId || employeeInviterId <= 0) return base;
+  return buildShareUrl(base, encodeCourseShareToken(employeeInviterId), {
+    kind: 1,
+    inviterId: employeeInviterId,
+  });
+}

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { enrollCourse } from "@/api/courseEnroll";
 import {
   getLearningLessonContent,
   reportLessonProgress,
@@ -11,6 +12,7 @@ import {
   syncViewerAccessTokenFromUrl,
   syncViewerIdFromUrl,
 } from "@/utils/viewerAuth";
+import { decodeCourseShareToken } from "@/utils/courseShareToken";
 import { goViewerLogin } from "@/utils/viewerLogin";
 import {
   buildDocumentPreview,
@@ -38,6 +40,8 @@ const lessonNodeId = Number(route.params.lessonNodeId);
 
 syncViewerIdFromUrl(route.query as Record<string, unknown>);
 syncViewerAccessTokenFromUrl(route.query as Record<string, unknown>);
+
+const SHARE_STORAGE_PREFIX = "zhibo.courseShare.";
 
 const loading = ref(true);
 const errorText = ref("");
@@ -184,6 +188,45 @@ function forwardQuery(): string {
   return parts.length ? `?${parts.join("&")}` : "";
 }
 
+/** 只信 query `c`；hint 可乱改，禁止当邀请人来源。 */
+function captureShareFromQuery() {
+  const raw = String(route.query.c ?? "").trim();
+  const decoded = decodeCourseShareToken(raw);
+  if (!decoded || !courseId) return null;
+  try {
+    sessionStorage.setItem(
+      `${SHARE_STORAGE_PREFIX}${courseId}`,
+      JSON.stringify(decoded),
+    );
+  } catch {
+    /* ignore */
+  }
+  return decoded;
+}
+
+function readStoredShare(): { inviterId: number } | null {
+  if (!courseId) return null;
+  try {
+    const raw = sessionStorage.getItem(`${SHARE_STORAGE_PREFIX}${courseId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { inviterId?: number };
+    if (!parsed?.inviterId || parsed.inviterId <= 0) return null;
+    return { inviterId: parsed.inviterId };
+  } catch {
+    return null;
+  }
+}
+
+/** 分享链先进学员表（带邀请人），再打开小节内容。 */
+async function ensureEnrolled() {
+  captureShareFromQuery();
+  const stored = readStoredShare();
+  await enrollCourse(
+    courseId,
+    stored?.inviterId ? { inviterId: stored.inviterId } : undefined,
+  );
+}
+
 async function load() {
   loading.value = true;
   errorText.value = "";
@@ -200,6 +243,7 @@ async function load() {
     return;
   }
   try {
+    await ensureEnrolled();
     const data = await getLearningLessonContent(courseId, lessonNodeId);
     lesson.value = data;
     if (data.contentKind === KIND_LIVE) {

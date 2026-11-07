@@ -22,11 +22,15 @@ import {
 } from "@element-plus/icons-vue";
 import {
   CATALOG_CONTENT_KIND_LABEL,
+  CourseCatalogContentKind,
   CourseCatalogNodeType,
   listCourseCatalog,
   type CatalogNode,
   type CourseCatalogContentKindValue,
 } from "@/api/course";
+import LessonShareDialog from "@/components/share/LessonShareDialog.vue";
+import { useAuthStore } from "@/stores/auth";
+import { buildCourseLessonShareUrl } from "@/utils/courseLinks";
 import emptyIllustration from "@/assets/images/course-catalog-empty.svg";
 import AddLessonDrawer from "./AddLessonDrawer.vue";
 import AddChapterDialog from "./AddChapterDialog.vue";
@@ -36,6 +40,8 @@ import DeleteChapterDialog from "./DeleteChapterDialog.vue";
 import DeleteSubcourseDialog from "./DeleteSubcourseDialog.vue";
 import EditLessonDialog from "./EditLessonDialog.vue";
 import SubcourseSettingsDialog from "./SubcourseSettingsDialog.vue";
+
+const auth = useAuthStore();
 
 const props = defineProps<{
   courseId: string;
@@ -53,6 +59,11 @@ const addLessonOpen = ref(false);
 const addLessonParentId = ref(0);
 const editLessonOpen = ref(false);
 const editingLesson = ref<CatalogNode | null>(null);
+const shareLessonOpen = ref(false);
+const shareLessonTitle = ref("");
+const shareLessonUrl = ref("");
+const shareLessonBrand = ref("钱坤云直播平台 发现一门精彩课程");
+const shareLessonVerb = ref("点击学习");
 const addChapterOpen = ref(false);
 const editingChapter = ref<CatalogNode | null>(null);
 const addSubOpen = ref(false);
@@ -203,6 +214,26 @@ function onEditLesson(lesson: CatalogNode) {
 
 function onLessonUnavailable() {
   ElMessage.info("功能暂未开放");
+}
+
+function onShareLesson(lesson: CatalogNode) {
+  const url = buildCourseLessonShareUrl(
+    props.courseId,
+    lesson.id,
+    auth.user?.id,
+  );
+  if (!url) {
+    ElMessage.warning("无法生成分享链接");
+    return;
+  }
+  const isLive = lesson.contentKind === CourseCatalogContentKind.LIVE;
+  shareLessonTitle.value = lesson.title ?? "";
+  shareLessonUrl.value = url;
+  shareLessonBrand.value = isLive
+    ? "钱坤云直播平台 发现一场精彩直播"
+    : "钱坤云直播平台 发现一门精彩课程";
+  shareLessonVerb.value = isLive ? "点击观看" : "点击学习";
+  shareLessonOpen.value = true;
 }
 
 function onDeleteChapter(ch: CatalogNode) {
@@ -597,7 +628,7 @@ watch(
                     <button
                       type="button"
                       class="lesson-op"
-                      @click="onLessonUnavailable"
+                      @click="onShareLesson(lesson)"
                     >
                       分享
                     </button>
@@ -643,7 +674,7 @@ watch(
                   <button
                     type="button"
                     class="lesson-op"
-                    @click="onLessonUnavailable"
+                    @click="onShareLesson(item)"
                   >
                     分享
                   </button>
@@ -673,6 +704,13 @@ watch(
       :course-id="props.courseId"
       :editing="editingLesson"
       @confirmed="onCatalogChanged"
+    />
+    <LessonShareDialog
+      v-model="shareLessonOpen"
+      :title="shareLessonTitle"
+      :share-url="shareLessonUrl"
+      :brand-line="shareLessonBrand"
+      :watch-verb="shareLessonVerb"
     />
     <AddChapterDialog
       v-model="addChapterOpen"

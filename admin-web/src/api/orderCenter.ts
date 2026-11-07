@@ -93,11 +93,12 @@ interface OrderCenterListBody {
   };
 }
 
-/** 开发态走 Vite `/order-center` 代理；构建态可配绝对域名 */
+/** 开发态走 Vite `/order-center` 代理；构建态读 VITE_ORDER_CENTER_BASE_URL（须写在对应 .env.*） */
 function orderCenterBase(): string {
   if (import.meta.env.DEV) return "";
-  const raw = import.meta.env.VITE_ORDER_CENTER_BASE_URL?.trim();
-  return (raw || "http://oms-api.scqkxx.com").replace(/\/$/, "");
+  return String(import.meta.env.VITE_ORDER_CENTER_BASE_URL ?? "")
+    .trim()
+    .replace(/\/$/, "");
 }
 
 /** 把 JSON 里的大整数 id 先收成字符串，避免超过 2^53-1 丢精度 */

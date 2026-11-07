@@ -25,8 +25,6 @@ function apiProxyPrefix(raw: string | undefined): string {
 export default defineConfig(({ mode }) => {
   const viteEnv = loadEnv(mode, process.cwd());
   const fileEnv = loadEnv(mode, process.cwd(), "");
-  const orderCenterTarget =
-    viteEnv.VITE_ORDER_CENTER_BASE_URL || "http://oms-api.scqkxx.com";
 
   return {
     define: {
@@ -48,9 +46,9 @@ export default defineConfig(({ mode }) => {
           target: `http://127.0.0.1:${listenPort(fileEnv.LIVE_SERVER_PORT, 8082)}`,
           changeOrigin: true,
         },
-        // 小黄车：观众端订单中心，开发态同源代理避免跨域
+        // 小黄车：观众端订单中心，开发态同源代理避免跨域；目标见 VITE_ORDER_CENTER_BASE_URL
         "/order-center": {
-          target: orderCenterTarget,
+          target: viteEnv.VITE_ORDER_CENTER_BASE_URL,
           changeOrigin: true,
           secure: false,
         },
