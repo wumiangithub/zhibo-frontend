@@ -124,23 +124,40 @@ function formatValidity(start?: string, end?: string): string {
   padding: 0;
   border: none;
   border-radius: 10px;
-  /* 偏亮橙，避免落到深红导致白字发糊 */
-  background: linear-gradient(120deg, #ffc56e 0%, #ff9a3c 42%, #ff7f2a 100%);
+  /* 深橙实底，白字对比清晰 */
+  background: #e85a0c;
   color: #fff;
   text-align: left;
-  text-shadow: 0 1px 1px rgb(180 70 0 / 28%);
+  text-shadow: 0 1px 2px rgb(80 25 0 / 32%);
   box-shadow: 0 6px 16px rgb(240 120 40 / 24%);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
 .coupon-ticket-main {
+  position: relative;
   flex: 1;
   min-width: 0;
   padding: 12px 12px 12px 14px;
+  overflow: hidden;
+}
+
+.coupon-ticket-main::after {
+  content: "";
+  position: absolute;
+  right: -8px;
+  top: -28px;
+  width: 90px;
+  height: 70px;
+  border-radius: 50%;
+  background: rgb(255 197 110 / 25%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .coupon-ticket-tag {
+  position: relative;
+  z-index: 1;
   display: inline-block;
   margin-bottom: 6px;
   padding: 1px 6px;
@@ -153,6 +170,8 @@ function formatValidity(start?: string, end?: string): string {
 }
 
 .coupon-ticket-amount {
+  position: relative;
+  z-index: 1;
   font-size: 24px;
   font-weight: 700;
   line-height: 1.15;
@@ -166,6 +185,8 @@ function formatValidity(start?: string, end?: string): string {
 }
 
 .coupon-ticket-name {
+  position: relative;
+  z-index: 1;
   margin-top: 6px;
   font-size: 13px;
   line-height: 1.35;
@@ -174,11 +195,13 @@ function formatValidity(start?: string, end?: string): string {
 }
 
 .coupon-ticket-valid {
+  position: relative;
+  z-index: 1;
   margin-top: 8px;
   font-size: 11px;
   line-height: 1.3;
   font-variant-numeric: tabular-nums;
-  color: rgb(255 255 255 / 92%);
+  color: rgb(255 255 255 / 96%);
 }
 
 .coupon-ticket-action {
