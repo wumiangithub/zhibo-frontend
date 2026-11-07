@@ -15,8 +15,10 @@ import { buildAudienceWatchUrl } from "@/utils/liveLinks";
 import ShareDialog from "@/components/share/ShareDialog.vue";
 import AttendeePanel from "./AttendeePanel.vue";
 import ChatFilterPanel from "./ChatFilterPanel.vue";
+import CouponPanel from "./CouponPanel.vue";
 import DiscussPanel from "./DiscussPanel.vue";
 import WatchDataPanel from "./WatchDataPanel.vue";
+import type { ConsoleSendCouponResult } from "./api/console";
 
 const route = useRoute();
 const id = computed(() => String(route.params.id ?? ""));
@@ -45,6 +47,9 @@ let chatFilterSeq = 0;
 const watchDataOpen = ref(true);
 /** 首次打开后保持挂载，关闭只隐藏以复用走势图 */
 const watchDataKept = ref(true);
+
+const couponOpen = ref(false);
+const couponKept = ref(false);
 
 function presenceTime(raw: string | undefined): string | undefined {
   const text = raw?.trim() ?? "";
@@ -119,6 +124,29 @@ function resetWatchData() {
   watchDataKept.value = true;
 }
 
+function hideCoupon() {
+  couponOpen.value = false;
+}
+
+function resetCoupon() {
+  couponOpen.value = false;
+  couponKept.value = false;
+}
+
+function openCoupon() {
+  couponKept.value = true;
+  couponOpen.value = true;
+}
+
+async function onCouponSent(res: ConsoleSendCouponResult) {
+  try {
+    await chat.broadcastCoupon(res);
+    toast("优惠券发送成功");
+  } catch (e) {
+    toast(e instanceof Error ? e.message : "优惠券广播失败");
+  }
+}
+
 function openWatchData() {
   watchDataKept.value = true;
   watchDataOpen.value = true;
@@ -180,12 +208,21 @@ function onAction(label: string) {
     void openChatFilter();
     return;
   }
+  if (label === "优惠券") {
+    if (couponOpen.value) {
+      hideCoupon();
+      return;
+    }
+    openCoupon();
+    return;
+  }
   toast(`「${label}」暂未开放`);
 }
 
 async function boot() {
   resetChatFilter();
   resetWatchData();
+  resetCoupon();
   await load();
 }
 
@@ -340,7 +377,8 @@ onMounted(() => {
           :class="{
             'is-active':
               (label === '评论审核' && chatFilterOpen) ||
-              (label === '数据' && watchDataOpen),
+              (label === '数据' && watchDataOpen) ||
+              (label === '优惠券' && couponOpen),
           }"
           @click="onAction(label)"
         >
@@ -376,6 +414,15 @@ onMounted(() => {
       :page-url="chatFilterPageUrl"
       :loading="chatFilterLoading"
       @close="hideChatFilter"
+    />
+
+    <CouponPanel
+      v-if="couponKept"
+      :open="couponOpen"
+      :activity-id="id"
+      @close="hideCoupon"
+      @sent="onCouponSent"
+      @fail="(msg) => toast(msg || '发送失败')"
     />
 
     <ShareDialog

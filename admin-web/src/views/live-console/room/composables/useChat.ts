@@ -8,6 +8,7 @@ import {
   type UpsertQuestionAnswerBody,
 } from "../api/comments";
 import { createChatQuestions } from "./chatQuestions";
+import { createChatCoupons } from "./chatCoupons";
 import { normalizeEmojiText } from "../constants/emoji";
 import { chatViewerIdFromRaw } from "../utils/chatViewerId";
 import { collectVhallChatImageUrls } from "../utils/vhallChatImage";
@@ -439,6 +440,15 @@ export function useChat(options: ChatOptions) {
     onAnswerCommit: reportQuestionAnswer,
   });
 
+  const coupons = createChatCoupons({
+    chat,
+    getSdk,
+    getSender,
+    trimList,
+    scrollChatToBottom,
+    getActivityId: options.getActivityId,
+  });
+
   function sendChat() {
     const msg = chat.chatInput.trim();
     const sdk = getSdk();
@@ -593,7 +603,10 @@ export function useChat(options: ChatOptions) {
       }
       throw e;
     } finally {
-      if (!historyDisposed) await questions.loadHistory();
+      if (!historyDisposed) {
+        await questions.loadHistory();
+        if (!historyDisposed) await coupons.loadHistory();
+      }
     }
   }
 
@@ -657,6 +670,8 @@ export function useChat(options: ChatOptions) {
     handleChatMessage,
     handleQuestion: questions.handleQuestion,
     handleQuestionBackout: questions.handleQuestionBackout,
+    handleCustomEvent: coupons.handleCustomEvent,
+    broadcastCoupon: coupons.broadcastAfterSend,
     handleChatDelete,
     loadChatHistory,
     scheduleLoadHistory,

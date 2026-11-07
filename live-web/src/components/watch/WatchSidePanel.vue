@@ -6,6 +6,10 @@ import IntroPanel from "@/components/watch/IntroPanel.vue";
 import type { ChatController } from "@/composables/useChat";
 import type { BarrageController } from "@/composables/useBarrage";
 
+type ClaimChatCouponPayload = NonNullable<ChatMessage["coupon"]> & {
+  employeeName?: string;
+};
+
 const props = withDefaults(
   defineProps<{
     chat: ChatController;
@@ -17,16 +21,20 @@ const props = withDefaults(
     likeCount?: number;
     /** 回放：只读聊天、无弹幕、禁点赞 */
     mode?: "live" | "replay";
+    showCouponIcon?: boolean;
   }>(),
   {
     barrage: null,
     likeCount: 0,
     mode: "live",
+    showCouponIcon: false,
   },
 );
 
 const emit = defineEmits<{
   cart: [];
+  coupon: [];
+  claimCoupon: [coupon: ClaimChatCouponPayload];
   like: [];
   /** 聊天列表触顶（回放加载更多） */
   chatScrollTop: [];
@@ -106,7 +114,10 @@ function onChatListScroll(e: Event) {
       :like-count="likeCount"
       :is-readonly="isReplay"
       :show-like="!isReplay"
+      :show-coupon-icon="showCouponIcon"
       @cart="emit('cart')"
+      @coupon="emit('coupon')"
+      @claim-coupon="emit('claimCoupon', $event)"
       @like="emit('like')"
       @list-scroll="onChatListScroll"
     />
@@ -122,8 +133,10 @@ function onChatListScroll(e: Event) {
       :readonly-chat="isReplay"
       :show-like="!isReplay"
       :like-count="likeCount"
+      :show-coupon-icon="showCouponIcon"
       @go-chat="activeTab = 'chat'"
       @cart="emit('cart')"
+      @coupon="emit('coupon')"
       @like="emit('like')"
     />
   </div>

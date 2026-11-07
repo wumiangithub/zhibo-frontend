@@ -7,10 +7,12 @@ import NativeReplayPlayer from "@/components/watch/NativeReplayPlayer.vue";
 import WatchRoomShell from "@/components/watch/WatchRoomShell.vue";
 import WatchSidePanel from "@/components/watch/WatchSidePanel.vue";
 import ProductSheet from "@/components/watch/ProductSheet.vue";
+import CouponSheet from "@/components/watch/CouponSheet.vue";
 import UiPageHeader from "@/components/UiPageHeader.vue";
 import { useReplayWatch } from "@/composables/useReplayWatch";
 import { useChatHistory } from "@/composables/useChatHistory";
 import { useWatchCart } from "@/composables/useWatchCart";
+import { useWatchCoupons } from "@/composables/useWatchCoupons";
 import {
   isViewerAuthQueryKey,
   readNicknameFromSearch,
@@ -68,6 +70,20 @@ const {
   closeCart,
   buyProduct,
 } = useWatchCart(() => activityId.value);
+const {
+  couponOpen,
+  couponLoading,
+  couponError,
+  coupons,
+  showCouponIcon,
+  claimingCouponId,
+  openCoupons,
+  closeCoupons,
+  claimCoupon,
+} = useWatchCoupons(
+  () => activityId.value,
+  () => summary.value?.title,
+);
 
 function preservedQuery(): Record<string, string | string[]> {
   const q: Record<string, string | string[]> = {};
@@ -199,7 +215,10 @@ onMounted(() => {
             :intro-title="summary?.title || record.title || '回放'"
             :intro-start-time="summary?.startTime"
             :intro-end-time="summary?.endTime"
+            :show-coupon-icon="showCouponIcon"
             @cart="openCart"
+            @coupon="openCoupons"
+            @claim-coupon="claimCoupon"
             @chat-scroll-top="chatHistory.onScrollNearTop()"
           />
         </template>
@@ -213,6 +232,16 @@ onMounted(() => {
       :products="cartProducts"
       @close="closeCart"
       @buy="buyProduct"
+    />
+
+    <CouponSheet
+      :open="couponOpen"
+      :loading="couponLoading"
+      :error="couponError"
+      :coupons="coupons"
+      :claiming-coupon-id="claimingCouponId"
+      @close="closeCoupons"
+      @claim="claimCoupon"
     />
   </div>
 </template>

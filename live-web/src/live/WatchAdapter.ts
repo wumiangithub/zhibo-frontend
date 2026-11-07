@@ -12,6 +12,8 @@ export interface WatchAdapterHandlers {
   onQuestion?: (msg: unknown) => void;
   /** 微吼撤回提问回复：question_answer_backout */
   onQuestionBackout?: (msg: unknown) => void;
+  /** 自定义广播：优惠券等（customEvent） */
+  onCustomEvent?: (msg: unknown) => void;
   onDisableChat: () => void;
   onPermitChat: () => void;
   onAnnouncement: (msg: unknown) => void;

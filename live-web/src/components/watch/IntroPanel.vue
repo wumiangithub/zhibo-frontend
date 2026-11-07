@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import cartYellowUrl from "@/assets/images/cart-yellow.png";
+import couponFloatUrl from "@/assets/images/coupon-float.png";
 
 withDefaults(
   defineProps<{
@@ -11,17 +12,20 @@ withDefaults(
     /** 回放禁点赞 */
     showLike?: boolean;
     likeCount?: number;
+    showCouponIcon?: boolean;
   }>(),
   {
     readonlyChat: false,
     showLike: true,
     likeCount: 0,
+    showCouponIcon: false,
   },
 );
 
 const emit = defineEmits<{
   goChat: [];
   cart: [];
+  coupon: [];
   like: [];
 }>();
 </script>
@@ -43,6 +47,21 @@ const emit = defineEmits<{
         </p>
       </div>
     </div>
+
+    <button
+      v-if="showCouponIcon"
+      type="button"
+      class="absolute top-2 right-2 z-30 flex h-14 w-14 items-center justify-center active:scale-95 md:hidden"
+      aria-label="优惠券"
+      @click="emit('coupon')"
+    >
+      <img
+        :src="couponFloatUrl"
+        alt=""
+        class="h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]"
+        draggable="false"
+      >
+    </button>
 
     <!-- 小黄车：悬浮右下角（与聊天页一致） -->
     <button

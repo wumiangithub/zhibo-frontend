@@ -111,6 +111,7 @@ export class VhallWatchAdapter implements WatchAdapter {
     });
     this.sdk.$on("customEvent", (msg: unknown) => {
       console.log(`[vhall-sdk] customEvent @ ${new Date().toISOString()}`, msg);
+      handlers.onCustomEvent?.(msg);
     });
     this.sdk.$on("chatDelete", handlers.onChatDelete);
     this.sdk.$on("disableChat", handlers.onDisableChat);

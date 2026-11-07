@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+/** Vite define 注入：npm run build / vite 启动时的本地时间 yyyy-MM-dd HH:mm:ss */
+declare const __APP_BUILD_TIME__: string;
+
 interface ImportMetaEnv {
   readonly VITE_APP_ENV: string;
   readonly VITE_APP_BASE_API: string;

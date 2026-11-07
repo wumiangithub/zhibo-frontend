@@ -8,6 +8,7 @@ import {
   type UpsertQuestionAnswerBody,
 } from "@/api/comments";
 import { createChatQuestions } from "@/composables/chatQuestions";
+import { createChatCoupons } from "@/composables/chatCoupons";
 import { normalizeEmojiText } from "@/constants/emoji";
 import { collectVhallChatImageUrls } from "@/utils/vhallChatImage";
 import { parseVhallChatRole } from "@/utils/vhallChatRole";
@@ -31,6 +32,8 @@ export interface ChatOptions {
    * 不传则仍弹假验证框（中控台沿用 T11.2）。
    */
   onUnauthenticatedChat?: () => void;
+  /** 收到 customEvent 优惠券后（刷新侧栏券列表等） */
+  onCouponCustomEvent?: () => void;
 }
 
 /** 非空对象才当回复体（空 {} / [] 表示无回复，对齐 demo verifyIsShowReply） */
@@ -364,7 +367,7 @@ export function useChat(options: ChatOptions) {
 
   /** 回声上屏后记下本站评论 id，便于随后 chatDelete 按 commentId 软删 */
   function claimPending(msg: ChatMessage) {
-    if (msg.kind === "question") return;
+    if (msg.kind === "question" || msg.kind === "coupon") return;
     const key = normalizeEmojiText((msg.msg || "").trim());
     if (!key) return;
     const now = Date.now();
@@ -475,6 +478,23 @@ export function useChat(options: ChatOptions) {
     onCreateMsgBackfill: reportQuestionMsgBackfill,
     onAnswerCommit: reportQuestionAnswer,
   });
+
+  const coupons = createChatCoupons({
+    chat,
+    getSdk,
+    getSender,
+    trimList,
+    scrollChatToBottom,
+    getActivityId: options.getActivityId,
+  });
+
+  function handleCustomEvent(raw: unknown) {
+    const before = chat.chatMessages.length;
+    coupons.handleCustomEvent(raw);
+    if (chat.chatMessages.length > before) {
+      options.onCouponCustomEvent?.();
+    }
+  }
 
   function sendChat() {
     const msg = chat.chatInput.trim();
@@ -630,7 +650,10 @@ export function useChat(options: ChatOptions) {
       }
       throw e;
     } finally {
-      if (!historyDisposed) await questions.loadHistory();
+      if (!historyDisposed) {
+        await questions.loadHistory();
+        await coupons.loadHistory();
+      }
     }
   }
 
@@ -695,6 +718,7 @@ export function useChat(options: ChatOptions) {
     handleChatMessage,
     handleQuestion: questions.handleQuestion,
     handleQuestionBackout: questions.handleQuestionBackout,
+    handleCustomEvent,
     handleChatDelete,
     loadChatHistory,
     scheduleLoadHistory,

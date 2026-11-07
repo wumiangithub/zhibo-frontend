@@ -34,6 +34,7 @@ import AddSubcourseDialog from "./AddSubcourseDialog.vue";
 import CatalogSortDialog from "./CatalogSortDialog.vue";
 import DeleteChapterDialog from "./DeleteChapterDialog.vue";
 import DeleteSubcourseDialog from "./DeleteSubcourseDialog.vue";
+import EditLessonDialog from "./EditLessonDialog.vue";
 import SubcourseSettingsDialog from "./SubcourseSettingsDialog.vue";
 
 const props = defineProps<{
@@ -50,6 +51,8 @@ const collapsedChapterIds = ref<Record<number, boolean>>({});
 
 const addLessonOpen = ref(false);
 const addLessonParentId = ref(0);
+const editLessonOpen = ref(false);
+const editingLesson = ref<CatalogNode | null>(null);
 const addChapterOpen = ref(false);
 const editingChapter = ref<CatalogNode | null>(null);
 const addSubOpen = ref(false);
@@ -191,6 +194,15 @@ function onAddChapter() {
 function onEditChapter(ch: CatalogNode) {
   editingChapter.value = ch;
   addChapterOpen.value = true;
+}
+
+function onEditLesson(lesson: CatalogNode) {
+  editingLesson.value = lesson;
+  editLessonOpen.value = true;
+}
+
+function onLessonUnavailable() {
+  ElMessage.info("功能暂未开放");
 }
 
 function onDeleteChapter(ch: CatalogNode) {
@@ -559,6 +571,37 @@ watch(
                     </div>
                     <span class="lesson-tag">{{ contentLabel(lesson.contentKind) }}</span>
                   </div>
+                  <div class="lesson-ops">
+                    <button
+                      type="button"
+                      class="lesson-op"
+                      @click="onEditLesson(lesson)"
+                    >
+                      编辑
+                    </button>
+                    <span
+                      class="lesson-op-sep"
+                      aria-hidden="true"
+                    />
+                    <button
+                      type="button"
+                      class="lesson-op"
+                      @click="onLessonUnavailable"
+                    >
+                      数据
+                    </button>
+                    <span
+                      class="lesson-op-sep"
+                      aria-hidden="true"
+                    />
+                    <button
+                      type="button"
+                      class="lesson-op"
+                      @click="onLessonUnavailable"
+                    >
+                      分享
+                    </button>
+                  </div>
                 </li>
               </ul>
             </div>
@@ -573,6 +616,37 @@ watch(
                     {{ item.title }}
                   </div>
                   <span class="lesson-tag">{{ contentLabel(item.contentKind) }}</span>
+                </div>
+                <div class="lesson-ops">
+                  <button
+                    type="button"
+                    class="lesson-op"
+                    @click="onEditLesson(item)"
+                  >
+                    编辑
+                  </button>
+                  <span
+                    class="lesson-op-sep"
+                    aria-hidden="true"
+                  />
+                  <button
+                    type="button"
+                    class="lesson-op"
+                    @click="onLessonUnavailable"
+                  >
+                    数据
+                  </button>
+                  <span
+                    class="lesson-op-sep"
+                    aria-hidden="true"
+                  />
+                  <button
+                    type="button"
+                    class="lesson-op"
+                    @click="onLessonUnavailable"
+                  >
+                    分享
+                  </button>
                 </div>
               </li>
             </ul>
@@ -592,6 +666,12 @@ watch(
       v-model="addLessonOpen"
       :course-id="props.courseId"
       :parent-id="addLessonParentId"
+      @confirmed="onCatalogChanged"
+    />
+    <EditLessonDialog
+      v-model="editLessonOpen"
+      :course-id="props.courseId"
+      :editing="editingLesson"
       @confirmed="onCatalogChanged"
     />
     <AddChapterDialog
@@ -917,6 +997,7 @@ watch(
 }
 .lesson-item {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
   padding: 10px 0;
   border-bottom: 1px solid #f0f0f0;
@@ -925,12 +1006,15 @@ watch(
   flex: none;
   color: #999;
   font-size: 13px;
+  line-height: 20px;
 }
 .lesson-main {
+  flex: 1;
   min-width: 0;
 }
 .lesson-title {
   font-size: 13px;
+  line-height: 20px;
   color: #303133;
 }
 .lesson-tag {
@@ -941,6 +1025,32 @@ watch(
   color: #666;
   background: #f5f6f8;
   border-radius: 3px;
+}
+.lesson-ops {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0;
+  margin-left: auto;
+  padding-top: 1px;
+  white-space: nowrap;
+}
+.lesson-op {
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.lesson-op:hover {
+  text-decoration: underline;
+}
+.lesson-op-sep {
+  width: 1px;
+  height: 12px;
+  background: #dcdfe6;
 }
 .tree-empty {
   margin: 24px 0;

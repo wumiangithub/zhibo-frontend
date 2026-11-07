@@ -283,7 +283,7 @@ export function bindCatalogLives(
   courseId: string,
   payload: { parentId: number; activityIds: string[] },
 ) {
-  return post<{ list: CatalogNode[]; contentCount: number }>(
+  return post<null>(
     `/courses/catalog/lessons/bind-lives/${encodeURIComponent(courseId)}`,
     payload,
   );
@@ -293,8 +293,18 @@ export function bindCatalogMaterials(
   courseId: string,
   payload: { parentId: number; materialIds: string[] },
 ) {
-  return post<{ list: CatalogNode[]; contentCount: number }>(
+  return post<null>(
     `/courses/catalog/lessons/bind-materials/${encodeURIComponent(courseId)}`,
+    payload,
+  );
+}
+
+export function updateCatalogLesson(
+  courseId: string,
+  payload: { id: number; title: string },
+) {
+  return post<CatalogNode>(
+    `/courses/catalog/lessons/update/${encodeURIComponent(courseId)}`,
     payload,
   );
 }

@@ -7,6 +7,10 @@ import {
   fetchWatchQuestionHistory,
   toQuestionChatMessage,
 } from "@/api/questionHistory";
+import {
+  listWatchCouponHistory,
+  toCouponChatMessage,
+} from "@/api/watchCoupons";
 import type { ChatController } from "@/composables/useChat";
 
 /**
@@ -30,6 +34,8 @@ export function useChatHistory(getActivityId: () => string) {
   let loadMoreCooldown = false;
   /** 本站提问缓存；聊天分页后重新并入，避免被 replace/prepend 冲掉 */
   let questionItems: ChatMessage[] = [];
+  /** 本站优惠券历史缓存；并入逻辑同提问 */
+  let couponItems: ChatMessage[] = [];
 
   function attachListEl(el: unknown) {
     listEl = (el as HTMLElement | null) || null;
@@ -50,26 +56,29 @@ export function useChatHistory(getActivityId: () => string) {
     });
   }
 
-  function mergeQuestionsIntoList(base: ChatMessage[]): ChatMessage[] {
-    if (!questionItems.length) return base;
-    const seen = new Set(
-      base.map((m) => m.msgId).filter((id): id is string => !!id),
-    );
-    const next = base.slice();
-    for (const item of questionItems) {
-      if (item.msgId && seen.has(item.msgId)) {
-        const idx = next.findIndex((m) => m.msgId === item.msgId);
-        if (idx >= 0) {
-          next[idx] = {
-            ...next[idx],
-            kind: "question",
-            answer: item.answer ?? next[idx].answer,
-          };
+  function mergeAuxiliaryIntoList(base: ChatMessage[]): ChatMessage[] {
+    const buckets: ChatMessage[][] = [questionItems, couponItems];
+    let next = base.slice();
+    for (const bucket of buckets) {
+      if (!bucket.length) continue;
+      const seen = new Set(
+        next.map((m) => m.msgId).filter((id): id is string => !!id),
+      );
+      for (const item of bucket) {
+        if (item.msgId && seen.has(item.msgId)) {
+          const idx = next.findIndex((m) => m.msgId === item.msgId);
+          if (idx >= 0 && item.kind === "question") {
+            next[idx] = {
+              ...next[idx],
+              kind: "question",
+              answer: item.answer ?? next[idx].answer,
+            };
+          }
+          continue;
         }
-        continue;
+        if (item.msgId) seen.add(item.msgId);
+        next.push(item);
       }
-      if (item.msgId) seen.add(item.msgId);
-      next.push(item);
     }
     next.sort((a, b) => a.timestamp - b.timestamp);
     return next;
@@ -87,15 +96,28 @@ export function useChatHistory(getActivityId: () => string) {
     }
   }
 
+  async function loadCoupons(activityId: string) {
+    try {
+      const res = await listWatchCouponHistory(activityId);
+      couponItems = (res.list ?? [])
+        .map((row) => toCouponChatMessage(row))
+        .filter((m): m is ChatMessage => m != null);
+    } catch (e) {
+      console.warn("加载优惠券历史失败", e);
+      couponItems = [];
+    }
+  }
+
   async function loadFirstPage() {
     page = 0;
     total = 0;
     exhausted = false;
     questionItems = [];
+    couponItems = [];
     chat.chatMessages = [];
     const activityId = getActivityId()?.trim();
     if (activityId) {
-      await loadQuestions(activityId);
+      await Promise.all([loadQuestions(activityId), loadCoupons(activityId)]);
     }
     await loadMore({ replace: true });
   }
@@ -114,25 +136,29 @@ export function useChatHistory(getActivityId: () => string) {
       page = nextPage;
 
       if (opts?.replace) {
-        chat.chatMessages = mergeQuestionsIntoList(items);
+        chat.chatMessages = mergeAuxiliaryIntoList(items);
         scrollChatToBottom();
       } else {
         const prevHeight = listEl?.scrollHeight ?? 0;
         const prevTop = listEl?.scrollTop ?? 0;
-        // 先剥掉已并入的提问，再 prepend 聊天，最后重新 merge，避免提问重复
-        const chatOnly = chat.chatMessages.filter((m) => m.kind !== "question");
-        chat.chatMessages = mergeQuestionsIntoList([...items, ...chatOnly]);
+        // 先剥掉已并入的提问/券，再 prepend 聊天，最后重新 merge，避免重复
+        const chatOnly = chat.chatMessages.filter(
+          (m) => m.kind !== "question" && m.kind !== "coupon",
+        );
+        chat.chatMessages = mergeAuxiliaryIntoList([...items, ...chatOnly]);
         preserveScrollAfterPrepend(prevHeight, prevTop);
       }
 
-      const chatCount = chat.chatMessages.filter((m) => m.kind !== "question").length;
+      const chatCount = chat.chatMessages.filter(
+        (m) => m.kind !== "question" && m.kind !== "coupon",
+      ).length;
       if (items.length === 0 || chatCount >= total) {
         exhausted = true;
       }
     } catch (e) {
       console.warn("加载聊天历史失败", e);
       if (opts?.replace) {
-        chat.chatMessages = mergeQuestionsIntoList([]);
+        chat.chatMessages = mergeAuxiliaryIntoList([]);
       }
       exhausted = true;
     } finally {
@@ -163,6 +189,7 @@ export function useChatHistory(getActivityId: () => string) {
     sendQuestion: () => Promise.resolve(),
     handleQuestion: noop,
     handleQuestionBackout: noop,
+    handleCustomEvent: noop,
     handleChatMessage: noop,
     handleChatDelete: noop,
     loadChatHistory: loadFirstPage,

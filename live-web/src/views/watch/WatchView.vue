@@ -18,11 +18,13 @@ import WatchSidePanel from "@/components/watch/WatchSidePanel.vue";
 import AccessPasswordDialog from "@/components/watch/AccessPasswordDialog.vue";
 import AccessBlockedScreen from "@/components/watch/AccessBlockedScreen.vue";
 import ProductSheet from "@/components/watch/ProductSheet.vue";
+import CouponSheet from "@/components/watch/CouponSheet.vue";
 import UiPageHeader from "@/components/UiPageHeader.vue";
 import { listWatchRecords, type WatchRecordItem } from "@/api/replayWatch";
 import { useWatchSession } from "@/composables/useWatchSession";
 import { useWatchAccessGate } from "@/composables/useWatchAccessGate";
 import { useWatchCart } from "@/composables/useWatchCart";
+import { useWatchCoupons } from "@/composables/useWatchCoupons";
 import { decodeAudienceInviteToken } from "@/utils/audienceInviteToken";
 import { pingViewerPresence } from "@/api/presence";
 import {
@@ -56,6 +58,8 @@ const {
   closeCart,
   buyProduct,
 } = useWatchCart(() => id);
+/** session 的发券自定义消息回调会用到；在 useWatchCoupons 初始化后赋值 */
+let refreshCoupons: () => Promise<void> = async () => {};
 
 const routeQuery = route.query as Record<string, unknown>;
 /** 小程序 web-view：viewerId + JWT + nickname 写入本地，再拉 /watch/sdk-sign */
@@ -139,6 +143,9 @@ const session = useWatchSession({
     void onViewerAuthRequired();
   },
   onViewerAuthRequired: () => onViewerAuthRequired(),
+  onCouponCustomEvent: () => {
+    void refreshCoupons();
+  },
 });
 
 const {
@@ -160,6 +167,23 @@ const {
   load,
   shareWatch,
 } = session;
+
+const {
+  couponOpen,
+  couponLoading,
+  couponError,
+  coupons,
+  showCouponIcon,
+  claimingCouponId,
+  refreshCoupons: refreshCouponsImpl,
+  openCoupons,
+  closeCoupons,
+  claimCoupon,
+} = useWatchCoupons(
+  () => id,
+  () => data.value?.title,
+);
+refreshCoupons = refreshCouponsImpl;
 
 const gate = useWatchAccessGate(() => id);
 const {
@@ -539,7 +563,10 @@ onMounted(() => {
                 :intro-start-time="data.startTime"
                 :intro-end-time="data.endTime"
                 :like-count="stats.likeCount"
+                :show-coupon-icon="showCouponIcon"
                 @cart="openCart"
+                @coupon="openCoupons"
+                @claim-coupon="claimCoupon"
                 @like="stats.handleLike"
               />
             </template>
@@ -563,6 +590,16 @@ onMounted(() => {
       :products="cartProducts"
       @close="closeCart"
       @buy="buyProduct"
+    />
+
+    <CouponSheet
+      :open="couponOpen"
+      :loading="couponLoading"
+      :error="couponError"
+      :coupons="coupons"
+      :claiming-coupon-id="claimingCouponId"
+      @close="closeCoupons"
+      @claim="claimCoupon"
     />
 
     <RecordPickerSheet

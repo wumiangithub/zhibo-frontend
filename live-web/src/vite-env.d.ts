@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+/** Vite define 注入：npm run build / vite 启动时的本地时间 yyyy-MM-dd HH:mm:ss */
+declare const __APP_BUILD_TIME__: string;
+
 interface ImportMetaEnv {
   /**
    * 接口前缀。同机为路径（/ 或 /live-client）；分机为域名。
@@ -61,10 +64,22 @@ interface ChatMessage {
    * msgId：被回复消息 id，昵称缺失时可在列表内回填。
    */
   reply?: { nickname: string; content: string; msgId?: string };
-  /** 提问。普通聊天不设。来自 sendQuestion / question_answer_* */
-  kind?: "question";
+  /** 提问 / 优惠券。普通聊天不设。 */
+  kind?: "question" | "coupon";
   /** 主持人对该提问的回复 */
   answer?: { nickname: string; content: string; roleLabel?: string };
+  /** 优惠券卡片（kind=coupon；D113） */
+  coupon?: {
+    couponId: number;
+    couponNo?: string;
+    couponName: string;
+    couponAmount: string;
+    couponStartDate?: string;
+    couponEndDate?: string;
+    employeeId?: number;
+    deptId?: number;
+    deptName?: string;
+  };
 }
 
 interface ChatModule {

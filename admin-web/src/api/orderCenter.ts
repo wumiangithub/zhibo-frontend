@@ -743,3 +743,132 @@ export async function listSalerOrders(
     total: body.data?.total ?? list.length,
   };
 }
+
+/** 业务员端券池列表项（订单中心；中控台发券用） */
+export interface OrderCenterCoupon {
+  couponId: number;
+  couponNo: string;
+  couponName: string;
+  couponAmount: string;
+  couponStartDate: string;
+  couponEndDate: string;
+  allSku: boolean;
+  deptNames: string[];
+  skuNames: string[];
+  createTime?: string;
+}
+
+export interface SalerCouponListQuery {
+  page?: number;
+  pageSize?: number;
+  couponName?: string;
+}
+
+export interface SalerCouponListResult {
+  list: OrderCenterCoupon[];
+  page: number;
+  size: number;
+  total: number;
+}
+
+function mapStringList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const row of raw) {
+    if (typeof row === "string" && row.trim()) out.push(row.trim());
+    else if (typeof row === "number" && Number.isFinite(row)) out.push(String(row));
+  }
+  return out;
+}
+
+function mapCoupon(row: unknown): OrderCenterCoupon | null {
+  if (!row || typeof row !== "object") return null;
+  const o = row as Record<string, unknown>;
+  const couponIdRaw = o.id;
+  const couponId =
+    typeof couponIdRaw === "number"
+      ? couponIdRaw
+      : typeof couponIdRaw === "string"
+        ? Number(couponIdRaw)
+        : NaN;
+  if (!Number.isFinite(couponId) || couponId <= 0) return null;
+  const couponNo =
+    typeof o.couponNo === "string" ? o.couponNo.trim() : String(o.couponNo ?? "").trim();
+  const couponName =
+    typeof o.couponName === "string" ? o.couponName.trim() : String(o.couponName ?? "").trim();
+  const couponAmount =
+    typeof o.couponAmount === "string"
+      ? o.couponAmount.trim()
+      : String(o.couponAmount ?? "").trim();
+  if (!couponNo || !couponName || !couponAmount) return null;
+  return {
+    couponId,
+    couponNo,
+    couponName,
+    couponAmount,
+    couponStartDate:
+      typeof o.couponStartDate === "string"
+        ? o.couponStartDate.trim()
+        : String(o.couponStartDate ?? "").trim(),
+    couponEndDate:
+      typeof o.couponEndDate === "string"
+        ? o.couponEndDate.trim()
+        : String(o.couponEndDate ?? "").trim(),
+    allSku: o.allSku === true || o.allSku === 1 || o.allSku === "1",
+    deptNames: mapStringList(o.deptNames),
+    skuNames: mapStringList(o.skuNames),
+    createTime: asOptionalString(o.createTime),
+  };
+}
+
+/**
+ * 业务员端券池列表（分页；不经本站后端）。
+ * 鉴权头 `Authorization-Live-Saler`。契约：订单中心对接.md §5.4 / D113
+ */
+export async function listSalerCouponsPage(
+  query: SalerCouponListQuery = {},
+): Promise<SalerCouponListResult> {
+  const token = await salerAccessToken();
+  const page = query.page != null && query.page > 0 ? query.page : 1;
+  const pageSize =
+    query.pageSize != null && query.pageSize > 0
+      ? Math.min(query.pageSize, 50)
+      : 20;
+  const couponName = query.couponName?.trim() || undefined;
+
+  const url = `${orderCenterBase()}/order-center/api/live/saler/coupon/list`;
+  let resp;
+  try {
+    resp = await axios.post(
+      url,
+      { page, pageSize, ...(couponName ? { couponName } : {}) },
+      {
+        headers: {
+          "Authorization-Live-Saler": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      },
+    );
+  } catch (e) {
+    throw new Error(axiosErrorMessage(e, "拉取优惠券列表失败"));
+  }
+
+  const body = resp.data as OrderCenterListBody;
+  if (!isOrderCenterSuccess(body?.code)) {
+    throw new Error(body?.msg || body?.message || "拉取优惠券列表失败");
+  }
+  const rawList = body.data?.list ?? [];
+  const list = rawList.map(mapCoupon).filter((p): p is OrderCenterCoupon => !!p);
+  list.sort((a, b) => {
+    const ta = a.createTime || "";
+    const tb = b.createTime || "";
+    return tb.localeCompare(ta);
+  });
+  return {
+    list,
+    page: body.data?.page ?? page,
+    size: body.data?.size ?? pageSize,
+    total: body.data?.total ?? list.length,
+  };
+}

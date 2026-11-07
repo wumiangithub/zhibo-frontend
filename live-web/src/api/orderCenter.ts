@@ -338,3 +338,111 @@ export async function listMyOrders(opts?: {
     total: asPageNumber(data.total, list.length),
   };
 }
+
+export interface ReceiveViewerCouponInput {
+  /** 订单中心券池 id（oms coupon.rs_mainkey_id） */
+  couponId: number;
+  /** 具体从哪里领，如直播间名称 */
+  receiveName?: string;
+  employeeId?: number;
+  employeeName?: string;
+  deptId?: number;
+  deptName?: string;
+}
+
+export interface ReceiveViewerCouponResult {
+  couponUserId?: number;
+  couponId?: number;
+  couponName?: string;
+  couponAmount?: string;
+  message?: string;
+}
+
+interface OrderCenterReceiveBody {
+  code?: number | string;
+  msg?: string;
+  message?: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * 观众端领取优惠券。
+ * POST /order-center/api/live/viewer/coupon/receive
+ * 头 Authorization-Live-Viewers；body 必填 couponId；username/receiveType 由对方登录态覆盖，勿传。
+ */
+export async function receiveViewerCoupon(
+  input: ReceiveViewerCouponInput,
+): Promise<ReceiveViewerCouponResult> {
+  const token = getViewerAccessToken();
+  if (!token) {
+    throw new Error("请先登录后再领取");
+  }
+
+  const couponId = Number(input.couponId);
+  if (!Number.isInteger(couponId) || couponId <= 0) {
+    throw new Error("优惠券无效");
+  }
+
+  const body: Record<string, unknown> = { couponId };
+  const receiveName = input.receiveName?.trim();
+  if (receiveName) body.receiveName = receiveName;
+  if (input.employeeId != null && Number.isFinite(input.employeeId) && input.employeeId >= 0) {
+    body.employeeId = Math.floor(input.employeeId);
+  }
+  const employeeName = input.employeeName?.trim();
+  if (employeeName) body.employeeName = employeeName;
+  if (input.deptId != null && Number.isFinite(input.deptId) && input.deptId >= 0) {
+    body.deptId = Math.floor(input.deptId);
+  }
+  const deptName = input.deptName?.trim();
+  if (deptName) body.deptName = deptName;
+
+  const url = `${orderCenterBase()}/order-center/api/live/viewer/coupon/receive`;
+  let resp;
+  try {
+    resp = await axios.post(url, body, {
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization-Live-Viewers": `Bearer ${token}`,
+      },
+      responseType: "text",
+      transformResponse: [(data) => data],
+      timeout: 20000,
+      validateStatus: (status) => (status >= 200 && status < 300) || status === 401,
+    });
+  } catch (e) {
+    throw new Error(axiosErrorMessage(e, "网络异常"));
+  }
+
+  let parsed: OrderCenterReceiveBody;
+  try {
+    const text = typeof resp.data === "string" ? resp.data : JSON.stringify(resp.data ?? {});
+    parsed = JSON.parse(text) as OrderCenterReceiveBody;
+  } catch {
+    if (resp.status === 401) throw new Error("登录状态已失效，请重新登录");
+    throw new Error("订单中心响应无法解析");
+  }
+
+  const code = parsed.code;
+  const authFailed =
+    resp.status === 401 ||
+    code === 401 ||
+    code === "401" ||
+    code === 16 ||
+    code === "16";
+  if (authFailed) {
+    throw new Error(parsed.message || parsed.msg || "登录状态已失效，请重新登录");
+  }
+  if (!isOrderCenterSuccess(code)) {
+    throw new Error(parsed.message || parsed.msg || "领取失败");
+  }
+
+  const data = parsed.data ?? {};
+  return {
+    couponUserId: typeof data.couponUserId === "number" ? data.couponUserId : undefined,
+    couponId: typeof data.couponId === "number" ? data.couponId : couponId,
+    couponName: typeof data.couponName === "string" ? data.couponName : undefined,
+    couponAmount: typeof data.couponAmount === "string" ? data.couponAmount : undefined,
+    message: parsed.message || parsed.msg || "领取成功",
+  };
+}

@@ -312,6 +312,7 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
         onLiveStart: handleLiveStart,
         onChatMsg: chat.handleChatMessage,
         onChatDelete: chat.handleChatDelete,
+        onCustomEvent: chat.handleCustomEvent,
         onQuestion: chat.handleQuestion,
         onQuestionBackout: chat.handleQuestionBackout,
         onDisableChat: () => chat.setMuted(true),

@@ -33,6 +33,8 @@ export interface WatchSessionOptions {
    * 观看页：refresh 或清票跳 /login。
    */
   onViewerAuthRequired?: () => void | Promise<void>;
+  /** 实时 customEvent 落券卡片后回调（如刷新券图标列表） */
+  onCouponCustomEvent?: () => void;
 }
 
 function resolveId(id: MaybeRefOrGetter<string>): string {
@@ -96,6 +98,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
     getActivityId: () => resolveId(opts.activityId),
     getViewerId: () => getViewerId(),
     onUnauthenticatedChat: opts.onUnauthenticatedChat,
+    onCouponCustomEvent: opts.onCouponCustomEvent,
   });
   reportSentChat = chat.reportSentMessage;
   const stats = useRoomStats(getSdk);
@@ -340,6 +343,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
         onChatDelete: chat.handleChatDelete,
         onQuestion: chat.handleQuestion,
         onQuestionBackout: chat.handleQuestionBackout,
+        onCustomEvent: chat.handleCustomEvent,
         onDisableChat: () => chat.setMuted(true),
         onPermitChat: () => chat.setMuted(false),
         onAnnouncement: notice.handleAnnouncement,

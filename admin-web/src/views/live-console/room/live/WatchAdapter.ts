@@ -8,6 +8,8 @@ export interface WatchAdapterHandlers {
   onLiveStart: () => void;
   onChatMsg: (msg: VhallChatMsgMessage) => void;
   onChatDelete: (msg: unknown) => void;
+  /** 自定义消息广播（优惠券等；D113） */
+  onCustomEvent?: (msg: unknown) => void;
   /** 微吼提问：question_answer_create / question_answer_commit */
   onQuestion?: (msg: unknown) => void;
   /** 微吼撤回提问回复：question_answer_backout */

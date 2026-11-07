@@ -45,6 +45,19 @@ const followerKeyword = ref("");
 const selectedFollower = ref<{ id: number; name: string } | null>(null);
 const brokenAvatars = reactive<Record<string, true>>({});
 
+function formatCouponAmount(raw: string): string {
+  const n = Number(raw);
+  if (Number.isFinite(n)) return n.toFixed(2);
+  return raw.trim() || "0.00";
+}
+
+function formatCouponValidity(start?: string, end?: string): string {
+  const a = (start || "").replace(/-/g, ".").slice(0, 10);
+  const b = (end || "").replace(/-/g, ".").slice(0, 10);
+  if (!a && !b) return "";
+  return `${a || "—"}至${b || "—"}`;
+}
+
 function avatarSrc(msg: ChatMessage): string {
   const url = msg.avatar?.trim();
   if (!url || brokenAvatars[url]) return "";
@@ -447,6 +460,30 @@ onBeforeUnmount(() => {
                   v-if="msg.kind === 'question'"
                   class="badge is-question"
                 >问</span>
+              </div>
+              <div
+                v-if="msg.kind === 'coupon' && msg.coupon"
+                class="msg-coupon"
+              >
+                <div class="msg-coupon-main">
+                  <span class="msg-coupon-tag">优惠券</span>
+                  <div class="msg-coupon-amount">
+                    <span class="yen">¥</span>{{ formatCouponAmount(msg.coupon.couponAmount) }}
+                  </div>
+                  <div class="msg-coupon-name">{{ msg.coupon.couponName }}</div>
+                  <div
+                    v-if="msg.coupon.couponStartDate || msg.coupon.couponEndDate"
+                    class="msg-coupon-valid"
+                  >
+                    {{ formatCouponValidity(msg.coupon.couponStartDate, msg.coupon.couponEndDate) }}
+                  </div>
+                </div>
+                <div
+                  class="msg-coupon-action"
+                  aria-hidden="true"
+                >
+                  <span class="msg-coupon-claim">领取</span>
+                </div>
               </div>
               <div
                 v-if="msg.reply || msg.msg?.trim() || msg.answer"
@@ -1016,6 +1053,107 @@ onBeforeUnmount(() => {
 .badge.is-question {
   background: var(--color-primary-bg);
   color: var(--color-primary);
+}
+
+.msg-coupon {
+  display: flex;
+  align-items: stretch;
+  margin: 6px 0 0;
+  max-width: 260px;
+  padding: 0;
+  border-radius: 10px;
+  background: linear-gradient(120deg, #ffc56e 0%, #ff9a3c 42%, #ff7f2a 100%);
+  color: #fff;
+  text-shadow: 0 1px 1px rgb(180 70 0 / 28%);
+  box-shadow: 0 6px 16px rgb(240 120 40 / 24%);
+  overflow: visible;
+}
+
+.msg-coupon-main {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.msg-coupon-tag {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 22%);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.04em;
+}
+
+.msg-coupon-amount {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.msg-coupon-amount .yen {
+  margin-right: 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.msg-coupon-name {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.msg-coupon-valid {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: rgb(255 255 255 / 92%);
+  font-variant-numeric: tabular-nums;
+}
+
+.msg-coupon-action {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  border-left: 1px dashed rgb(255 255 255 / 65%);
+  background: rgb(255 255 255 / 14%);
+}
+
+.msg-coupon-action::before,
+.msg-coupon-action::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  /* 讨论区列表底 */
+  background: #fff;
+}
+
+.msg-coupon-action::before {
+  top: -6px;
+}
+
+.msg-coupon-action::after {
+  bottom: -6px;
+}
+
+.msg-coupon-claim {
+  writing-mode: vertical-rl;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  line-height: 1;
 }
 
 .msg-text {

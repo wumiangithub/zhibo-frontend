@@ -12,6 +12,12 @@ function listenPort(raw: string | undefined, fallback: number): number {
   return fallback
 }
 
+/** 本地打包/启动时刻，注入到客户端便于核对是否最新包 */
+function formatBuildTime(d = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+
 /** 同机为 /api 或 /live-admin；写成域名时浏览器直连，开发代理仍用 /api。 */
 function apiProxyPrefix(raw: string | undefined): string {
   const base = (raw ?? "").trim().replace(/\/+$/, "")
@@ -30,6 +36,9 @@ export default defineConfig(({ mode }) => {
   const orderCenterTarget =
     VITE_ORDER_CENTER_BASE_URL || "http://oms-api.scqkxx.com"
   return {
+    define: {
+      __APP_BUILD_TIME__: JSON.stringify(formatBuildTime()),
+    },
     plugins: [
       vue(),
       UnoCSS(),

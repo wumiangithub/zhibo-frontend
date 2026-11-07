@@ -51,7 +51,11 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body">
-    <Transition name="ui-sheet">
+    <!-- duration 显式给定：动效写在子节点，根上嗅探不到 transition 时长时会瞬间插拔，上升看起来生硬 -->
+    <Transition
+      name="ui-sheet"
+      :duration="{ enter: 320, leave: 280 }"
+    >
       <div
         v-if="open"
         class="lw-theme ui-sheet-root fixed inset-0 flex flex-col justify-end"
@@ -154,6 +158,7 @@ onBeforeUnmount(() => {
 .ui-sheet-enter-active .ui-sheet-panel,
 .ui-sheet-leave-active .ui-sheet-panel {
   transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
 .ui-sheet-enter-from .ui-sheet-mask,
@@ -163,7 +168,7 @@ onBeforeUnmount(() => {
 
 .ui-sheet-enter-from .ui-sheet-panel,
 .ui-sheet-leave-to .ui-sheet-panel {
-  transform: translateY(100%);
+  transform: translate3d(0, 100%, 0);
 }
 
 @media (min-width: 768px) {
@@ -176,7 +181,7 @@ onBeforeUnmount(() => {
 
   .ui-sheet-center-md.ui-sheet-enter-from .ui-sheet-panel,
   .ui-sheet-center-md.ui-sheet-leave-to .ui-sheet-panel {
-    transform: translateY(12px) scale(0.98);
+    transform: translate3d(0, 12px, 0) scale(0.98);
     opacity: 0;
   }
 }

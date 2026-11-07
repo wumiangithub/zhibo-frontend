@@ -8,6 +8,8 @@ import ElementPlus from "element-plus";
 import App from "./App.vue";
 import router from "./router";
 
+console.info(`[live-web] build time: ${__APP_BUILD_TIME__}`);
+
 const app = createApp(App);
 app.use(router);
 app.use(ElementPlus, { locale: zhCn });

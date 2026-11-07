@@ -9,6 +9,8 @@ import ElementPlus from "element-plus";
 import App from "./App.vue";
 import router from "./router";
 
+console.info(`[admin-web] build time: ${__APP_BUILD_TIME__}`);
+
 const app = createApp(App);
 app.use(createPinia());
 app.use(router);

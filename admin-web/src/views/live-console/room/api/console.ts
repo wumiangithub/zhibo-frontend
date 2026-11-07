@@ -3,7 +3,7 @@
  * 对照 live-web 观看：`/watch/summary` + `/watch/sdk-sign`；名单/走势/审核页原 watch 路径已删。
  */
 import type { LiveProvider } from "../live/types";
-import { get } from "@/api/http";
+import { get, post } from "@/api/http";
 
 /** 后端只下发签名/init 鉴权；脚本 CDN 由适配器按 provider 加载 */
 export interface SdkInitPayload {
@@ -148,4 +148,65 @@ export function fetchChatFilterPageUrl(
   return get<ChatFilterData>(`/activities/chat-filter/${encodeURIComponent(id)}`, {
     params: Object.keys(params).length ? params : undefined,
   });
+}
+
+/** D113 发券落库响应（成功后再 sendCustomEvent） */
+export interface ConsoleSendCouponBody {
+  couponId: number;
+  couponNo: string;
+  couponName: string;
+  couponAmount: string;
+  couponStartDate: string;
+  couponEndDate: string;
+  allSku?: boolean;
+  deptNames?: string[];
+  skuNames?: string[];
+}
+
+export interface ConsoleSendCouponResult {
+  commentId: number;
+  couponId: number;
+  couponNo: string;
+  couponName: string;
+  couponAmount: string;
+  couponStartDate: string;
+  couponEndDate: string;
+  employeeId: number;
+  nickname: string;
+  deptId?: number;
+  deptName?: string;
+  commentTime: string;
+}
+
+export interface ConsoleCouponHistoryItem {
+  id: number;
+  senderName: string;
+  timestamp: number;
+  couponId: number;
+  couponNo?: string;
+  couponName: string;
+  couponAmount: string;
+  couponStartDate?: string;
+  couponEndDate?: string;
+  employeeId?: number;
+  deptId?: number;
+  deptName?: string;
+}
+
+export interface ConsoleCouponHistoryData {
+  total: number;
+  list: ConsoleCouponHistoryItem[];
+}
+
+export function sendConsoleCoupon(activityId: string, body: ConsoleSendCouponBody) {
+  return post<ConsoleSendCouponResult>(
+    `/activities/console/coupons/send/${encodeURIComponent(activityId)}`,
+    body,
+  );
+}
+
+export function listConsoleCouponHistory(activityId: string) {
+  return get<ConsoleCouponHistoryData>(
+    `/activities/console/coupon-history/${encodeURIComponent(activityId)}`,
+  );
 }
