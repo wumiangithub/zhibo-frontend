@@ -32,9 +32,9 @@ const emit = defineEmits<{
     <div class="px-4 py-2">
       <div
         v-if="loading"
-        class="flex flex-col items-center justify-center gap-3 py-14 text-gray-400"
+        class="flex flex-col items-center justify-center gap-3 py-14 text-[var(--lw-text-muted)]"
       >
-        <span class="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300" />
+        <span class="h-6 w-6 animate-spin rounded-full border-2 border-[var(--lw-border-strong)] border-t-[var(--lw-text-secondary)]" />
         <p class="text-sm">
           加载中…
         </p>
@@ -51,10 +51,10 @@ const emit = defineEmits<{
 
       <div
         v-else-if="products.length === 0"
-        class="flex flex-col items-center justify-center gap-3 py-14 text-gray-500"
+        class="flex flex-col items-center justify-center gap-3 py-14 text-[var(--lw-text-secondary)]"
       >
         <span
-          class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-gray-500"
+          class="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--lw-bg-elevated)] text-[var(--lw-text-muted)]"
           aria-hidden="true"
         >
           <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,7 +68,7 @@ const emit = defineEmits<{
 
       <ul
         v-else
-        class="m-0 list-none divide-y divide-white/5 p-0"
+        class="m-0 list-none divide-y divide-[var(--lw-border)] p-0"
       >
         <li
           v-for="(item, idx) in products"
@@ -76,7 +76,7 @@ const emit = defineEmits<{
           class="flex items-stretch gap-3 py-3"
         >
           <!-- 封面居左 -->
-          <div class="relative h-[76px] w-[76px] flex-none overflow-hidden rounded-xl bg-[#2a3140]">
+          <div class="relative h-[76px] w-[76px] flex-none overflow-hidden rounded-xl bg-[var(--lw-bg-elevated)]">
             <img
               v-if="item.coverImg"
               :src="item.coverImg"
@@ -86,7 +86,7 @@ const emit = defineEmits<{
             >
             <div
               v-else
-              class="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-[#2f3645] to-[#232833] text-gray-500"
+              class="flex h-full w-full flex-col items-center justify-center gap-1 bg-[var(--lw-bg-elevated)] text-[var(--lw-text-muted)]"
               aria-hidden="true"
             >
               <svg class="h-7 w-7 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,7 +97,7 @@ const emit = defineEmits<{
                   d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              <span class="text-[10px] tracking-wide text-gray-500">暂无封面</span>
+              <span class="text-[10px] tracking-wide">暂无封面</span>
             </div>
             <span
               class="absolute left-1 top-1 flex h-4 min-w-4 items-center justify-center rounded bg-black/55 px-1 text-[10px] font-medium tabular-nums text-white/90"
@@ -108,7 +108,7 @@ const emit = defineEmits<{
 
           <!-- 中间：标题 + 价格 -->
           <div class="flex min-w-0 flex-1 flex-col justify-between py-0.5">
-            <p class="line-clamp-2 text-[15px] font-medium leading-5 text-white/95">
+            <p class="line-clamp-2 text-[15px] font-medium leading-5 text-[var(--lw-text-primary)]">
               {{ item.productName || '未命名商品' }}
             </p>
             <p

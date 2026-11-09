@@ -17,13 +17,6 @@ interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
 
-declare module "vue-router" {
-  interface RouteMeta {
-    /** 观众 H5 壳：无 access 则去 /login */
-    requiresViewer?: boolean;
-  }
-}
-
 interface VhallSdkOptions {
   app_key: string;
   signedat: string;

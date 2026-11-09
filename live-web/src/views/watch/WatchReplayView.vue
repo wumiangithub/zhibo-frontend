@@ -13,6 +13,7 @@ import { useReplayWatch } from "@/composables/useReplayWatch";
 import { useChatHistory } from "@/composables/useChatHistory";
 import { useWatchCart } from "@/composables/useWatchCart";
 import { useWatchCoupons } from "@/composables/useWatchCoupons";
+import { useWatchTheme } from "@/composables/useWatchTheme";
 import {
   isViewerAuthQueryKey,
   readNicknameFromSearch,
@@ -27,6 +28,7 @@ const router = useRouter();
 /** 小程序 web-view 已有原生顶栏，不再叠一层返回 Header */
 const inMiniProgram = isLikelyMiniProgramWebView();
 
+const { theme } = useWatchTheme();
 const activityId = computed(() => String(route.params.id ?? ""));
 const recordIdParam = computed(() => {
   const raw = route.query.recordId;
@@ -165,7 +167,7 @@ onMounted(() => {
 <template>
   <div
     class="lw-theme flex h-dvh flex-col bg-[var(--lw-bg-canvas)] text-[var(--lw-text-primary)]"
-    data-lw-theme="dark"
+    :data-lw-theme="theme"
   >
     <UiPageHeader
       v-if="!inMiniProgram"
@@ -176,7 +178,7 @@ onMounted(() => {
     <div class="flex min-h-0 flex-1 flex-col">
       <p
         v-if="loading"
-        class="py-16 text-center text-sm text-gray-400"
+        class="py-16 text-center text-sm text-[var(--lw-text-secondary)]"
       >
         加载中…
       </p>
@@ -184,12 +186,12 @@ onMounted(() => {
         v-else-if="error"
         class="flex flex-col items-center gap-4 px-6 py-16 text-center"
       >
-        <p class="text-sm text-amber-400">
+        <p class="text-sm text-[var(--lw-color-warning)]">
           {{ error }}
         </p>
         <button
           type="button"
-          class="rounded-lg bg-gray-800 px-4 py-2 text-sm hover:bg-gray-700"
+          class="rounded-lg bg-[var(--lw-bg-elevated)] px-4 py-2 text-sm text-[var(--lw-text-primary)] hover:opacity-90"
           @click="goBackToWatch"
         >
           返回直播间

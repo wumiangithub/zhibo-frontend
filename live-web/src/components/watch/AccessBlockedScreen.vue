@@ -23,8 +23,8 @@ defineProps<{
   min-height: 60dvh;
   padding: 24px 16px;
   text-align: center;
-  color: #fff;
-  background: #111;
+  color: var(--lw-text-primary);
+  background: var(--lw-bg-canvas);
 }
 .blocked h2 {
   margin: 0 0 10px;
@@ -34,7 +34,7 @@ defineProps<{
 .blocked p {
   margin: 0;
   font-size: 14px;
-  color: #aaa;
+  color: var(--lw-text-secondary);
   line-height: 1.6;
   max-width: 320px;
 }

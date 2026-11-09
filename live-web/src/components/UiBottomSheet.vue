@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, watch } from "vue";
+import { useWatchTheme } from "@/composables/useWatchTheme";
 
 const props = withDefaults(
   defineProps<{
@@ -29,6 +30,7 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{ close: [] }>();
+const { theme } = useWatchTheme();
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key === "Escape") emit("close");
@@ -59,7 +61,7 @@ onBeforeUnmount(() => {
       <div
         v-if="open"
         class="lw-theme ui-sheet-root fixed inset-0 flex flex-col justify-end"
-        data-lw-theme="dark"
+        :data-lw-theme="theme"
         :class="[
           zIndexClass,
           centerOnDesktop ? 'ui-sheet-center-md md:items-center md:justify-center' : '',
@@ -67,12 +69,12 @@ onBeforeUnmount(() => {
       >
         <button
           type="button"
-          class="ui-sheet-mask absolute inset-0 bg-black/60"
+          class="ui-sheet-mask absolute inset-0 bg-[var(--lw-bg-overlay)]"
           aria-label="关闭"
           @click="emit('close')"
         />
         <div
-          class="ui-sheet-panel relative flex w-full flex-col rounded-t-2xl bg-[var(--lw-bg-panel)] text-[var(--lw-text-primary)] shadow-xl"
+          class="ui-sheet-panel relative flex w-full flex-col rounded-t-2xl bg-[var(--lw-bg-chrome)] text-[var(--lw-text-primary)] shadow-xl"
           :class="[
             maxHeightClass,
             centerOnDesktop
@@ -88,18 +90,18 @@ onBeforeUnmount(() => {
             class="flex flex-none justify-center pt-2.5 pb-0.5"
             aria-hidden="true"
           >
-            <span class="h-1 w-9 rounded-full bg-gray-600" />
+            <span class="h-1 w-9 rounded-full bg-[var(--lw-border-strong)]" />
           </div>
 
           <slot name="header">
             <div
               v-if="title || showClose"
-              class="flex flex-none items-center border-b border-gray-800/80 px-4 py-3"
+              class="flex flex-none items-center border-b border-[var(--lw-border)] px-4 py-3"
               :class="showHandle ? 'relative justify-center' : 'justify-between'"
             >
               <h2
                 v-if="title"
-                class="text-[15px] font-semibold tracking-wide text-gray-100"
+                class="text-[15px] font-semibold tracking-wide text-[var(--lw-text-primary)]"
               >
                 {{ title }}
               </h2>
@@ -110,7 +112,7 @@ onBeforeUnmount(() => {
               <button
                 v-if="showClose"
                 type="button"
-                class="flex h-8 w-8 flex-none items-center justify-center rounded-full text-white transition-colors hover:bg-white/5"
+                class="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[var(--lw-text-secondary)] transition-colors hover:bg-[var(--lw-bg-elevated)] hover:text-[var(--lw-text-primary)]"
                 :class="showHandle ? 'absolute right-2 top-1/2 -translate-y-1/2' : ''"
                 aria-label="关闭"
                 @click="emit('close')"
@@ -139,7 +141,7 @@ onBeforeUnmount(() => {
 
           <div
             v-if="$slots.footer"
-            class="flex-none border-t border-gray-800"
+            class="flex-none border-t border-[var(--lw-border)]"
           >
             <slot name="footer" />
           </div>

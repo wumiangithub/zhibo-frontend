@@ -86,15 +86,19 @@ export function ensureWxJsSdk(): Promise<WxGlobal | null> {
   return ensureWxJsSdkPromise;
 }
 
-/** 粗判是否在小程序 web-view（不必等 JS-SDK）。 */
+/**
+ * 同步粗判是否在小程序 web-view（不必等 JS-SDK）。
+ * 对齐官方文档 https://developers.weixin.qq.com/miniprogram/dev/component/web-view.html ：
+ * - `window.__wxjs_environment === "miniprogram"`（建议 WeixinJSBridgeReady 后再读；此处作首屏粗判）
+ * - UA 含 `miniProgram`（微信 ≥ 7.0.0）
+ * 异步准判用 `wx.miniProgram.getEnv`（须先 ensureWxJsSdk）。
+ * 禁止用 `wx.miniProgram.navigateTo` 是否存在：同源注入的 jweixin 在普通浏览器也会挂上该 API。
+ * 细则见 zhibo-shared/docs/小程序web-view.md
+ */
 export function isLikelyMiniProgramWebView(): boolean {
   try {
-    const w = window as unknown as {
-      __wxjs_environment?: string;
-      wx?: { miniProgram?: { navigateTo?: unknown } };
-    };
+    const w = window as unknown as { __wxjs_environment?: string };
     if (w.__wxjs_environment === "miniprogram") return true;
-    if (typeof w.wx?.miniProgram?.navigateTo === "function") return true;
     return /miniProgram/i.test(navigator.userAgent || "");
   } catch {
     return false;

@@ -58,7 +58,7 @@ const emit = defineEmits<{
       <img
         :src="couponFloatUrl"
         alt=""
-        class="h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]"
+        class="float-icon h-12 w-12 object-contain"
         draggable="false"
       >
     </button>
@@ -74,12 +74,12 @@ const emit = defineEmits<{
       <img
         :src="cartYellowUrl"
         alt=""
-        class="h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]"
+        class="float-icon h-12 w-12 object-contain"
         draggable="false"
       >
     </button>
 
-    <div class="flex flex-none items-center gap-2 border-t border-[var(--lw-border)] px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] md:hidden">
+    <div class="flex flex-none items-center gap-2 border-t border-[var(--lw-border)] bg-[var(--lw-bg-chrome)] px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] md:hidden">
       <button
         type="button"
         class="min-w-0 flex-1 rounded-full bg-[var(--lw-bg-elevated)] px-3 py-2 text-left text-sm text-[var(--lw-text-muted)]"
@@ -107,3 +107,9 @@ const emit = defineEmits<{
     </div>
   </div>
 </template>
+
+<style scoped>
+.float-icon {
+  filter: var(--lw-float-icon-filter);
+}
+</style>

@@ -27,10 +27,10 @@ const emit = defineEmits<{
       >
         <button
           type="button"
-          class="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-gray-800/80 active:bg-gray-800"
+          class="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-[var(--lw-bg-elevated)] active:bg-[var(--lw-bg-elevated)]"
           @click="emit('select', row)"
         >
-          <div class="h-14 w-24 flex-none overflow-hidden rounded-md bg-gray-800">
+          <div class="h-14 w-24 flex-none overflow-hidden rounded-md bg-[var(--lw-bg-elevated)]">
             <img
               v-if="row.coverUrl"
               :src="row.coverUrl"
@@ -39,10 +39,10 @@ const emit = defineEmits<{
             >
           </div>
           <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-white">
+            <p class="truncate text-sm font-medium text-[var(--lw-text-primary)]">
               {{ row.title || `回放 ${row.id}` }}
             </p>
-            <p class="mt-1 text-xs text-gray-400">
+            <p class="mt-1 text-xs text-[var(--lw-text-secondary)]">
               <span v-if="row.duration">{{ row.duration }}</span>
               <span
                 v-if="row.duration && row.createdTime"

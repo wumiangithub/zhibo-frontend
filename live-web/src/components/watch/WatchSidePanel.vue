@@ -80,31 +80,46 @@ function onChatListScroll(e: Event) {
 
 <template>
   <div class="flex min-h-0 w-full flex-1 flex-col border-t border-[var(--lw-border)] bg-[var(--lw-bg-panel)] md:w-[360px] md:flex-none md:border-l md:border-t-0">
-    <div class="flex flex-none border-b border-[var(--lw-border)]">
+    <div class="side-tabs flex flex-none border-b border-[var(--lw-border)] bg-[var(--lw-bg-chrome)]">
       <button
         type="button"
-        class="flex-1 bg-transparent px-4 py-3 text-sm font-medium md:flex-1"
-        :class="activeTab === 'chat' ? 'border-b-2 border-[var(--lw-color-primary)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
+        class="side-tab"
+        :class="{ 'is-active': activeTab === 'chat' }"
         @click="activeTab = 'chat'"
       >
         聊天
+        <span
+          v-if="activeTab === 'chat'"
+          class="side-tab-line"
+          aria-hidden="true"
+        />
       </button>
       <button
         v-if="!isReplay && barrage"
         type="button"
-        class="hidden bg-transparent px-4 py-3 text-sm font-medium md:block md:flex-1"
-        :class="activeTab === 'barrage' ? 'border-b-2 border-[var(--lw-color-primary)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
+        class="side-tab side-tab--pc-only"
+        :class="{ 'is-active': activeTab === 'barrage' }"
         @click="activeTab = 'barrage'"
       >
         弹幕
+        <span
+          v-if="activeTab === 'barrage'"
+          class="side-tab-line"
+          aria-hidden="true"
+        />
       </button>
       <button
         type="button"
-        class="flex-1 bg-transparent px-4 py-3 text-sm font-medium"
-        :class="activeTab === 'intro' ? 'border-b-2 border-[var(--lw-color-primary)] text-[var(--lw-text-primary)]' : 'text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]'"
+        class="side-tab"
+        :class="{ 'is-active': activeTab === 'intro' }"
         @click="activeTab = 'intro'"
       >
         简介
+        <span
+          v-if="activeTab === 'intro'"
+          class="side-tab-line"
+          aria-hidden="true"
+        />
       </button>
     </div>
 
@@ -141,3 +156,46 @@ function onChatListScroll(e: Event) {
     />
   </div>
 </template>
+
+<style scoped>
+.side-tabs {
+  height: 44px;
+  padding: 0 8px;
+}
+.side-tab {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+  color: var(--lw-text-secondary);
+  cursor: pointer;
+}
+.side-tab.is-active {
+  color: var(--lw-text-primary);
+  font-weight: 600;
+}
+.side-tab--pc-only {
+  display: none;
+}
+@media (min-width: 768px) {
+  .side-tab--pc-only {
+    display: flex;
+  }
+}
+.side-tab-line {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--lw-color-primary);
+  transform: translateX(-50%);
+}
+</style>

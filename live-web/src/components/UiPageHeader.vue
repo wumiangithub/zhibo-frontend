@@ -17,12 +17,12 @@ const emit = defineEmits<{ back: [] }>();
 
 <template>
   <header
-    class="page-header relative flex flex-none items-center justify-center border-b border-white/10 bg-black text-white"
+    class="page-header relative flex flex-none items-center justify-center border-b border-[var(--lw-border)] bg-[var(--lw-bg-panel)] text-[var(--lw-text-primary)]"
   >
     <button
       v-if="showBack"
       type="button"
-      class="page-header__back absolute bottom-0 left-1 z-10 inline-flex items-center gap-0.5 rounded-md bg-transparent py-1.5 pl-1 pr-2 text-sm text-white/80 hover:bg-white/10 hover:text-white"
+      class="page-header__back absolute bottom-0 left-1 z-10 inline-flex items-center gap-0.5 rounded-md bg-transparent py-1.5 pl-1 pr-2 text-sm text-[var(--lw-text-secondary)] hover:bg-[var(--lw-bg-elevated)] hover:text-[var(--lw-text-primary)]"
       aria-label="返回"
       @click="emit('back')"
     >

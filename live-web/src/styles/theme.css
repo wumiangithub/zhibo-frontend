@@ -1,12 +1,12 @@
 /**
  * live-web 观众观看主题 token（仅观看直播 / 回放 / 预告 / 结束）
- * 挂载点：根节点 class="lw-theme"（可加 data-lw-theme="dark"|"light"）
+ * 挂载点：根节点 class="lw-theme"（data-lw-theme="dark"|"light"）
  * Teleport 弹层同步加 lw-theme，否则变量传不进去。
  * 约定见 docs/设计规范.md「live-web」
  *
  * 前缀 --lw-，避免与 admin-web --color-* 冲突。
  * 首页 / 中控台壳 / 课程等不要挂 lw-theme。
- * 当前只实现 dark；light 占位。
+ * 默认 light（白天）；观众可在播放器工具栏切换，localStorage key=lw-watch-theme。
  */
 
 .lw-theme,
@@ -16,18 +16,21 @@
   --lw-color-brand-hover: #e85d32;
   --lw-color-brand-muted: rgba(255, 106, 61, 0.22);
 
-  /* —— 功能主色（发送 / Tab / 主持人角标 / 提问勾选；对齐 admin --color-primary） —— */
-  --lw-color-primary: #2f54eb;
-  --lw-color-primary-hover: #1d39c4;
-  --lw-color-primary-muted: rgba(47, 84, 235, 0.28);
+  /* —— 功能主色（发送 / Tab / 提问；暗底用稍亮、略降饱和，少扎眼） —— */
+  --lw-color-primary: #5b8cff;
+  --lw-color-primary-hover: #4c7dff;
+  --lw-color-primary-muted: rgba(91, 140, 255, 0.18);
 
   /* —— 表面分层（深 → 浅） —— */
   --lw-bg-canvas: #0b0d12;
-  --lw-bg-panel: #12151c;
-  --lw-bg-elevated: #1c212b;
-  --lw-bg-bubble: #2a303c;
+  --lw-bg-panel: #141821;
+  --lw-bg-chrome: #1a1f2a;
+  --lw-bg-elevated: #222836;
+  --lw-bg-bubble: #2a3140;
   --lw-bg-player: #000000;
   --lw-bg-overlay: rgba(0, 0, 0, 0.7);
+  --lw-bubble-shadow: none;
+  --lw-bubble-border: rgba(255, 255, 255, 0.04);
 
   /* —— 边框 —— */
   --lw-border: #2a3140;
@@ -58,20 +61,59 @@
   --lw-color-danger-muted: rgba(245, 34, 45, 0.2);
   --lw-color-success: #22c55e;
   --lw-color-warning: #fbbf24;
+
+  /* 小黄车 / 券悬浮图：暗底要投影，白底收掉避免脏边 */
+  --lw-float-icon-filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
 }
 
 /*
- * 白天主题待实现（仅 .lw-theme）：
- *
- * .lw-theme[data-lw-theme="light"] {
- *   --lw-bg-canvas: #f5f6f8;
- *   --lw-bg-panel: #ffffff;
- *   --lw-bg-elevated: #f0f1f3;
- *   --lw-bg-bubble: #f3f4f6;
- *   --lw-bg-player: #000000;
- *   --lw-border: #e5e7eb;
- *   --lw-text-primary: rgba(17, 24, 39, 0.92);
- *   --lw-text-secondary: rgba(17, 24, 39, 0.55);
- *   --lw-text-muted: rgba(17, 24, 39, 0.38);
- * }
+ * 白天：对齐常见直播 H5——聊天区浅灰底、气泡/Tab/底栏纯白分层，勿整页死白。
+ * 播放器舞台仍黑底。
  */
+.lw-theme[data-lw-theme="light"] {
+  --lw-color-brand: #ff6a3d;
+  --lw-color-brand-hover: #e85d32;
+  --lw-color-brand-muted: rgba(255, 106, 61, 0.14);
+
+  /* 白天主色比暗色壳的 #2f54eb 更柔，少抢聊天内容 */
+  --lw-color-primary: #4c7dff;
+  --lw-color-primary-hover: #3b6aef;
+  --lw-color-primary-muted: rgba(76, 125, 255, 0.12);
+
+  --lw-bg-canvas: #e8ecf2;
+  --lw-bg-panel: #f5f7fa;
+  --lw-bg-chrome: #ffffff;
+  --lw-bg-elevated: #eef1f6;
+  --lw-bg-bubble: #ffffff;
+  --lw-bg-player: #000000;
+  --lw-bg-overlay: rgba(15, 23, 42, 0.4);
+  --lw-bubble-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --lw-bubble-border: #eef0f4;
+
+  --lw-border: #e8ecf1;
+  --lw-border-strong: #d5dbe6;
+
+  --lw-text-primary: #1f2329;
+  --lw-text-secondary: #8a9199;
+  --lw-text-muted: #b0b7c0;
+  --lw-text-on-brand: #ffffff;
+
+  --lw-color-host-badge: var(--lw-color-primary);
+  --lw-color-host-muted: var(--lw-color-primary-muted);
+  --lw-color-assistant: #d48806;
+  --lw-color-assistant-muted: rgba(212, 136, 6, 0.12);
+  --lw-color-guest: #722ed1;
+  --lw-color-guest-muted: rgba(114, 46, 209, 0.1);
+  --lw-color-ask: var(--lw-color-primary);
+  --lw-color-ask-muted: var(--lw-color-primary-muted);
+  --lw-color-like: #fa8c16;
+  --lw-color-like-badge: #ff6a3d;
+
+  --lw-color-live: #ef4444;
+  --lw-color-danger: #f5222d;
+  --lw-color-danger-muted: rgba(245, 34, 45, 0.1);
+  --lw-color-success: #52c41a;
+  --lw-color-warning: #faad14;
+
+  --lw-float-icon-filter: drop-shadow(0 2px 8px rgba(15, 23, 42, 0.1));
+}

@@ -5,6 +5,9 @@ import type { BarrageController } from "@/composables/useBarrage";
 import type { RoomStatsController } from "@/composables/useRoomStats";
 import UiBottomSheet from "@/components/UiBottomSheet.vue";
 import SheetOptionList from "@/components/SheetOptionList.vue";
+import { useWatchTheme } from "@/composables/useWatchTheme";
+
+const { isLight, toggleTheme } = useWatchTheme();
 
 const props = defineProps<{
   player: PlayerController;
@@ -466,6 +469,46 @@ onBeforeUnmount(() => {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.601 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
         </svg>
         <span class="text-xs">{{ stats.likeCount }}</span>
+      </button>
+
+      <button
+        type="button"
+        class="bar-btn"
+        :title="isLight ? '切换到夜间' : '切换到白天'"
+        :aria-label="isLight ? '切换到夜间' : '切换到白天'"
+        @click="toggleTheme"
+      >
+        <!-- light：月亮（切夜间）；dark：太阳（切白天） -->
+        <svg
+          v-if="isLight"
+          class="bar-icon"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"
+          />
+        </svg>
+        <svg
+          v-else
+          class="bar-icon"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.364 6.364l-1.414-1.414M7.05 7.05L5.636 5.636m12.728 0L16.95 7.05M7.05 16.95l-1.414 1.414M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+          />
+        </svg>
       </button>
 
       <button

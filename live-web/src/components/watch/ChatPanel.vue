@@ -85,11 +85,8 @@ function roleBadge(msg: ChatMessage): string | undefined {
   return vhallChatRoleBadge(msg.role_name);
 }
 
-function nameClass(msg: ChatMessage): string {
-  // 昵称一律主文字白；身份颜色只放在角标上。观众次级字色
-  if (msg.role_name === 1 || msg.role_name === 3 || msg.role_name === 4) {
-    return "text-[var(--lw-text-primary)]";
-  }
+function nameClass(_msg: ChatMessage): string {
+  // 昵称统一次级字色；身份只靠角标区分（对齐白天参考稿）
   return "text-[var(--lw-text-secondary)]";
 }
 
@@ -218,7 +215,7 @@ function onChatInputUpdate(value: string) {
       <img
         :src="couponFloatUrl"
         alt=""
-        class="h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]"
+        class="float-icon h-12 w-12 object-contain"
         draggable="false"
       >
     </button>
@@ -234,7 +231,7 @@ function onChatInputUpdate(value: string) {
       <img
         :src="cartYellowUrl"
         alt=""
-        class="h-12 w-12 object-contain drop-shadow-[0_4px_10px_rgba(0,0,0,0.45)]"
+        class="float-icon h-12 w-12 object-contain"
         draggable="false"
       >
     </button>
@@ -273,10 +270,9 @@ function onChatInputUpdate(value: string) {
         >
           {{ messageShowTimes[idx] }}
         </div>
-        <div class="mb-3 flex gap-2">
+        <div class="mb-3.5 flex gap-2.5">
           <div
-            class="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--lw-bg-elevated)] text-[13px] font-semibold"
-            :class="nameClass(msg)"
+            class="chat-avatar flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-semibold"
           >
             <img
               v-if="avatarSrc(msg)"
@@ -305,7 +301,7 @@ function onChatInputUpdate(value: string) {
               </span>
               <span
                 v-if="msg.kind === 'question'"
-                class="flex-none rounded bg-[var(--lw-color-ask-muted)] px-1.5 py-0.5 text-[10px] leading-4 text-[var(--lw-color-ask)]"
+                class="ask-chip"
               >
                 问
               </span>
@@ -339,10 +335,10 @@ function onChatInputUpdate(value: string) {
                 <span class="msg-coupon-claim">领取</span>
               </div>
             </button>
-            <!-- 同一暗色气泡：上引用（竖条+浅灰小字）/ 下正文（更大更白），非分离卡片 -->
+            <!-- 气泡：普通聊天；提问则气泡内「提问」角标 + 正文加粗加深 -->
             <div
               v-if="msg.reply || msg.msg?.trim() || msg.answer"
-              class="mt-1 inline-block max-w-full rounded-[14px] bg-[var(--lw-bg-bubble)] px-3 py-2.5"
+              class="chat-bubble mt-1.5 inline-block max-w-full rounded-[10px] bg-[var(--lw-bg-bubble)] px-3 py-2.5"
             >
               <div
                 v-if="msg.reply"
@@ -356,18 +352,25 @@ function onChatInputUpdate(value: string) {
               </div>
               <div
                 v-if="msg.msg?.trim()"
-                class="break-words text-[14px] leading-5 text-[var(--lw-text-primary)]"
+                class="chat-msg-body break-words text-[14px] leading-5"
+                :class="msg.kind === 'question' ? 'chat-msg-ask' : 'chat-msg-normal'"
               >
-                <template v-for="(seg, segIdx) in splitEmojiText(msg.msg)" :key="segIdx">
-                  <img
-                    v-if="seg.kind === 'emoji'"
-                    :src="seg.src"
-                    :alt="seg.name"
-                    :title="seg.name"
-                    class="inline-block h-5 w-5 align-text-bottom"
-                  >
-                  <span v-else>{{ seg.value }}</span>
-                </template>
+                <span
+                  v-if="msg.kind === 'question'"
+                  class="ask-tag"
+                >提问</span>
+                <span class="chat-msg-text">
+                  <template v-for="(seg, segIdx) in splitEmojiText(msg.msg)" :key="segIdx">
+                    <img
+                      v-if="seg.kind === 'emoji'"
+                      :src="seg.src"
+                      :alt="seg.name"
+                      :title="seg.name"
+                      class="inline-block h-5 w-5 align-text-bottom"
+                    >
+                    <span v-else>{{ seg.value }}</span>
+                  </template>
+                </span>
               </div>
               <div
                 v-if="questionAnswerText(msg)"
@@ -402,7 +405,7 @@ function onChatInputUpdate(value: string) {
     </div>
 
     <!-- PC 输入栏（回放展示禁用态） -->
-    <div class="hidden flex-none border-t border-[var(--lw-border)] p-3 md:block">
+    <div class="hidden flex-none border-t border-[var(--lw-border)] bg-[var(--lw-bg-chrome)] p-3 md:block">
       <ChatComposerBar
         ref="pcComposerRef"
         variant="pc"
@@ -422,7 +425,7 @@ function onChatInputUpdate(value: string) {
     </div>
 
     <!-- 小屏底栏（小黄车已改为悬浮；回放同外观但禁用） -->
-    <div class="flex flex-none items-center gap-2 border-t border-[var(--lw-border)] bg-[var(--lw-bg-panel)] px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] md:hidden">
+    <div class="flex flex-none items-center gap-2 border-t border-[var(--lw-border)] bg-[var(--lw-bg-chrome)] px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] md:hidden">
       <ChatComposerBar
         ref="mobileComposerRef"
         variant="mobile"
@@ -458,18 +461,20 @@ function onChatInputUpdate(value: string) {
           v-model="chat.verifyInput"
           type="text"
           placeholder="输入任意内容..."
-          class="mb-4 w-full rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-green-500 focus:outline-none"
+          class="mb-4 w-full rounded-md border border-[var(--lw-border-strong)] bg-[var(--lw-bg-panel)] px-3 py-2 text-sm text-[var(--lw-text-primary)] placeholder:text-[var(--lw-text-muted)] focus:border-[var(--lw-color-primary)] focus:outline-none"
           @keyup.enter="chat.completeVerify(resolveInputEl())"
-        />
+        >
         <div class="flex justify-end gap-2">
           <button
-            class="rounded-md bg-transparent px-4 py-2 text-sm text-gray-400 hover:text-white"
+            type="button"
+            class="rounded-md bg-transparent px-4 py-2 text-sm text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]"
             @click="chat.showVerifyDialog = false"
           >
             取消
           </button>
           <button
-            class="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+            type="button"
+            class="rounded-md bg-[var(--lw-color-primary)] px-4 py-2 text-sm font-medium text-[var(--lw-text-on-brand)] hover:bg-[var(--lw-color-primary-hover)] disabled:opacity-50"
             :disabled="!chat.verifyInput.trim()"
             @click="chat.completeVerify(resolveInputEl())"
           >
@@ -482,6 +487,69 @@ function onChatInputUpdate(value: string) {
 </template>
 
 <style scoped>
+.float-icon {
+  filter: var(--lw-float-icon-filter);
+}
+
+.chat-avatar {
+  background: var(--lw-bg-elevated);
+  color: var(--lw-text-secondary);
+}
+
+.chat-bubble {
+  border: 1px solid var(--lw-bubble-border);
+  box-shadow: var(--lw-bubble-shadow);
+}
+
+.chat-msg-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.chat-msg-text {
+  min-width: 0;
+  flex: 1;
+  /* 与 leading-5（20px）对齐，标签同高垂直居中首行 */
+  line-height: 20px;
+}
+
+.chat-msg-normal {
+  color: var(--lw-text-primary);
+  font-weight: 400;
+}
+
+.chat-msg-ask {
+  /* 比普通消息略重即可，勿纯黑加粗抢戏 */
+  color: var(--lw-text-primary);
+  font-weight: 500;
+}
+
+.ask-chip {
+  flex: none;
+  border-radius: 4px;
+  padding: 1px 6px;
+  background: var(--lw-color-ask-muted);
+  color: var(--lw-color-ask);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.ask-tag {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--lw-color-ask-muted);
+  color: var(--lw-color-ask);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
 .msg-coupon {
   display: flex;
   align-items: stretch;

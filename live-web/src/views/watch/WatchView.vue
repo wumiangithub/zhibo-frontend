@@ -25,6 +25,7 @@ import { useWatchSession } from "@/composables/useWatchSession";
 import { useWatchAccessGate } from "@/composables/useWatchAccessGate";
 import { useWatchCart } from "@/composables/useWatchCart";
 import { useWatchCoupons } from "@/composables/useWatchCoupons";
+import { useWatchTheme } from "@/composables/useWatchTheme";
 import { decodeAudienceInviteToken } from "@/utils/audienceInviteToken";
 import { pingViewerPresence } from "@/api/presence";
 import {
@@ -49,6 +50,7 @@ const id = String(route.params.id);
 const courseContextId = String(route.query.courseId ?? "").trim().toLowerCase();
 const courseLessonNodeId = Number(route.query.lessonNodeId);
 const { toast } = useToast();
+const { theme } = useWatchTheme();
 const {
   cartOpen,
   cartLoading,
@@ -373,11 +375,10 @@ onMounted(() => {
 <template>
   <div
     class="lw-theme flex h-dvh flex-col bg-[var(--lw-bg-canvas)] text-[var(--lw-text-primary)]"
-    data-lw-theme="dark"
+    :data-lw-theme="theme"
   >
     <UiPageHeader
       v-if="!inMiniProgram"
-      class="md:hidden"
       :title="data?.title || '直播'"
       @back="goBackFromWatch"
     />
@@ -399,7 +400,7 @@ onMounted(() => {
 
         <div
           v-else-if="accessChecking || (passwordOpen && !data)"
-          class="flex flex-1 items-center justify-center text-sm text-gray-400"
+          class="flex flex-1 items-center justify-center text-sm text-[var(--lw-text-secondary)]"
         >
           {{ accessChecking ? "校验观看权限…" : "请输入观看密码" }}
         </div>
@@ -425,7 +426,7 @@ onMounted(() => {
           <button
             v-else
             type="button"
-            class="rounded bg-gray-700 px-2.5 py-1 text-white hover:bg-gray-600 disabled:opacity-50"
+            class="rounded bg-[var(--lw-bg-elevated)] px-2.5 py-1 text-[var(--lw-text-primary)] hover:opacity-90 disabled:opacity-50"
             :disabled="devPresenceBusy"
             @click="simulatePresence('Leave')"
           >
@@ -463,16 +464,17 @@ onMounted(() => {
                 />
               </svg>
             </button>
-            <span class="flex items-center gap-1 text-xs text-gray-300">
-              <span class="h-2 w-2 rounded-full bg-green-500"></span>
+            <span class="flex items-center gap-1 text-xs text-[var(--lw-text-secondary)]">
+              <span class="h-2 w-2 rounded-full bg-[var(--lw-color-success)]"></span>
               {{ stats.onlineCount }}
             </span>
-            <p class="text-xs text-gray-400">
-              昵称：<span class="text-gray-200">{{ displayNickname }}</span>
+            <p class="text-xs text-[var(--lw-text-secondary)]">
+              昵称：<span class="text-[var(--lw-text-primary)]">{{ displayNickname }}</span>
             </p>
             <button
               v-if="!hasViewerId"
-              class="bg-transparent text-xs text-gray-500 hover:text-gray-300"
+              type="button"
+              class="bg-transparent text-xs text-[var(--lw-text-muted)] hover:text-[var(--lw-text-secondary)]"
               @click="changeNickname"
             >
               修改
@@ -482,7 +484,7 @@ onMounted(() => {
 
         <div
           v-if="loading"
-          class="flex flex-1 items-center justify-center text-sm text-gray-400"
+          class="flex flex-1 items-center justify-center text-sm text-[var(--lw-text-secondary)]"
         >
           加载中…
         </div>
@@ -494,7 +496,8 @@ onMounted(() => {
           <p class="text-sm text-[var(--lw-color-danger)]">{{ error }}</p>
           <div class="flex gap-3">
             <button
-              class="rounded-md border border-gray-600 bg-gray-800 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
+              type="button"
+              class="rounded-md border border-[var(--lw-border-strong)] bg-[var(--lw-bg-elevated)] px-4 py-2 text-sm text-[var(--lw-text-primary)] hover:opacity-90"
               @click="onRetryEnter"
             >
               重试

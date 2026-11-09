@@ -24,7 +24,7 @@ const emit = defineEmits<{
     >
       <button
         type="button"
-        class="sheet-option-item flex w-full items-center justify-center px-4 py-[14px] text-center text-[16px] leading-snug transition-colors active:bg-white/[0.06]"
+        class="sheet-option-item flex w-full items-center justify-center px-4 py-[14px] text-center text-[16px] leading-snug transition-colors active:bg-[var(--lw-bg-elevated)]"
         :class="
           opt.selected
             ? 'font-medium text-[var(--lw-text-primary)]'

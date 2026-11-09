@@ -40,9 +40,9 @@ function formatValidity(start?: string, end?: string): string {
     <div class="px-4 py-2">
       <div
         v-if="loading"
-        class="flex flex-col items-center justify-center gap-3 py-14 text-gray-400"
+        class="flex flex-col items-center justify-center gap-3 py-14 text-[var(--lw-text-muted)]"
       >
-        <span class="h-6 w-6 animate-spin rounded-full border-2 border-gray-600 border-t-gray-300" />
+        <span class="h-6 w-6 animate-spin rounded-full border-2 border-[var(--lw-border-strong)] border-t-[var(--lw-text-secondary)]" />
         <p class="text-sm">
           加载中…
         </p>
@@ -59,10 +59,10 @@ function formatValidity(start?: string, end?: string): string {
 
       <div
         v-else-if="coupons.length === 0"
-        class="flex flex-col items-center justify-center gap-3 py-14 text-gray-500"
+        class="flex flex-col items-center justify-center gap-3 py-14 text-[var(--lw-text-secondary)]"
       >
         <span
-          class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ff9a3c] to-[#e85d1c] text-lg font-bold text-white"
+          class="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ff9a3c] to-[#e85d1c] text-lg font-bold text-[var(--lw-text-on-brand)]"
           aria-hidden="true"
         >
           券
@@ -74,7 +74,7 @@ function formatValidity(start?: string, end?: string): string {
 
       <ul
         v-else
-        class="m-0 list-none divide-y divide-white/5 p-0"
+        class="m-0 list-none divide-y divide-[var(--lw-border)] p-0"
       >
         <li
           v-for="item in coupons"
