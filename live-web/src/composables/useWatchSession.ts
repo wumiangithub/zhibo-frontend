@@ -520,6 +520,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
         try {
           await fetchSignAndInit();
         } catch (e) {
+          // 鉴权失败：交给上层 refresh / 跳登录（勿在结束壳吞掉）
+          if (isViewerLoginRequiredError(e)) throw e;
           // 结束类房间偶发无法 init：仍保留结束壳，不挡「查看回放」
           if (isEndedLikeState(summary.state)) {
             console.warn("[watch] ended-like sdk init failed, keep ended shell", e);

@@ -7,21 +7,34 @@ import NativeReplayPlayer from "@/components/watch/NativeReplayPlayer.vue";
 import WatchRoomShell from "@/components/watch/WatchRoomShell.vue";
 import WatchSidePanel from "@/components/watch/WatchSidePanel.vue";
 import ProductSheet from "@/components/watch/ProductSheet.vue";
+import CheckoutSheet from "@/components/watch/CheckoutSheet.vue";
+import RiskAssessmentOverlay from "@/components/watch/RiskAssessmentOverlay.vue";
+import OrderPayOverlay from "@/components/watch/OrderPayOverlay.vue";
 import CouponSheet from "@/components/watch/CouponSheet.vue";
+import AccessPasswordDialog from "@/components/watch/AccessPasswordDialog.vue";
+import AccessBlockedScreen from "@/components/watch/AccessBlockedScreen.vue";
 import UiPageHeader from "@/components/UiPageHeader.vue";
 import { useReplayWatch } from "@/composables/useReplayWatch";
 import { useChatHistory } from "@/composables/useChatHistory";
 import { useWatchCart } from "@/composables/useWatchCart";
 import { useWatchCoupons } from "@/composables/useWatchCoupons";
 import { useWatchTheme } from "@/composables/useWatchTheme";
+import { useWatchAccessGate } from "@/composables/useWatchAccessGate";
 import {
   isViewerAuthQueryKey,
+  isViewerLoggedIn,
   readNicknameFromSearch,
   syncViewerAccessTokenFromUrl,
   syncViewerIdFromUrl,
 } from "@/utils/viewerAuth";
 import { storeNickname } from "@/api/watch";
 import { ensureWxJsSdk, isLikelyMiniProgramWebView } from "@/utils/miniProgram";
+import {
+  goViewerLogin,
+  isViewerLoginRequiredError,
+  recoverViewerAuth,
+} from "@/utils/viewerLogin";
+import { purgeOrphanUiSheets } from "@/utils/purgeUiSheets";
 
 const route = useRoute();
 const router = useRouter();
@@ -52,6 +65,18 @@ const fastForwardAllow = computed(
   () => summary.value?.playbackFastForwardAllow !== false,
 );
 
+const gate = useWatchAccessGate(() => activityId.value);
+const {
+  checking: accessChecking,
+  passwordOpen,
+  passwordSubmitting,
+  passwordError,
+  blockedTitle,
+  blockedMessage,
+  ensureAccess,
+  submitPassword,
+} = gate;
+
 const replayWatch = useReplayWatch({
   activityId: () => activityId.value,
   recordId: () => record.value?.id ?? recordIdParam.value,
@@ -71,6 +96,34 @@ const {
   openCart,
   closeCart,
   buyProduct,
+  checkoutOpen,
+  checkoutLoading,
+  checkoutError,
+  checkoutProductName,
+  checkoutCoverImg,
+  checkoutValidityText,
+  checkoutPayPriceText,
+  checkoutCoupons,
+  checkoutCouponsLoading,
+  selectedCouponUserId,
+  couponPickerOpen,
+  closeCheckout,
+  openCouponPicker,
+  closeCouponPicker,
+  selectCoupon,
+  submitCheckoutOrder,
+  checkoutSubmitting,
+  riskOpen,
+  riskSubmitting,
+  riskSubmitError,
+  pendingOrderId,
+  riskGrade,
+  riskGradeName,
+  closeRiskAssessment,
+  onRiskAnswersSubmit,
+  payOpen,
+  closePay,
+  onConfirmPay,
 } = useWatchCart(() => activityId.value);
 const {
   couponOpen,
@@ -99,6 +152,7 @@ function preservedQuery(): Record<string, string | string[]> {
 }
 
 function goBackToWatch() {
+  purgeOrphanUiSheets();
   void router.replace({
     name: "watch",
     params: { id: activityId.value },
@@ -106,7 +160,7 @@ function goBackToWatch() {
   });
 }
 
-async function load() {
+async function loadContent() {
   loading.value = true;
   error.value = "";
   record.value = null;
@@ -146,21 +200,44 @@ async function load() {
     record.value = hit;
     void chatHistory.loadFirstPage();
   } catch (e) {
+    if (isViewerLoginRequiredError(e)) {
+      await recoverViewerAuth();
+      return;
+    }
     error.value = e instanceof Error ? e.message : "加载失败";
   } finally {
     loading.value = false;
   }
 }
 
+async function enterReplay() {
+  if (!isViewerLoggedIn()) {
+    await goViewerLogin();
+    return;
+  }
+  const ok = await ensureAccess();
+  if (!ok) {
+    loading.value = false;
+    return;
+  }
+  await loadContent();
+}
+
+async function onPasswordSubmit(password: string) {
+  const ok = await submitPassword(password);
+  if (ok) await loadContent();
+}
+
 watch(
   () => [activityId.value, recordIdParam.value] as const,
   () => {
-    void load();
+    void enterReplay();
   },
 );
 
 onMounted(() => {
-  void load();
+  purgeOrphanUiSheets();
+  void enterReplay();
 });
 </script>
 
@@ -176,8 +253,21 @@ onMounted(() => {
     />
 
     <div class="flex min-h-0 flex-1 flex-col">
+      <AccessBlockedScreen
+        v-if="blockedTitle"
+        :title="blockedTitle"
+        :message="blockedMessage"
+      />
+
+      <div
+        v-else-if="accessChecking || (passwordOpen && !record)"
+        class="flex flex-1 items-center justify-center text-sm text-[var(--lw-text-secondary)]"
+      >
+        {{ accessChecking ? "校验观看权限…" : "请输入观看密码" }}
+      </div>
+
       <p
-        v-if="loading"
+        v-else-if="loading"
         class="py-16 text-center text-sm text-[var(--lw-text-secondary)]"
       >
         加载中…
@@ -227,6 +317,13 @@ onMounted(() => {
       </WatchRoomShell>
     </div>
 
+    <AccessPasswordDialog
+      :open="passwordOpen"
+      :submitting="passwordSubmitting"
+      :error="passwordError"
+      @submit="onPasswordSubmit"
+    />
+
     <ProductSheet
       :open="cartOpen"
       :loading="cartLoading"
@@ -234,6 +331,44 @@ onMounted(() => {
       :products="cartProducts"
       @close="closeCart"
       @buy="buyProduct"
+    />
+
+    <CheckoutSheet
+      :open="checkoutOpen"
+      :loading="checkoutLoading"
+      :error="checkoutError"
+      :product-name="checkoutProductName"
+      :cover-img="checkoutCoverImg"
+      :validity-text="checkoutValidityText"
+      :pay-price-text="checkoutPayPriceText"
+      :coupons="checkoutCoupons"
+      :coupons-loading="checkoutCouponsLoading"
+      :selected-coupon-user-id="selectedCouponUserId"
+      :coupon-picker-open="couponPickerOpen"
+      :submitting="checkoutSubmitting"
+      @close="closeCheckout"
+      @open-coupons="openCouponPicker"
+      @close-coupons="closeCouponPicker"
+      @select-coupon="selectCoupon"
+      @submit="submitCheckoutOrder"
+    />
+
+    <RiskAssessmentOverlay
+      :open="riskOpen"
+      :submitting="riskSubmitting"
+      :submit-error="riskSubmitError"
+      @close="closeRiskAssessment"
+      @submit="onRiskAnswersSubmit"
+    />
+
+    <OrderPayOverlay
+      :open="payOpen"
+      :order-id="pendingOrderId"
+      :cover-img="checkoutCoverImg"
+      :risk-grade="riskGrade"
+      :risk-grade-name="riskGradeName"
+      @close="closePay"
+      @pay="onConfirmPay"
     />
 
     <CouponSheet

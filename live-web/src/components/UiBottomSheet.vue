@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, watch } from "vue";
+import { computed, onBeforeUnmount, watch } from "vue";
 import { useWatchTheme } from "@/composables/useWatchTheme";
 
 const props = withDefaults(
@@ -18,19 +18,55 @@ const props = withDefaults(
     /** 面板最大高度 */
     maxHeightClass?: string;
     zIndexClass?: string;
+    /** 堆叠层级（内联 style，避免 Uno 未扫到任意值类） */
+    zIndex?: number;
   }>(),
   {
     showClose: true,
     showHandle: false,
     centerOnDesktop: false,
     maxHeightClass: "max-h-[70dvh]",
-    /** 高于结束页 fixed 遮罩 z-[100]，避免「查看回放」选片弹层被盖住 */
+    /** 高于播放器伪全屏等 z-100 层 */
     zIndexClass: "z-[110]",
+    zIndex: 110,
   },
 );
 
 const emit = defineEmits<{ close: [] }>();
 const { theme } = useWatchTheme();
+/** 显式字符串，保证 Teleport 根 data-lw-theme 跟观看页一致 */
+const sheetTheme = computed(() => (theme.value === "dark" ? "dark" : "light"));
+const sheetSurface = computed(() =>
+  sheetTheme.value === "dark"
+    ? {
+        panelBg: "#1a1f2a",
+        panelFg: "rgba(255, 255, 255, 0.92)",
+        panelBorder: "#2a3140",
+        maskBg: "rgba(0, 0, 0, 0.7)",
+        elevated: "#222836",
+        secondary: "rgba(255, 255, 255, 0.55)",
+      }
+    : {
+        panelBg: "#ffffff",
+        panelFg: "#1f2329",
+        panelBorder: "#e8ecf1",
+        maskBg: "rgba(15, 23, 42, 0.4)",
+        elevated: "#eef1f6",
+        secondary: "#8a9199",
+      },
+);
+
+
+/** 路由切换时 Transition+Teleport 可能把 leave 节点留在 body；靠 id 强制清掉 */
+const sheetId =
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? `uis-${crypto.randomUUID()}`
+    : `uis-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+function removeTeleportedRoot() {
+  if (typeof document === "undefined") return;
+  document.querySelector(`[data-ui-sheet="${sheetId}"]`)?.remove();
+}
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key === "Escape") emit("close");
@@ -48,6 +84,7 @@ watch(
 onBeforeUnmount(() => {
   if (typeof document === "undefined") return;
   document.removeEventListener("keydown", onKeydown);
+  removeTeleportedRoot();
 });
 </script>
 
@@ -56,25 +93,34 @@ onBeforeUnmount(() => {
     <!-- duration 显式给定：动效写在子节点，根上嗅探不到 transition 时长时会瞬间插拔，上升看起来生硬 -->
     <Transition
       name="ui-sheet"
-      :duration="{ enter: 320, leave: 280 }"
+      :duration="{ enter: 320, leave: 320 }"
     >
       <div
         v-if="open"
         class="lw-theme ui-sheet-root fixed inset-0 flex flex-col justify-end"
-        :data-lw-theme="theme"
+        :data-ui-sheet="sheetId"
+        :data-lw-theme="sheetTheme"
         :class="[
           zIndexClass,
           centerOnDesktop ? 'ui-sheet-center-md md:items-center md:justify-center' : '',
         ]"
+        :style="{ zIndex, pointerEvents: 'auto' }"
       >
         <button
           type="button"
-          class="ui-sheet-mask absolute inset-0 bg-[var(--lw-bg-overlay)]"
+          class="ui-sheet-mask absolute inset-0"
+          :style="{ zIndex: 0, background: sheetSurface.maskBg }"
           aria-label="关闭"
           @click="emit('close')"
         />
         <div
-          class="ui-sheet-panel relative flex w-full flex-col rounded-t-2xl bg-[var(--lw-bg-chrome)] text-[var(--lw-text-primary)] shadow-xl"
+          class="ui-sheet-panel relative flex w-full flex-col overflow-hidden rounded-t-2xl shadow-xl"
+          :style="{
+            zIndex: 1,
+            background: sheetSurface.panelBg,
+            color: sheetSurface.panelFg,
+            borderColor: sheetSurface.panelBorder,
+          }"
           :class="[
             maxHeightClass,
             centerOnDesktop
@@ -135,7 +181,7 @@ onBeforeUnmount(() => {
             </div>
           </slot>
 
-          <div class="ui-sheet-body min-h-0 flex-1 overflow-y-auto">
+          <div class="ui-sheet-body min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <slot />
           </div>
 
@@ -152,6 +198,20 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.ui-sheet-root {
+  color: var(--lw-text-primary);
+}
+
+.ui-sheet-mask {
+  background: var(--lw-bg-overlay);
+}
+
+.ui-sheet-panel {
+  background: var(--lw-bg-chrome);
+  color: var(--lw-text-primary);
+  border: 1px solid var(--lw-border);
+}
+
 .ui-sheet-enter-active .ui-sheet-mask,
 .ui-sheet-leave-active .ui-sheet-mask {
   transition: opacity 0.22s ease;

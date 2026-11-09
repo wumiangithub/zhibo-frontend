@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { attributeAudience } from "@/api/audienceAttribute";
 import { getOrCreateDevSocketId, simulateDevPresence } from "@/api/devPresence";
@@ -18,6 +18,9 @@ import WatchSidePanel from "@/components/watch/WatchSidePanel.vue";
 import AccessPasswordDialog from "@/components/watch/AccessPasswordDialog.vue";
 import AccessBlockedScreen from "@/components/watch/AccessBlockedScreen.vue";
 import ProductSheet from "@/components/watch/ProductSheet.vue";
+import CheckoutSheet from "@/components/watch/CheckoutSheet.vue";
+import RiskAssessmentOverlay from "@/components/watch/RiskAssessmentOverlay.vue";
+import OrderPayOverlay from "@/components/watch/OrderPayOverlay.vue";
 import CouponSheet from "@/components/watch/CouponSheet.vue";
 import UiPageHeader from "@/components/UiPageHeader.vue";
 import { listWatchRecords, type WatchRecordItem } from "@/api/replayWatch";
@@ -41,6 +44,8 @@ import {
 import { ensureWxJsSdk, isLikelyMiniProgramWebView } from "@/utils/miniProgram";
 import { goViewerLogin, recoverViewerAuth } from "@/utils/viewerLogin";
 import { reportLessonProgress } from "@/api/learning";
+import { purgeOrphanUiSheets } from "@/utils/purgeUiSheets";
+import { backOrHome } from "@/utils/navigation";
 
 const route = useRoute();
 const router = useRouter();
@@ -59,6 +64,34 @@ const {
   openCart,
   closeCart,
   buyProduct,
+  checkoutOpen,
+  checkoutLoading,
+  checkoutError,
+  checkoutProductName,
+  checkoutCoverImg,
+  checkoutValidityText,
+  checkoutPayPriceText,
+  checkoutCoupons,
+  checkoutCouponsLoading,
+  selectedCouponUserId,
+  couponPickerOpen,
+  closeCheckout,
+  openCouponPicker,
+  closeCouponPicker,
+  selectCoupon,
+  submitCheckoutOrder,
+  checkoutSubmitting,
+  riskOpen,
+  riskSubmitting,
+  riskSubmitError,
+  pendingOrderId,
+  riskGrade,
+  riskGradeName,
+  closeRiskAssessment,
+  onRiskAnswersSubmit,
+  payOpen,
+  closePay,
+  onConfirmPay,
 } = useWatchCart(() => id);
 /** session 的发券自定义消息回调会用到；在 useWatchCoupons 初始化后赋值 */
 let refreshCoupons: () => Promise<void> = async () => {};
@@ -246,7 +279,7 @@ function preservedWatchQuery(): Record<string, string | string[]> {
   return q;
 }
 
-/** H5 顶栏返回：有课程上下文回课程详情，否则 history.back，再否则首页 */
+/** H5 顶栏返回：有课程上下文回课程详情，否则站内上一页，再否则首页 */
 function goBackFromWatch() {
   if (courseContextId) {
     void router.replace({
@@ -255,20 +288,30 @@ function goBackFromWatch() {
     });
     return;
   }
-  if (window.history.length > 1) {
-    router.back();
-    return;
-  }
-  void router.replace("/");
+  backOrHome(router);
 }
 
 function goReplay(recordId: number) {
+  recordPickerOpen.value = false;
+  purgeOrphanUiSheets();
   void router.push({
     name: "watch-replay",
     params: { id },
     query: { ...preservedWatchQuery(), recordId: String(recordId) },
   });
 }
+
+/** 结束页小遮罩盖住内容区时，退出伪全屏，避免 fixed 层和弹层抢点击 */
+function exitFullscreenOnEndedShell() {
+  if (player.pseudoFullscreen) player.pseudoFullscreen = false;
+}
+watch(
+  () => isEnded.value || isReplay.value,
+  (on) => {
+    if (on) exitFullscreenOnEndedShell();
+  },
+  { immediate: true },
+);
 
 async function onViewReplay() {
   if (!showReplayEntry.value || playbackExpired.value) return;
@@ -296,7 +339,6 @@ async function onViewReplay() {
 }
 
 function onPickRecord(row: WatchRecordItem) {
-  recordPickerOpen.value = false;
   goReplay(Number(row.id));
 }
 
@@ -349,6 +391,7 @@ function changeNickname() {
 }
 
 onMounted(() => {
+  purgeOrphanUiSheets();
   // 预热微信 JS-SDK，聊天跳登录时不必等首屏脚本
   void ensureWxJsSdk().catch(() => {});
   if (!isViewerLoggedIn()) {
@@ -512,7 +555,7 @@ onMounted(() => {
         >
           <PreviewScreen
             v-if="isPreview"
-            class="absolute inset-0 z-20"
+            class="absolute inset-0 z-40"
             :data="data"
             :countdown="countdown"
             :host-player="false"
@@ -520,7 +563,7 @@ onMounted(() => {
 
           <EndedScreen
             v-if="isEnded || isReplay"
-            class="absolute inset-0 z-[100]"
+            class="absolute inset-0 z-40"
             :data="data"
             :show-replay-entry="showReplayEntry"
             :playback-expired="playbackExpired"
@@ -546,6 +589,8 @@ onMounted(() => {
           <WatchRoomShell class="min-h-0 flex-1">
             <template #media>
               <PlayerStage
+                class="transition-opacity"
+                :class="{ 'opacity-0': isPreview || isEnded || isReplay }"
                 :player="player"
                 :barrage="barrage"
                 :stats="stats"
@@ -593,6 +638,44 @@ onMounted(() => {
       :products="cartProducts"
       @close="closeCart"
       @buy="buyProduct"
+    />
+
+    <CheckoutSheet
+      :open="checkoutOpen"
+      :loading="checkoutLoading"
+      :error="checkoutError"
+      :product-name="checkoutProductName"
+      :cover-img="checkoutCoverImg"
+      :validity-text="checkoutValidityText"
+      :pay-price-text="checkoutPayPriceText"
+      :coupons="checkoutCoupons"
+      :coupons-loading="checkoutCouponsLoading"
+      :selected-coupon-user-id="selectedCouponUserId"
+      :coupon-picker-open="couponPickerOpen"
+      :submitting="checkoutSubmitting"
+      @close="closeCheckout"
+      @open-coupons="openCouponPicker"
+      @close-coupons="closeCouponPicker"
+      @select-coupon="selectCoupon"
+      @submit="submitCheckoutOrder"
+    />
+
+    <RiskAssessmentOverlay
+      :open="riskOpen"
+      :submitting="riskSubmitting"
+      :submit-error="riskSubmitError"
+      @close="closeRiskAssessment"
+      @submit="onRiskAnswersSubmit"
+    />
+
+    <OrderPayOverlay
+      :open="payOpen"
+      :order-id="pendingOrderId"
+      :cover-img="checkoutCoverImg"
+      :risk-grade="riskGrade"
+      :risk-grade-name="riskGradeName"
+      @close="closePay"
+      @pay="onConfirmPay"
     />
 
     <CouponSheet

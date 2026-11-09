@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router";
+import { backOrHome } from "@/utils/navigation";
 
 defineProps<{
   title?: string;
@@ -8,11 +9,7 @@ defineProps<{
 const router = useRouter();
 
 function back() {
-  if (window.history.length > 1) {
-    router.back();
-    return;
-  }
-  void router.replace("/");
+  backOrHome(router);
 }
 </script>
 

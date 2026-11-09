@@ -266,6 +266,12 @@ watch(anyOverlayOpen, (open, wasOpen) => {
   if (wasOpen && props.player.isPaused) revealControls(true);
 });
 
+/** 切主题时收起清晰度 sheet，避免 mask 残留 */
+watch(isLight, () => {
+  qualitySheetOpen.value = false;
+  qualityPinned.value = false;
+});
+
 onMounted(() => {
   narrowMql = window.matchMedia("(max-width: 767px)");
   syncNarrow();

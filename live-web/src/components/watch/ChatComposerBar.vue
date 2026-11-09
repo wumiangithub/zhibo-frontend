@@ -132,54 +132,59 @@ function onEnter() {
         @insert="emit('insert-emoji', $event)"
       />
     </div>
-    <input
-      :id="inputId"
-      ref="inputEl"
-      type="text"
-      maxlength="140"
-      name="zhibo-chat-message"
-      :value="disabled ? '' : modelValue"
-      :placeholder="placeholder"
-      autocomplete="off"
-      autocorrect="off"
-      autocapitalize="off"
-      spellcheck="false"
-      class="min-w-0 flex-1 rounded-md bg-[var(--lw-bg-elevated)] px-3 py-2 text-sm text-[var(--lw-text-primary)] placeholder-[var(--lw-text-muted)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
-      :disabled="controlsDisabled"
-      :readonly="disabled"
-      :tabindex="disabled ? -1 : undefined"
-      @input="onInput"
-      @focus="onFocus"
-      @keyup.enter="onEnter"
+    <div
+      class="flex min-w-0 flex-1 items-center gap-1.5 rounded-md bg-[var(--lw-bg-elevated)] px-3 py-2"
+      :class="controlsDisabled ? 'opacity-50' : ''"
     >
-    <button
-      type="button"
-      role="checkbox"
-      class="inline-flex flex-none select-none items-center gap-1.5 text-sm text-[var(--lw-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-      :class="disabled ? '' : 'cursor-pointer'"
-      title="提问"
-      :aria-checked="askMode"
-      :aria-label="askMode ? '取消提问模式' : '开启提问模式'"
-      :disabled="controlsDisabled"
-      @click="onAskClick"
-    >
-      <span
-        class="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[3px] border-2"
-        :class="askMode && !disabled ? 'border-[var(--lw-color-ask)] bg-[var(--lw-color-ask)] text-[var(--lw-text-on-brand)]' : 'border-[var(--lw-border-strong)] bg-[var(--lw-bg-elevated)]'"
-        aria-hidden="true"
+      <input
+        :id="inputId"
+        ref="inputEl"
+        type="text"
+        maxlength="140"
+        name="zhibo-chat-message"
+        :value="disabled ? '' : modelValue"
+        :placeholder="placeholder"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        class="min-w-0 flex-1 bg-transparent text-sm text-[var(--lw-text-primary)] placeholder-[var(--lw-text-muted)] focus:outline-none disabled:cursor-not-allowed"
+        :disabled="controlsDisabled"
+        :readonly="disabled"
+        :tabindex="disabled ? -1 : undefined"
+        @input="onInput"
+        @focus="onFocus"
+        @keyup.enter="onEnter"
       >
-        <svg
-          v-if="askMode && !disabled"
-          class="h-3 w-3"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+      <button
+        type="button"
+        role="checkbox"
+        class="inline-flex flex-none select-none items-center gap-1.5 text-sm text-[var(--lw-text-primary)] disabled:cursor-not-allowed"
+        :class="disabled ? '' : 'cursor-pointer'"
+        title="提问"
+        :aria-checked="askMode"
+        :aria-label="askMode ? '取消提问模式' : '开启提问模式'"
+        :disabled="controlsDisabled"
+        @click="onAskClick"
+      >
+        <span
+          class="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[3px] border-2"
+          :class="askMode && !disabled ? 'border-[var(--lw-color-ask)] bg-[var(--lw-color-ask)] text-[var(--lw-text-on-brand)]' : 'border-[var(--lw-border-strong)] bg-[var(--lw-bg-chrome)]'"
+          aria-hidden="true"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-        </svg>
-      </span>
-      <span>问</span>
-    </button>
+          <svg
+            v-if="askMode && !disabled"
+            class="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+          </svg>
+        </span>
+        <span>问</span>
+      </button>
+    </div>
     <button
       v-if="!disabled"
       type="button"
@@ -215,7 +220,10 @@ function onEnter() {
       />
     </div>
 
-    <div class="relative z-50 min-w-0 flex-1">
+    <div
+      class="relative z-50 flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-[var(--lw-bg-elevated)] px-3 py-2"
+      :class="controlsDisabled ? 'opacity-50' : ''"
+    >
       <input
         :id="inputId"
         ref="inputEl"
@@ -228,7 +236,7 @@ function onEnter() {
         autocorrect="off"
         autocapitalize="off"
         spellcheck="false"
-        class="w-full rounded-full bg-[var(--lw-bg-elevated)] px-3 py-2 text-sm text-[var(--lw-text-primary)] placeholder-[var(--lw-text-muted)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+        class="min-w-0 flex-1 bg-transparent text-sm text-[var(--lw-text-primary)] placeholder-[var(--lw-text-muted)] focus:outline-none disabled:cursor-not-allowed"
         :disabled="controlsDisabled"
         :readonly="disabled"
         :tabindex="disabled ? -1 : undefined"
@@ -237,37 +245,36 @@ function onEnter() {
         @blur="onBlur"
         @keyup.enter="onEnter"
       >
-    </div>
-
-    <button
-      type="button"
-      role="checkbox"
-      class="inline-flex flex-none select-none items-center gap-1.5 text-sm text-[var(--lw-text-primary)] disabled:cursor-not-allowed disabled:opacity-50"
-      :class="disabled ? '' : 'cursor-pointer'"
-      title="提问"
-      :aria-checked="disabled ? false : askMode"
-      :aria-label="askMode ? '取消提问模式' : '开启提问模式'"
-      :disabled="controlsDisabled"
-      @mousedown.prevent
-      @click="onAskClick"
-    >
-      <span
-        class="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[3px] border-2"
-        :class="askMode && !disabled ? 'border-[var(--lw-color-ask)] bg-[var(--lw-color-ask)] text-[var(--lw-text-on-brand)]' : 'border-[var(--lw-border-strong)] bg-[var(--lw-bg-elevated)]'"
-        aria-hidden="true"
+      <button
+        type="button"
+        role="checkbox"
+        class="inline-flex flex-none select-none items-center gap-1 text-sm text-[var(--lw-text-primary)] disabled:cursor-not-allowed"
+        :class="disabled ? '' : 'cursor-pointer'"
+        title="提问"
+        :aria-checked="disabled ? false : askMode"
+        :aria-label="askMode ? '取消提问模式' : '开启提问模式'"
+        :disabled="controlsDisabled"
+        @mousedown.prevent
+        @click="onAskClick"
       >
-        <svg
-          v-if="askMode && !disabled"
-          class="h-3 w-3"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+        <span
+          class="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[3px] border-2"
+          :class="askMode && !disabled ? 'border-[var(--lw-color-ask)] bg-[var(--lw-color-ask)] text-[var(--lw-text-on-brand)]' : 'border-[var(--lw-border-strong)] bg-[var(--lw-bg-chrome)]'"
+          aria-hidden="true"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-        </svg>
-      </span>
-      <span>问</span>
-    </button>
+          <svg
+            v-if="askMode && !disabled"
+            class="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+          </svg>
+        </span>
+        <span>问</span>
+      </button>
+    </div>
 
     <button
       v-if="active && !disabled"

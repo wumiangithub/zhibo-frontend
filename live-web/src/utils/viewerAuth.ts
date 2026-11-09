@@ -186,6 +186,29 @@ export function isViewerLoggedIn(): boolean {
   return !!getViewerAccessToken();
 }
 
+/**
+ * 从观众 access JWT 解出订单中心 `username` claim（不验签，仅读 payload）。
+ * 对齐 oms-go：优先手机号，否则 openid / viewerId。
+ */
+export function getViewerOrderCenterUsername(): string {
+  const token = getViewerAccessToken();
+  if (!token) return "";
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2) return "";
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
+    const json = atob(b64 + pad);
+    const payload = JSON.parse(json) as { username?: unknown };
+    const name = typeof payload.username === "string" ? payload.username.trim() : "";
+    if (name) return name;
+  } catch {
+    /* ignore */
+  }
+  const id = getViewerId();
+  return id != null ? String(id) : "";
+}
+
 /** 上次登录记下的脱敏手机号；没有则空串。 */
 export function getViewerPhoneMasked(): string {
   try {

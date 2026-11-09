@@ -371,7 +371,7 @@ onMounted(() => {
             <div class="tag-line">
               <span
                 v-for="(label, idx) in row.tagLabels"
-                :key="`${row.id}-${row.tagIds?.[idx] ?? idx}`"
+                :key="`${row.id}-${idx}`"
                 class="tag-pill"
               >{{ label }}</span>
             </div>
@@ -396,22 +396,6 @@ onMounted(() => {
             <i :class="stateDotClass(row.entitlementState)" />
             {{ row.entitlementStateLabel }}
           </span>
-        </template>
-      </ElTableColumn>
-      <ElTableColumn
-        label="所属邀请人"
-        min-width="120"
-      >
-        <template #default="{ row }">
-          {{ row.inviterDisplayName || "—" }}
-        </template>
-      </ElTableColumn>
-      <ElTableColumn
-        label="导入人"
-        min-width="120"
-      >
-        <template #default="{ row }">
-          {{ row.importerName || "—" }}
         </template>
       </ElTableColumn>
       <ElTableColumn

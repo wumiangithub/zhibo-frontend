@@ -384,30 +384,20 @@ export function reorderCourseCatalog(
 
 /** 课程用户列表权益计算态（D100） */
 export type CourseUserEntitlementState = "valid" | "expired" | "invalid";
-export type CourseUserAcquireWay = "purchase" | "import";
 
 export interface CourseUserListItem {
   id: number;
-  viewerId: number;
   nickname?: string;
   avatar?: string;
   phoneMasked?: string;
-  tagIds?: number[];
   tagLabels?: string[];
   chapterCompletionRate: number;
   entitlementStatus: number;
   entitlementState: CourseUserEntitlementState;
   entitlementStateLabel: string;
-  acquireWay: CourseUserAcquireWay;
   acquireWayLabel: string;
-  /** 权益首次获取 / 邀请加入 / 导入时间，均为 created_time */
+  /** 权益首次获取时间 = created_time */
   firstAcquireTime?: string;
-  employeeInviterId?: number;
-  inviterDisplayName?: string;
-  inviteTime?: string;
-  importerId?: number;
-  importerName?: string;
-  importTime?: string;
   expireTime?: string;
   expireDisplay: string;
 }
@@ -416,7 +406,6 @@ export interface CourseUserListResult {
   page: number;
   pageSize: number;
   total: number;
-  accessValidityType: CourseAccessValidityType;
   list: CourseUserListItem[];
 }
 

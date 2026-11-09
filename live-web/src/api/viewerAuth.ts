@@ -39,8 +39,12 @@ export function getViewerUserInfo() {
 
 /** 双票刷新；过期 access 也要原样带上（白名单，不靠 Authorization）。 */
 export function refreshViewerSession(accessToken: string, refreshToken: string) {
-  return post<ViewerAuthSession>("/viewer/auth/refresh", {
-    accessToken: accessToken || "",
-    refreshToken,
-  });
+  return post<ViewerAuthSession>(
+    "/viewer/auth/refresh",
+    {
+      accessToken: accessToken || "",
+      refreshToken,
+    },
+    { skipAuthRefresh: true },
+  );
 }

@@ -355,6 +355,12 @@ watch([speedSheetOpen, showRates], ([sheet, flyout]) => {
   if (!playing.value) revealControls(true);
 });
 
+/** 切主题时收起倍速 sheet，避免 mask 残留盖住整页 */
+watch(isLight, () => {
+  speedSheetOpen.value = false;
+  showRates.value = false;
+});
+
 watch(
   () => props.speedAllow,
   (allow) => {

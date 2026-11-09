@@ -45,5 +45,6 @@ export function verifyWatchPassword(activityId: string, password: string) {
   return post<VerifyPasswordResult>(
     `/watch/access/verify-password/${activityId}`,
     { password },
+    { headers: authHeaders(activityId) },
   );
 }

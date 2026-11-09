@@ -117,3 +117,19 @@
 
   --lw-float-icon-filter: drop-shadow(0 2px 8px rgba(15, 23, 42, 0.1));
 }
+
+/* 原生滚动条等跟昼夜；主题根节点必须可点（Teleport 弹层也挂 lw-theme） */
+.lw-theme[data-lw-theme="dark"] {
+  color-scheme: dark;
+  pointer-events: auto;
+}
+
+.lw-theme[data-lw-theme="light"] {
+  color-scheme: light;
+  pointer-events: auto;
+}
+
+.lw-theme.ui-sheet-root,
+.ui-sheet-root {
+  pointer-events: auto;
+}

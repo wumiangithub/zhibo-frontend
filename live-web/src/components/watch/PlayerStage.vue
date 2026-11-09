@@ -292,4 +292,6 @@ onBeforeUnmount(() => syncStageEl(null));
   animation-play-state: paused;
   opacity: 0.45;
 }
+
+
 </style>
