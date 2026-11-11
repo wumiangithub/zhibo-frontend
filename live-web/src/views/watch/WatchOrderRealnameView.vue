@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import {
+  createViewerPendingContract,
+  getViewerCustomerByOrderId,
+  getViewerOrderPaidInfo,
+} from "@/api/orderCenter";
 import UiPageHeader from "@/components/UiPageHeader.vue";
 import { useToast } from "@/composables/useToast";
 import { isLikelyMiniProgramWebView } from "@/utils/miniProgram";
 import { backOrReplace } from "@/utils/navigation";
+import { saveViewerPendingSignSession } from "@/utils/viewerPendingSignSession";
 
 /** 写死 fdd_id_card_type（字典项编码 → 备注文案） */
 const CARD_TYPES = [
@@ -18,6 +24,9 @@ const CARD_TYPES = [
   { value: 8, key: "hk_macao_foreigner", label: "港澳居民来往内地通行证(非中国籍)" },
 ] as const;
 
+/** 本轮合同名称占位；对方未回合同标题字段 */
+const CONTRACT_TITLE_PLACEHOLDER = "《服务合同》";
+
 const route = useRoute();
 const router = useRouter();
 const { toast } = useToast();
@@ -30,6 +39,7 @@ const realname = ref("");
 const cardType = ref(1);
 const idCard = ref("");
 const pickerOpen = ref(false);
+const submitting = ref(false);
 
 const cardTypeLabel = computed(
   () => CARD_TYPES.find((c) => c.value === cardType.value)?.label ?? "",
@@ -39,7 +49,8 @@ const canSubmit = computed(
   () =>
     Boolean(realname.value.trim()) &&
     Boolean(idCard.value.trim()) &&
-    Number.isInteger(cardType.value),
+    Number.isInteger(cardType.value) &&
+    !submitting.value,
 );
 
 function goBack() {
@@ -55,12 +66,53 @@ function selectCardType(value: number) {
   pickerOpen.value = false;
 }
 
-function onSubmit() {
+async function onSubmit() {
   if (!canSubmit.value) {
     toast("请填写完整实名信息");
     return;
   }
-  toast("待开发");
+  if (!orderId) {
+    toast("订单无效");
+    return;
+  }
+  submitting.value = true;
+  try {
+    const [paid, customer] = await Promise.all([
+      getViewerOrderPaidInfo(orderId),
+      getViewerCustomerByOrderId(orderId).catch(() => null),
+    ]);
+    const orderNo = paid.orderNo?.trim();
+    if (!orderNo) {
+      throw new Error("未拿到订单号，请返回支付完成页重试");
+    }
+
+    const phone = customer?.phone?.trim() || "";
+    const { signUrl } = await createViewerPendingContract({
+      orderNo,
+      customerName: realname.value.trim(),
+      idCardType: cardType.value,
+      idCardNo: idCard.value.trim(),
+      customerPhone: phone || undefined,
+    });
+
+    saveViewerPendingSignSession({
+      activityId,
+      orderId,
+      orderNo,
+      signUrl,
+      contractTitle: CONTRACT_TITLE_PLACEHOLDER,
+    });
+
+    await router.replace({
+      name: "watch-order-contract",
+      params: { id: activityId },
+      query: { orderId },
+    });
+  } catch (e) {
+    toast(e instanceof Error ? e.message : "提交实名认证失败");
+  } finally {
+    submitting.value = false;
+  }
 }
 </script>
 
@@ -147,7 +199,7 @@ function onSubmit() {
         :disabled="!canSubmit"
         @click="onSubmit"
       >
-        提交实名认证
+        {{ submitting ? "提交中…" : "提交实名认证" }}
       </button>
     </div>
 

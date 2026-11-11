@@ -1427,3 +1427,69 @@ export function isViewerCustomerRealNamed(
   return Boolean(customer.idCard?.trim() && customer.realname?.trim());
 }
 
+export interface CreateViewerPendingContractInput {
+  /** 订单号（paid-info.orderNo），不是订单主键 */
+  orderNo: string;
+  customerName: string;
+  /** 1～8，见订单中心 id_card_type_enum */
+  idCardType: number;
+  idCardNo: string;
+  /** 选传；有则优先作签署方手机号 */
+  customerPhone?: string;
+}
+
+export interface CreateViewerPendingContractResult {
+  /** 签署长链；每次 create 都是新任务、新链接 */
+  signUrl: string;
+}
+
+/**
+ * 观众端待签合同生成（实名提交后拿签署链接）。
+ * POST /order-center/api/live/viewer/sign/pending-contract/create
+ * Body：orderNo + customerName + idCardType + idCardNo（四项必传）；customerPhone 可选
+ */
+export async function createViewerPendingContract(
+  input: CreateViewerPendingContractInput,
+): Promise<CreateViewerPendingContractResult> {
+  const orderNo = String(input.orderNo ?? "").trim();
+  const customerName = String(input.customerName ?? "").trim();
+  const idCardNo = String(input.idCardNo ?? "").trim();
+  const idCardType = Number(input.idCardType);
+  if (!orderNo) throw new Error("订单号无效");
+  if (!customerName) throw new Error("请填写真实姓名");
+  if (!idCardNo) throw new Error("请填写证件号码");
+  if (!Number.isInteger(idCardType) || idCardType < 1 || idCardType > 8) {
+    throw new Error("请选择证件类型");
+  }
+
+  const body: Record<string, unknown> = {
+    orderNo,
+    customerName,
+    idCardType,
+    idCardNo,
+  };
+  const phone = input.customerPhone?.trim();
+  if (phone) body.customerPhone = phone;
+
+  const env = await postViewerOrderCenter<Record<string, unknown>>(
+    "/order-center/api/live/viewer/sign/pending-contract/create",
+    body,
+    { loginRequiredMessage: "请先登录后再实名认证", timeout: 30000 },
+  );
+
+  if (isOrderCenterAuthExpired(env.httpStatus, env.code)) {
+    throw new Error(env.message || env.msg || "登录状态已失效，请重新登录");
+  }
+  if (!isOrderCenterSuccess(env.code)) {
+    throw new Error(env.message || env.msg || "提交实名认证失败");
+  }
+
+  const data = env.data ?? {};
+  const signUrl =
+    typeof data.signUrl === "string" ? data.signUrl.trim() : "";
+  if (!signUrl) {
+    throw new Error("未返回签署链接，请稍后重试");
+  }
+  return { signUrl };
+}
+

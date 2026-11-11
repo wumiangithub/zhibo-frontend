@@ -13,6 +13,7 @@ import { isLikelyMiniProgramWebView } from "@/utils/miniProgram";
 import { backOrHome, backOrReplace } from "@/utils/navigation";
 import { loadViewerOrderCheckoutSession } from "@/utils/viewerOrderCheckoutSession";
 
+/** 支付成功页商户名写死；不用 paid-info.merchant */
 const MERCHANT_NAME = "四川钱坤云智能科技有限公司";
 
 const route = useRoute();

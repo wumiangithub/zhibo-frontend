@@ -19,8 +19,9 @@ const route = useRoute();
 const router = useRouter();
 const { toast } = useToast();
 
-/** 对齐小程序：仅 Vite 开发构建展示明文手机号入口 */
-const showDevLogin = import.meta.env.DEV;
+/** 对齐小程序：开发构建与 mode=test 展示明文手机号入口；prod/uat 不展示 */
+const showDevLogin =
+  import.meta.env.DEV || import.meta.env.MODE === "test";
 
 const agreed = ref(false);
 const phoneMasked = ref("");

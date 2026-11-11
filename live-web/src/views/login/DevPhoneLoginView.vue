@@ -13,7 +13,9 @@ const route = useRoute();
 const router = useRouter();
 const { toast } = useToast();
 
-const isDevLogin = import.meta.env.DEV;
+/** 开发构建与 mode=test 可用；prod/uat 退回登录页 */
+const isDevLogin =
+  import.meta.env.DEV || import.meta.env.MODE === "test";
 
 const phone = ref("");
 const loading = ref(false);
@@ -70,7 +72,7 @@ onMounted(() => {
     <div class="body">
       <template v-if="isDevLogin">
         <p class="hint">
-          仅开发环境可用：输入合法手机号即可登录；未注册将自动注册。
+          仅开发 / 测试环境可用：输入合法手机号即可登录；未注册将自动注册。
         </p>
 
         <div class="field">
