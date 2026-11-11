@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 import {
-  ElButton,
   ElInput,
   ElMessage,
   ElOption,
@@ -14,12 +13,23 @@ import {
   listSalerOrders,
   ORDER_STATUS,
   ORDER_STATUS_TABS,
-  orderStatusDotClass,
   orderStatusLabel,
+  orderStatusTone,
   type OrderUserKeywordType,
   type SalerOrderItem,
 } from "@/api/orderCenter";
 import { exportOrderRows } from "./exportOrderRows";
+
+const AVATAR_COLORS = [
+  "#3B82F6",
+  "#0EA5A4",
+  "#8B5CF6",
+  "#F59E0B",
+  "#64748B",
+  "#2563EB",
+  "#E11D48",
+  "#0284C7",
+];
 
 const loading = ref(false);
 const error = ref("");
@@ -60,10 +70,22 @@ function displayName(row: SalerOrderItem) {
   return row.nickname || row.customerName || row.customerAccount || "--";
 }
 
-function displayMoney(row: SalerOrderItem) {
-  const m = row.orderMoney?.trim();
-  if (!m) return "--";
-  return `¥ ${m}`;
+function nameInitial(row: SalerOrderItem) {
+  const name = displayName(row);
+  if (!name || name === "--") return "?";
+  return name.slice(0, 1);
+}
+
+function avatarColor(row: SalerOrderItem) {
+  const key = displayName(row) + (row.userId || row.orderId || "");
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+function displayPayTime(row: SalerOrderItem) {
+  const t = row.payTime?.trim();
+  return t || "";
 }
 
 async function fetchList() {
@@ -152,13 +174,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="order-all">
-    <div class="filter-bar">
-      <div class="filter-item">
-        <span class="filter-label">用户</span>
+  <div class="admin-panel admin-panel--row-64 order-all">
+    <div class="admin-filter-bar">
+      <div class="admin-filter-fields">
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">用户</span>
         <ElSelect
           v-model="filters.keywordType"
-          style="width: 110px"
+          style="width: 88px"
         >
           <ElOption
             label="昵称"
@@ -177,35 +200,35 @@ onMounted(() => {
           v-model="filters.keyword"
           clearable
           :placeholder="keywordPlaceholder[filters.keywordType]"
-          style="width: 180px"
+          style="width: 148px"
           @keyup.enter="search"
         />
       </div>
-      <div class="filter-item">
-        <span class="filter-label">订单号</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">订单号</span>
         <ElInput
           v-model="filters.orderNo"
           clearable
           placeholder="请输入订单号"
-          style="width: 180px"
+          style="width: 168px"
           @keyup.enter="search"
         />
       </div>
-      <div class="filter-item">
-        <span class="filter-label">商品名称</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">商品名称</span>
         <ElInput
           v-model="filters.productName"
           clearable
           placeholder="请输入商品名称"
-          style="width: 180px"
+          style="width: 148px"
           @keyup.enter="search"
         />
       </div>
-      <div class="filter-item">
-        <span class="filter-label">订单状态</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">订单状态</span>
         <ElSelect
           v-model="filters.orderStatus"
-          style="width: 140px"
+          style="width: 112px"
           @change="onStatusSelectChange"
         >
           <ElOption
@@ -216,40 +239,55 @@ onMounted(() => {
           />
         </ElSelect>
       </div>
-      <ElButton @click="resetFilter">重置</ElButton>
-      <ElButton
-        type="primary"
-        @click="search"
-      >
-        查询
-      </ElButton>
+      </div>
+      <div class="admin-filter-actions">
+        <button
+          type="button"
+          class="admin-btn admin-btn--primary"
+          @click="search"
+        >
+          查询
+        </button>
+        <button
+          type="button"
+          class="admin-btn admin-btn--ghost"
+          @click="resetFilter"
+        >
+          重置
+        </button>
+      </div>
     </div>
 
-    <div class="status-tabs">
+    <div class="admin-tabs">
       <button
         v-for="tab in ORDER_STATUS_TABS"
         :key="tab.key"
         type="button"
-        class="status-tab"
+        class="admin-tab"
         :class="{ 'is-active': filters.orderStatus === tab.key }"
         @click="onTabChange(tab.key)"
       >
         {{ tab.label }}
       </button>
-    </div>
-
-    <div class="toolbar">
-      <ElButton @click="onExport">导出</ElButton>
+      <div class="admin-tabs__extra">
+        <button
+          type="button"
+          class="admin-btn admin-btn--ghost"
+          @click="onExport"
+        >
+          导出
+        </button>
+      </div>
     </div>
 
     <p
       v-if="error"
-      class="err-banner"
+      class="admin-err"
     >
       {{ error }}
     </p>
 
-    <div class="table-wrap">
+    <div class="admin-table-wrap">
       <ElTable
         v-loading="loading"
         :data="list"
@@ -260,78 +298,57 @@ onMounted(() => {
       >
         <ElTableColumn
           type="selection"
-          width="48"
+          width="44"
         />
         <ElTableColumn
           label="用户"
-          min-width="160"
+          width="148"
         >
           <template #default="{ row }">
             <div class="user-cell">
               <img
                 v-if="row.avatar"
-                class="avatar"
+                class="user-av"
                 :src="row.avatar"
                 alt=""
               >
               <span
                 v-else
-                class="avatar avatar-ph"
-              />
-              <div class="user-meta">
-                <span class="user-name">{{ displayName(row as SalerOrderItem) }}</span>
-                <span
-                  v-if="row.weComFriend"
-                  class="wecom-tag"
-                >企微好友</span>
-              </div>
+                class="user-av user-av-ph"
+                :style="{ background: avatarColor(row as SalerOrderItem) }"
+              >{{ nameInitial(row as SalerOrderItem) }}</span>
+              <span class="user-name">{{ displayName(row as SalerOrderItem) }}</span>
             </div>
           </template>
         </ElTableColumn>
         <ElTableColumn
           label="用户ID"
-          min-width="140"
+          width="120"
         >
           <template #default="{ row }">
-            {{ row.userId || "--" }}
+            <span class="mono">{{ row.userId || "--" }}</span>
           </template>
         </ElTableColumn>
         <ElTableColumn
           label="订单号"
-          min-width="160"
+          width="180"
           show-overflow-tooltip
         >
           <template #default="{ row }">
-            {{ row.orderNo || "--" }}
+            <span class="mono">{{ row.orderNo || "--" }}</span>
           </template>
         </ElTableColumn>
         <ElTableColumn
           label="商品名称"
-          min-width="220"
+          min-width="160"
         >
           <template #default="{ row }">
-            <div class="product-cell">
-              <div class="cover">
-                <img
-                  v-if="row.coverImg"
-                  :src="row.coverImg"
-                  :alt="row.productName"
-                >
-                <span
-                  v-else
-                  class="cover-ph"
-                >无图</span>
-              </div>
-              <div class="product-meta">
-                <p class="product-name">{{ row.productName || "--" }}</p>
-                <p class="validity">{{ row.validityLabel || "--" }}</p>
-              </div>
-            </div>
+            <span class="goods">{{ row.productName || "--" }}</span>
           </template>
         </ElTableColumn>
         <ElTableColumn
           label="下单时间"
-          min-width="170"
+          width="168"
         >
           <template #default="{ row }">
             {{ row.createTime || "--" }}
@@ -339,74 +356,55 @@ onMounted(() => {
         </ElTableColumn>
         <ElTableColumn
           label="支付时间"
-          min-width="170"
+          width="168"
         >
           <template #default="{ row }">
-            {{ row.payTime || "--" }}
-          </template>
-        </ElTableColumn>
-        <ElTableColumn
-          label="支付金额"
-          width="120"
-        >
-          <template #default="{ row }">
-            {{ displayMoney(row as SalerOrderItem) }}
-          </template>
-        </ElTableColumn>
-        <ElTableColumn
-          label="支付方式"
-          width="120"
-        >
-          <template #default="{ row }">
-            {{ row.payWayText || "--" }}
+            <span
+              v-if="displayPayTime(row as SalerOrderItem)"
+            >{{ displayPayTime(row as SalerOrderItem) }}</span>
+            <span
+              v-else
+              class="pay-empty"
+            >—</span>
           </template>
         </ElTableColumn>
         <ElTableColumn
           label="订单状态"
-          width="120"
+          width="108"
         >
           <template #default="{ row }">
-            <span class="status-dot">
-              <i
-                class="dot"
-                :class="orderStatusDotClass(row.orderStatus)"
-              />
+            <span
+              class="status-dot"
+              :class="`is-${orderStatusTone(row.orderStatus)}`"
+            >
+              <i class="dot" />
               {{ orderStatusLabel(row.orderStatus) }}
             </span>
           </template>
         </ElTableColumn>
         <ElTableColumn
-          label="服务状态"
-          width="110"
-        >
-          <template #default="{ row }">
-            {{ row.serviceStatusText || row.serviceStatus || "--" }}
-          </template>
-        </ElTableColumn>
-        <ElTableColumn
           label="操作"
-          width="100"
+          width="88"
           fixed="right"
         >
           <template #default>
             <button
               type="button"
-              class="op-link is-disabled"
+              class="admin-op is-strong"
               @click="onDetailClick"
             >
-              订单详情
+              详情
             </button>
           </template>
         </ElTableColumn>
       </ElTable>
     </div>
 
-    <div class="pager">
-      <span class="pager-total">共 {{ total }} 条记录 第 {{ query.page }}/{{ pageCount }} 页</span>
+    <div class="admin-pager">
+      <span class="admin-pager__total">共 {{ total }} 条</span>
       <ElPagination
         :current-page="query.page"
         :page-size="query.pageSize"
-        background
         layout="sizes, prev, pager, next, jumper"
         :total="total"
         :page-sizes="[10, 20, 50]"
@@ -418,207 +416,47 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.order-all {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  height: calc(100dvh - 92px);
-  min-height: 0;
-  overflow: hidden;
-}
-.filter-bar {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
-}
-.filter-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.filter-label {
-  font-size: 13px;
-  color: #666;
-  white-space: nowrap;
-}
-.status-tabs {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 4px;
-  border-bottom: 1px solid #ebebeb;
-}
-.status-tab {
-  margin: 0 0 -1px;
-  padding: 8px 14px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: #666;
-  font-size: 13px;
-  cursor: pointer;
-  outline: none;
-}
-.status-tab:hover {
-  color: var(--color-primary);
-}
-.status-tab.is-active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-  font-weight: 500;
-}
-.toolbar {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 12px;
-}
-.err-banner {
-  flex: none;
-  margin: 0;
-  padding: 8px 12px;
-  border-radius: 4px;
-  background: #fff2f0;
-  color: #cf1322;
-  font-size: 13px;
-}
-.table-wrap {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid #ebebeb;
-  border-radius: 4px;
-  background: #fff;
-}
 .user-cell {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
-.avatar {
-  width: 32px;
-  height: 32px;
+.user-av {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   object-fit: cover;
   flex: none;
 }
-.avatar-ph {
-  background: #e8e8e8;
-}
-.user-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
+.user-av-ph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
 }
 .user-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100px;
   font-size: 13px;
-  color: #1a1a1a;
+  font-weight: 700;
+  color: var(--text);
 }
-.wecom-tag {
-  display: inline-block;
-  padding: 0 4px;
-  border-radius: 2px;
-  background: #e6f4ff;
-  color: #1677ff;
-  font-size: 11px;
-  line-height: 18px;
+.mono {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
 }
-.product-cell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.cover {
-  width: 48px;
-  height: 48px;
-  flex: none;
-  overflow: hidden;
-  border-radius: 4px;
-  background: #f0f0f0;
-}
-.cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.cover-ph {
-  display: flex;
-  width: 100%;
-  height: 100%;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  color: #bfbfbf;
-}
-.product-meta {
-  min-width: 0;
-}
-.product-name {
-  margin: 0;
-  font-size: 13px;
-  color: #1a1a1a;
+.goods {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 160px;
+  color: var(--text);
 }
-.validity {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: #999;
-}
-.status-dot {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #bfbfbf;
-}
-.dot--gray {
-  background: #bfbfbf;
-}
-.dot--green {
-  background: #52c41a;
-}
-.dot--red {
-  background: #f5222d;
-}
-.op-link {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--color-primary);
-  font-size: 13px;
-  cursor: pointer;
-  outline: none;
-}
-.op-link.is-disabled {
-  color: #bfbfbf;
-}
-.pager {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 16px;
-}
-.pager-total {
-  font-size: 13px;
-  color: #666;
+.pay-empty {
+  color: var(--text-4);
 }
 </style>

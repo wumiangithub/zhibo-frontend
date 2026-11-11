@@ -410,13 +410,13 @@ watch(id, () => {
   padding: 8px 12px;
   border-radius: 6px;
   background: #fff1f0;
-  color: var(--color-danger);
+  color: var(--danger);
   font-size: 13px;
 }
 .card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
 }
 .summary {
   display: flex;
@@ -437,7 +437,7 @@ watch(id, () => {
   height: 68px;
   border-radius: 6px;
   overflow: hidden;
-  background: #f0f0f0;
+  background: var(--line-soft);
 }
 .cover-img {
   width: 100%;
@@ -461,7 +461,7 @@ watch(id, () => {
   gap: 0 8px;
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--text);
   line-height: 1.4;
 }
 .state-badge {
@@ -470,20 +470,20 @@ watch(id, () => {
   gap: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--color-text-secondary);
+  color: var(--text-3);
   line-height: 1;
 }
 .dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #bfbfbf;
+  background: var(--text-4);
 }
 .dot--green {
-  background: #52c41a;
+  background: var(--success);
 }
 .dot--grey {
-  background: #bfbfbf;
+  background: var(--text-4);
 }
 .ready-badge {
   font-size: 14px;
@@ -491,13 +491,13 @@ watch(id, () => {
   line-height: 1;
 }
 .ready-badge.is-ok {
-  color: #389e0d;
+  color: var(--success);
 }
 .ready-badge.is-pending {
-  color: #d48806;
+  color: var(--gold-deep);
 }
 .ready-badge.is-fail {
-  color: #cf1322;
+  color: var(--danger);
 }
 .ready-refresh {
   flex: none;
@@ -509,13 +509,13 @@ watch(id, () => {
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: 8px;
   background: transparent;
-  color: var(--color-text-secondary);
+  color: var(--text-3);
   cursor: pointer;
 }
 .ready-refresh:hover:not(:disabled) {
-  color: var(--color-primary);
+  color: var(--primary);
   background: var(--color-primary-bg);
 }
 .ready-refresh:disabled {
@@ -533,7 +533,7 @@ watch(id, () => {
 .summary-time {
   margin: 8px 0 0;
   font-size: 13px;
-  color: var(--color-text-secondary);
+  color: var(--text-3);
 }
 .summary-actions {
   display: flex;
@@ -555,22 +555,22 @@ watch(id, () => {
   display: block;
   width: 100%;
   border: 0;
-  border-radius: 4px;
+  border-radius: 8px;
   background: transparent;
   padding: 10px 12px;
   text-align: left;
   font-size: 13px;
-  color: var(--color-text);
+  color: var(--text);
   cursor: pointer;
   outline: none;
 }
 .side-item:hover {
   background: var(--color-primary-bg);
-  color: var(--color-primary);
+  color: var(--primary);
 }
 .side-item.is-active {
   background: var(--color-primary-bg-active);
-  color: var(--color-primary);
+  color: var(--primary);
   font-weight: 600;
 }
 .panel {

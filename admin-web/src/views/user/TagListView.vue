@@ -42,7 +42,7 @@ const selected = ref<ViewerTagItem[]>([]);
 const total = ref(0);
 const page = ref(1);
 const pageSize = ref(10);
-const typeFilter = ref<number | "">("");
+const typeFilter = ref<"all" | number>("all");
 const nameKeyword = ref("");
 
 async function fetchList() {
@@ -51,7 +51,7 @@ async function fetchList() {
     const res = await listViewerTags({
       page: page.value,
       pageSize: pageSize.value,
-      type: typeFilter.value === "" ? undefined : typeFilter.value,
+      type: typeFilter.value === "all" ? undefined : typeFilter.value,
       name: nameKeyword.value.trim() || undefined,
     });
     rows.value = res.list ?? [];
@@ -129,20 +129,20 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="tag-manage">
-    <div class="tabs">
+  <div class="admin-panel admin-panel--row-64 tag-manage">
+    <div class="admin-tabs">
       <button
         type="button"
-        class="tab"
-        :class="{ active: activeTab === 'list' }"
+        class="admin-tab"
+        :class="{ 'is-active': activeTab === 'list' }"
         @click="onTabChange('list')"
       >
         标签列表
       </button>
       <button
         type="button"
-        class="tab"
-        :class="{ active: activeTab === 'groups' }"
+        class="admin-tab"
+        :class="{ 'is-active': activeTab === 'groups' }"
         @click="onTabChange('groups')"
       >
         标签分组
@@ -155,14 +155,9 @@ onMounted(() => {
     />
 
     <template v-else>
-      <div class="toolbar">
-        <ElButton
-          type="primary"
-          @click="onCreate"
-        >
-          + 新建标签
-        </ElButton>
-        <ElButton @click="onExport">导出</ElButton>
+      <div class="admin-toolbar">
+        <button type="button" class="admin-btn admin-btn--primary" @click="onCreate">+ 新建标签</button>
+        <button type="button" class="admin-btn admin-btn--ghost" @click="onExport">导出</button>
         <div class="toolbar-right">
           <ElSelect
             v-model="typeFilter"
@@ -171,7 +166,7 @@ onMounted(() => {
           >
             <ElOption
               label="全部标签"
-              :value="''"
+              value="all"
             />
             <ElOption
               label="手动标签"
@@ -200,7 +195,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="table-wrap">
+      <div class="admin-table-wrap">
         <ElTable
           v-loading="loading"
           :data="rows"
@@ -234,7 +229,7 @@ onMounted(() => {
                 <span v-else>--</span>
                 <button
                   type="button"
-                  class="link-btn detail-link"
+                  class="admin-op detail-link"
                   @click="onAutoDetailPlaceholder"
                 >
                   详情
@@ -281,7 +276,7 @@ onMounted(() => {
             <template #default="{ row }">
               <button
                 type="button"
-                class="link-btn"
+                class="admin-op"
                 @click="onDetail(row as ViewerTagItem)"
               >
                 详情
@@ -289,7 +284,7 @@ onMounted(() => {
               <span class="op-sep">|</span>
               <button
                 type="button"
-                class="link-btn"
+                class="admin-op"
                 @click="onEdit(row as ViewerTagItem)"
               >
                 编辑
@@ -297,7 +292,7 @@ onMounted(() => {
               <span class="op-sep">|</span>
               <button
                 type="button"
-                class="link-btn"
+                class="admin-op"
                 @click="onDelete(row as ViewerTagItem)"
               >
                 删除
@@ -313,14 +308,13 @@ onMounted(() => {
         </ElTable>
       </div>
 
-      <div class="pager">
-        <span class="pager-total">共 {{ total }} 条</span>
+      <div class="admin-pager">
+        <span class="admin-pager__total">共 {{ total }} 条</span>
         <ElPagination
           v-model:current-page="page"
           v-model:page-size="pageSize"
           :total="total"
           :page-sizes="[10, 20, 50]"
-          background
           layout="sizes, prev, pager, next, jumper"
           @current-change="fetchList"
           @size-change="
@@ -336,64 +330,15 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.tag-manage {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  height: calc(100dvh - 92px);
-  min-height: 0;
-  overflow: hidden;
-}
-.tabs {
-  flex: none;
-  display: flex;
-  gap: 24px;
-  border-bottom: 1px solid #ebebeb;
-}
-.tab {
-  border: 0;
-  background: transparent;
-  padding: 0 0 10px;
-  font-size: 14px;
-  color: #666;
-  cursor: pointer;
-  position: relative;
-}
-.tab.active {
-  color: var(--color-primary);
-  font-weight: 500;
-}
-.tab.active::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  background: var(--color-primary);
-}
-.toolbar {
-  flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
+
+
 .toolbar-right {
   margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
-.table-wrap {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid #ebebeb;
-  border-radius: 4px;
-  background: #fff;
-}
+
 .th-with-tip {
   display: inline-flex;
   align-items: center;
@@ -402,12 +347,12 @@ onMounted(() => {
 .info-icon {
   margin-left: 2px;
   font-size: 14px;
-  color: #c0c4cc;
+  color: var(--text-4);
   cursor: help;
   vertical-align: middle;
 }
 .user-count {
-  color: var(--color-primary);
+  color: var(--primary);
 }
 .user-count-tip {
   max-width: 280px;
@@ -421,7 +366,7 @@ onMounted(() => {
   border: 0;
   background: transparent;
   padding: 0;
-  color: var(--color-primary);
+  color: var(--primary);
   cursor: pointer;
   font-size: 13px;
 }
@@ -432,20 +377,8 @@ onMounted(() => {
   margin-left: 4px;
 }
 .op-sep {
-  color: #ddd;
+  color: var(--line);
   margin: 0 6px;
 }
-.pager {
-  flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-}
-.pager-total {
-  font-size: 13px;
-  color: #666;
-  margin-right: auto;
-}
+
 </style>

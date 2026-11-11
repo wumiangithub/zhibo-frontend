@@ -26,8 +26,8 @@ export const CENTER_TYPE_TABS: { key: MaterialCenterType; label: string }[] = [
   { key: "article", label: "文章" },
 ];
 
-export const AUDIT_OPTIONS: { value: "" | AuditStatus; label: string }[] = [
-  { value: "", label: "全部状态" },
+export const AUDIT_OPTIONS: { value: "all" | AuditStatus; label: string }[] = [
+  { value: "all", label: "全部状态" },
   { value: MaterialAudit.PASSED, label: MATERIAL_AUDIT_LABEL[MaterialAudit.PASSED] },
   { value: MaterialAudit.REJECTED, label: MATERIAL_AUDIT_LABEL[MaterialAudit.REJECTED] },
   { value: MaterialAudit.PENDING, label: MATERIAL_AUDIT_LABEL[MaterialAudit.PENDING] },

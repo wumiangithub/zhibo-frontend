@@ -200,17 +200,24 @@ const ARTICLE_PLACEHOLDER = [
         </div>
       </div>
     </section>
-    <footer class="footer">
-      <ElButton @click="goBack">{{ viewing ? "返回" : "取消" }}</ElButton>
-      <ElButton
+    <footer class="admin-page-footer footer">
+      <button
+        type="button"
+        class="admin-btn admin-btn--ghost"
+        @click="goBack"
+      >
+        {{ viewing ? "返回" : "取消" }}
+      </button>
+      <button
         v-if="!viewing"
-        :type="canSubmit ? 'primary' : 'default'"
-        :disabled="!canSubmit"
-        :loading="submitting"
+        type="button"
+        class="admin-btn"
+        :class="canSubmit ? 'admin-btn--primary' : 'admin-btn--ghost'"
+        :disabled="!canSubmit || submitting"
         @click="onConfirm"
       >
         确认
-      </ElButton>
+      </button>
     </footer>
   </div>
 </template>
@@ -226,7 +233,7 @@ const ARTICLE_PLACEHOLDER = [
 .lock-tip {
   margin: 0;
   padding: 10px 48px 0;
-  color: var(--color-danger, #f56c6c);
+  color: var(--danger));
   font-size: 13px;
 }
 
@@ -238,8 +245,10 @@ const ARTICLE_PLACEHOLDER = [
 .card {
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-card);
-  border-radius: 4px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
 }
 
 .detail {
@@ -251,19 +260,19 @@ const ARTICLE_PLACEHOLDER = [
   font-size: 22px;
   font-weight: 600;
   line-height: 1.4;
-  color: var(--color-text);
+  color: var(--text);
 }
 
 .detail-author {
   margin: 12px 0 0;
   font-size: 14px;
-  color: var(--color-text-secondary, #8c8c8c);
+  color: var(--text-3));
 }
 
 .detail-empty {
   margin: 24px 0 0;
   font-size: 14px;
-  color: var(--color-text-secondary, #8c8c8c);
+  color: var(--text-3));
 }
 
 .detail-html {
@@ -271,7 +280,7 @@ const ARTICLE_PLACEHOLDER = [
   max-width: 720px;
   font-size: 15px;
   line-height: 1.7;
-  color: var(--color-text);
+  color: var(--text);
   word-break: break-word;
 }
 
@@ -316,7 +325,7 @@ const ARTICLE_PLACEHOLDER = [
   width: 88px;
   padding-top: 6px;
   font-size: 14px;
-  color: var(--color-text);
+  color: var(--text);
   text-align: right;
 }
 
@@ -326,7 +335,7 @@ const ARTICLE_PLACEHOLDER = [
 
 .field-label i {
   margin-right: 4px;
-  color: var(--color-danger, #f56c6c);
+  color: var(--danger));
   font-style: normal;
 }
 
@@ -342,20 +351,9 @@ const ARTICLE_PLACEHOLDER = [
   width: 100%;
 }
 
-/* 与新建直播 LiveCreateView .live-create__footer 同一套贴底悬浮 */
+/* 贴底悬浮页脚：对齐侧栏 220px，共用 .admin-page-footer */
 .footer {
-  position: fixed;
-  left: 176px;
-  right: 0;
-  bottom: 0;
-  z-index: 10;
-  height: 64px;
-  display: flex;
-  align-items: center;
   justify-content: center;
   gap: 16px;
-  padding: 0 32px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
 }
 </style>

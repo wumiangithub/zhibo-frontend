@@ -26,7 +26,20 @@ function back() {
           aria-label="返回"
           @click="back"
         >
-          ‹
+          <svg
+            class="back-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M15.5 4.5 7.5 12l8 7.5"
+              stroke="currentColor"
+              stroke-width="2.4"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
         </button>
         <h1 class="title">
           {{ title }}
@@ -68,13 +81,21 @@ function back() {
   left: 4px;
   top: 50%;
   transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
   border: 0;
   background: transparent;
-  font-size: 28px;
-  line-height: 1;
   color: #111111;
-  padding: 4px 12px;
+  padding: 0;
   cursor: pointer;
+}
+.back-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 .title {
   margin: 0;

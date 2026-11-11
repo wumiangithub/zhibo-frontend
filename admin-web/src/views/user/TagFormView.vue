@@ -2,7 +2,6 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
-  ElButton,
   ElInput,
   ElMessage,
   ElOption,
@@ -208,23 +207,31 @@ async function onSave() {
 
     <div class="footer">
       <template v-if="readonly">
-        <ElButton
-          type="primary"
+        <button
+          type="button"
+          class="admin-btn admin-btn--primary"
           @click="goBack"
         >
           返回
-        </ElButton>
+        </button>
       </template>
       <template v-else>
-        <ElButton @click="goBack">取消</ElButton>
-        <ElButton
-          :type="canSave ? 'primary' : 'default'"
-          :disabled="!canSave"
-          :loading="submitting"
+        <button
+          type="button"
+          class="admin-btn admin-btn--ghost"
+          @click="goBack"
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          class="admin-btn"
+          :class="canSave ? 'admin-btn--primary' : 'admin-btn--ghost'"
+          :disabled="!canSave || submitting"
           @click="onSave"
         >
           保存
-        </ElButton>
+        </button>
       </template>
     </div>
   </div>
@@ -239,9 +246,9 @@ async function onSave() {
   min-height: calc(100dvh - 92px);
 }
 .form-card {
-  background: #fff;
-  border: 1px solid #ebebeb;
-  border-radius: 4px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 8px;
   padding: 28px 32px;
   display: flex;
   flex-direction: column;
@@ -257,12 +264,12 @@ async function onSave() {
   width: 88px;
   line-height: 32px;
   font-size: 14px;
-  color: #333;
+  color: var(--text-2);
   text-align: right;
 }
 .label.required::before {
   content: "*";
-  color: #f56c6c;
+  color: var(--danger);
   margin-right: 4px;
 }
 .type-block {
@@ -271,15 +278,15 @@ async function onSave() {
   padding-top: 4px;
 }
 .type-hint {
-  color: #999;
+  color: var(--text-4);
   font-size: 12px;
 }
 .auto-placeholder {
   margin-top: 12px;
   padding: 16px;
-  background: #f7f8fa;
-  border-radius: 4px;
-  color: #999;
+  background: var(--bg);
+  border-radius: 8px;
+  color: var(--text-4);
   font-size: 13px;
 }
 .footer {

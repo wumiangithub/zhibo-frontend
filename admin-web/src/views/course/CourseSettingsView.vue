@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
-import { MoreFilled, Share } from "@element-plus/icons-vue";
+import { Share } from "@element-plus/icons-vue";
 import {
   ElDropdown,
   ElDropdownItem,
@@ -264,9 +264,7 @@ watch(id, () => {
               class="action-btn action-more"
               aria-label="更多"
             >
-              <ElIcon :size="16">
-                <MoreFilled />
-              </ElIcon>
+              <i class="admin-more-icon" aria-hidden="true" />
               更多
             </button>
             <template #dropdown>
@@ -401,12 +399,12 @@ watch(id, () => {
   font-size: 14px;
 }
 .status-err {
-  color: var(--color-danger);
+  color: var(--danger);
 }
 .card {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
 }
 .summary {
   display: flex;
@@ -436,14 +434,14 @@ watch(id, () => {
   padding: 4px 6px;
   border: 0;
   background: transparent;
-  color: #666;
+  color: var(--text-3);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
 }
 .action-btn:hover,
 .action-more:hover {
-  color: var(--color-primary);
+  color: var(--primary);
 }
 .action-more {
   outline: none;
@@ -453,8 +451,8 @@ watch(id, () => {
   height: 54px;
   overflow: hidden;
   flex-shrink: 0;
-  background: #f5f6f8;
-  border-radius: 4px;
+  background: var(--bg);
+  border-radius: 8px;
 }
 .cover-img {
   width: 100%;
@@ -467,7 +465,7 @@ watch(id, () => {
   justify-content: center;
   width: 100%;
   height: 100%;
-  color: #bbb;
+  color: var(--text-4);
   font-size: 12px;
 }
 .summary-info {
@@ -477,7 +475,7 @@ watch(id, () => {
   margin: 0 0 8px;
   font-size: 16px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--text);
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -489,10 +487,10 @@ watch(id, () => {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #666;
+  color: var(--text-3);
 }
 .meta-sep {
-  color: #d9d9d9;
+  color: var(--line);
 }
 .shelf-badge {
   display: inline-flex;
@@ -505,16 +503,16 @@ watch(id, () => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #bfbfbf;
+  background: var(--text-4);
 }
 .dot--green {
   background: var(--color-success);
 }
 .dot--red {
-  background: var(--color-danger);
+  background: var(--danger);
 }
 .dot--grey {
-  background: #bfbfbf;
+  background: var(--text-4);
 }
 .body {
   display: flex;
@@ -525,8 +523,8 @@ watch(id, () => {
   width: 160px;
   flex-shrink: 0;
   padding: 12px 0;
-  border-right: 1px solid #f0f0f0;
-  background: #fafbfc;
+  border-right: 1px solid var(--line-soft);
+  background: var(--bg);
 }
 .side-item {
   display: block;
@@ -534,21 +532,21 @@ watch(id, () => {
   padding: 12px 20px;
   text-align: left;
   font-size: 14px;
-  color: #333;
+  color: var(--text-2);
   background: transparent;
   border: 0;
   border-left: 3px solid transparent;
   cursor: pointer;
 }
 .side-item:hover {
-  color: var(--color-primary);
+  color: var(--primary);
   background: var(--color-primary-bg);
 }
 .side-item.is-active {
-  color: var(--color-primary);
+  color: var(--primary);
   font-weight: 600;
   background: var(--color-primary-bg);
-  border-left-color: var(--color-primary);
+  border-left-color: var(--primary);
 }
 .panel {
   flex: 1;

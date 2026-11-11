@@ -83,12 +83,8 @@ async function onSave() {
 
 <template>
   <div class="role-page">
-    <div class="page-head">
-      <div class="breadcrumb">设置 / 员工组织 / 角色管理</div>
-      <h1 class="title">角色管理</h1>
-    </div>
     <div class="body">
-      <aside class="role-list">
+      <aside class="role-list hover-scrollbar">
         <div class="panel-title">角色</div>
         <button
           v-for="role in roles"
@@ -103,7 +99,7 @@ async function onSave() {
       </aside>
       <section
         v-loading="loading"
-        class="role-main"
+        class="role-main hover-scrollbar"
       >
         <template v-if="detail">
           <div class="summary">
@@ -132,13 +128,14 @@ async function onSave() {
             :props="{ label: 'name', children: 'children' }"
           />
           <div class="actions">
-            <ElButton
-              type="primary"
-              :loading="saving"
+            <button
+              type="button"
+              class="admin-btn admin-btn--primary"
+              :disabled="saving"
               @click="onSave"
             >
               保存
-            </ElButton>
+            </button>
           </div>
         </template>
       </section>
@@ -155,17 +152,6 @@ async function onSave() {
   min-height: 0;
 }
 
-.breadcrumb {
-  color: #8a919f;
-  font-size: 12px;
-}
-
-.title {
-  margin: 6px 0 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-
 .body {
   display: flex;
   gap: 16px;
@@ -175,9 +161,9 @@ async function onSave() {
 
 .role-list,
 .role-main {
-  background: #fff;
-  border: 1px solid #ebebeb;
-  border-radius: 8px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
 }
 
 .role-list {
@@ -204,12 +190,12 @@ async function onSave() {
   background: transparent;
   text-align: left;
   cursor: pointer;
-  color: #1f2329;
+  color: var(--text);
 }
 
 .role-item.is-active {
-  background: #e8f3ff;
-  color: #165dff;
+  background: var(--primary-soft);
+  color: var(--primary);
 }
 
 .role-main {
@@ -222,8 +208,8 @@ async function onSave() {
 .summary {
   margin-bottom: 20px;
   padding: 12px 16px;
-  border-radius: 8px;
-  background: #f7f8fa;
+  border-radius: 12px;
+  background: var(--bg);
 }
 
 .role-name {
@@ -234,7 +220,7 @@ async function onSave() {
 .members,
 .remark {
   margin-top: 6px;
-  color: #4e5969;
+  color: var(--text-3);
   font-size: 13px;
   line-height: 1.6;
 }

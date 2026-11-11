@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import {
-  isPaidOrder,
+  isListVisibleOrder,
   listMyOrders,
   orderStatusLabel,
-  ORDER_STATUS_PAID,
   type ViewerOrderItem,
 } from "@/api/orderCenter";
 import AudienceFrame from "@/components/audience/AudienceFrame.vue";
@@ -16,19 +16,21 @@ import {
 
 /** 与小程序 pages/orders/list 一致 */
 const PAGE_SIZE = 20;
+/** 连续空页（过滤掉待支付后无可见订单）最多再拉几页 */
 const MAX_SKIP_EMPTY = 5;
 const DEFAULT_COVER = "/audience/cover-course-1.png";
 
 interface OrderCard {
+  orderId: string;
   orderNo: string;
   productName: string;
   orderMoney: string;
   coverImg: string;
   statusLabel: string;
-  paid: boolean;
   validityText: string;
 }
 
+const router = useRouter();
 const { toast } = useToast();
 
 const scroller = ref<HTMLElement | null>(null);
@@ -54,12 +56,12 @@ function toCard(item: ViewerOrderItem): OrderCard {
     validityText = item.createTime;
   }
   return {
+    orderId: item.orderId,
     orderNo: item.orderNo,
     productName: item.productName,
     orderMoney: item.orderMoney || "0.00",
     coverImg: item.coverImg,
-    statusLabel: orderStatusLabel(item.orderStatus) || "已付款",
-    paid: item.orderStatus === ORDER_STATUS_PAID,
+    statusLabel: orderStatusLabel(item.orderStatus) || "已支付",
     validityText,
   };
 }
@@ -107,7 +109,7 @@ async function fetchPage(targetPage: number, replace: boolean, emptySkips: numbe
     const data = await listMyOrders({ page: targetPage, pageSize: PAGE_SIZE });
     if (gen !== loadGen) return;
     const rawList = data.list;
-    const rows = rawList.filter((item) => isPaidOrder(item.orderStatus)).map(toCard);
+    const rows = rawList.filter((item) => isListVisibleOrder(item.orderStatus)).map(toCard);
     const remoteNoMore = rawList.length < PAGE_SIZE;
     if (rows.length === 0 && !remoteNoMore && emptySkips < MAX_SKIP_EMPTY) {
       page.value = targetPage;
@@ -146,12 +148,11 @@ async function fetchPage(targetPage: number, replace: boolean, emptySkips: numbe
 }
 
 function onTap(item: OrderCard) {
-  if (!item.paid) {
-    toast("仅已付款订单可查看详情");
+  if (!item.orderId) {
+    toast("订单无效");
     return;
   }
-  if (!item.orderNo) return;
-  toast("订单详情待接入");
+  void router.push({ name: "order-detail", params: { orderId: item.orderId } });
 }
 
 function bindObserver() {
@@ -214,7 +215,7 @@ onBeforeUnmount(() => {
         v-else-if="!list.length"
         class="empty"
       >
-        暂无已付款订单
+        暂无订单
       </p>
       <div
         v-else
@@ -222,7 +223,7 @@ onBeforeUnmount(() => {
       >
         <button
           v-for="(item, index) in list"
-          :key="`${item.orderNo}-${index}`"
+          :key="item.orderId || `${item.orderNo}-${index}`"
           type="button"
           class="card"
           @click="onTap(item)"

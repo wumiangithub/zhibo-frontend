@@ -134,19 +134,19 @@ onMounted(load);
   min-width: 800px;
 }
 .card {
-  background: #fff;
+  background: var(--white);
   border-radius: 6px;
   min-height: 500px;
   padding: 18px 24px;
 }
 .err {
-  color: var(--color-danger);
+  color: var(--danger);
 }
 header {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--line-soft);
   padding-bottom: 16px;
 }
 header h2 {
@@ -160,14 +160,14 @@ header > div {
 }
 header > span {
   padding: 2px 7px;
-  background: #f5f5f5;
+  background: var(--bg);
 }
 .passed {
-  color: #389e0d;
+  color: var(--success);
   background: #f6ffed;
 }
 .rejected {
-  color: #cf1322;
+  color: var(--danger);
   background: #fff1f0;
 }
 dl {
@@ -178,7 +178,7 @@ dl {
 }
 dt {
   text-align: right;
-  color: #666;
+  color: var(--text-3);
   font-size: 13px;
 }
 dd {
@@ -199,7 +199,7 @@ dd p {
   grid-template-columns: 28px minmax(180px, 300px) 70px auto auto;
   align-items: center;
   gap: 10px;
-  background: #f7f8fa;
+  background: var(--bg);
   padding: 10px 12px;
   width: max-content;
   min-width: 470px;
@@ -214,7 +214,7 @@ dd p {
   border: 0;
   background: none;
   padding: 0;
-  color: var(--color-primary);
+  color: var(--primary);
   cursor: pointer;
   text-decoration: none;
   font-size: 13px;
@@ -222,9 +222,9 @@ dd p {
 footer {
   display: flex;
   justify-content: space-between;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--line-soft);
   padding: 18px;
-  color: #666;
+  color: var(--text-3);
   font-size: 12px;
 }
 </style>

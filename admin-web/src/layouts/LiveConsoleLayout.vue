@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
+import SideIcon from "@/components/SideIcon.vue";
 import { useToast } from "@/composables/useToast";
 
 const route = useRoute();
 const { message, visible, toast } = useToast();
 
 const sideNav = [
-  { key: "list", label: "直播列表", to: "/live-console" },
-  { key: "quick", label: "快捷发送" },
-  { key: "settings", label: "通用设置" },
+  { key: "list", label: "直播列表", icon: "video", to: "/live-console" },
+  { key: "quick", label: "快捷发送", icon: "plus" },
+  { key: "settings", label: "通用设置", icon: "settings" },
 ] as const;
 
 const activeSide = computed(() => {
@@ -63,7 +64,8 @@ function onShellClick(label: string) {
               class="side-nav-item"
               :class="{ 'is-active': activeSide === item.key }"
             >
-              {{ item.label }}
+              <SideIcon :name="item.icon" />
+              <span>{{ item.label }}</span>
             </RouterLink>
             <button
               v-else
@@ -71,7 +73,8 @@ function onShellClick(label: string) {
               class="side-nav-item"
               @click="onShellClick(item.label)"
             >
-              {{ item.label }}
+              <SideIcon :name="item.icon" />
+              <span>{{ item.label }}</span>
             </button>
           </template>
         </nav>
@@ -97,8 +100,9 @@ function onShellClick(label: string) {
   display: flex;
   width: 100%;
   align-items: center;
+  gap: 0.625rem;
   border: 0;
-  border-radius: 0 0.375rem 0.375rem 0;
+  border-radius: 0.375rem;
   background: transparent;
   padding: 0.625rem 0.75rem;
   text-align: left;
@@ -117,11 +121,14 @@ function onShellClick(label: string) {
 }
 
 .side-nav-item.is-active {
-  border-left: 3px solid var(--color-primary);
-  padding-left: calc(0.75rem - 3px);
   background: var(--color-primary-bg-active);
   color: var(--color-primary);
   font-weight: 600;
   text-decoration: none;
+}
+
+.side-nav-item :deep(svg) {
+  color: inherit;
+  flex-shrink: 0;
 }
 </style>

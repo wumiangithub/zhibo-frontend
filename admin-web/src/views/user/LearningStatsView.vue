@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from "vue";
 import {
-  ElButton,
   ElInput,
   ElMessage,
   ElOption,
@@ -226,20 +225,20 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="learning-stats">
-    <div class="tabs">
+  <div class="admin-panel admin-panel--row-64 learning-stats">
+    <div class="admin-tabs">
       <button
         type="button"
-        class="tab"
-        :class="{ active: activeTab === 'summary' }"
+        class="admin-tab"
+        :class="{ 'is-active': activeTab === 'summary' }"
         @click="onTabChange('summary')"
       >
         汇总数据
       </button>
       <button
         type="button"
-        class="tab"
-        :class="{ active: activeTab === 'courses' }"
+        class="admin-tab"
+        :class="{ 'is-active': activeTab === 'courses' }"
         @click="onTabChange('courses')"
       >
         课程数据
@@ -249,10 +248,11 @@ onMounted(async () => {
     <!-- 汇总筛选 -->
     <div
       v-if="activeTab === 'summary'"
-      class="filter-bar"
+      class="admin-filter-bar"
     >
-      <div class="filter-item">
-        <span class="filter-label">用户关键字</span>
+      <div class="admin-filter-fields">
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">用户关键字</span>
         <ElSelect
           v-model="summaryFilters.keywordType"
           style="width: 110px"
@@ -278,8 +278,8 @@ onMounted(async () => {
           @keyup.enter="onSearch"
         />
       </div>
-      <div class="filter-item">
-        <span class="filter-label">标签</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">标签</span>
         <ElSelect
           v-model="summaryFilters.tagMatch"
           style="width: 110px"
@@ -315,8 +315,8 @@ onMounted(async () => {
           />
         </ElSelect>
       </div>
-      <div class="filter-item">
-        <span class="filter-label">累计学习时长</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">累计学习时长</span>
         <ElSelect
           v-model="summaryFilters.learnDurationOp"
           style="width: 110px"
@@ -337,22 +337,21 @@ onMounted(async () => {
           style="width: 140px"
         />
       </div>
-      <ElButton @click="onReset">重置</ElButton>
-      <ElButton
-        type="primary"
-        @click="onSearch"
-      >
-        查询
-      </ElButton>
+      </div>
+      <div class="admin-filter-actions">
+        <button type="button" class="admin-btn admin-btn--primary" @click="onSearch">查询</button>
+        <button type="button" class="admin-btn admin-btn--ghost" @click="onReset">重置</button>
+      </div>
     </div>
 
     <!-- 课程筛选 -->
     <div
       v-else
-      class="filter-bar"
+      class="admin-filter-bar"
     >
-      <div class="filter-item">
-        <span class="filter-label">用户关键字</span>
+      <div class="admin-filter-fields">
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">用户关键字</span>
         <ElSelect
           v-model="courseFilters.keywordType"
           style="width: 110px"
@@ -378,8 +377,8 @@ onMounted(async () => {
           @keyup.enter="onSearch"
         />
       </div>
-      <div class="filter-item">
-        <span class="filter-label">标签</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">标签</span>
         <ElSelect
           v-model="courseFilters.tagMatch"
           style="width: 110px"
@@ -415,20 +414,18 @@ onMounted(async () => {
           />
         </ElSelect>
       </div>
-      <ElButton @click="onReset">重置</ElButton>
-      <ElButton
-        type="primary"
-        @click="onSearch"
-      >
-        查询
-      </ElButton>
+      </div>
+      <div class="admin-filter-actions">
+        <button type="button" class="admin-btn admin-btn--primary" @click="onSearch">查询</button>
+        <button type="button" class="admin-btn admin-btn--ghost" @click="onReset">重置</button>
+      </div>
     </div>
 
-    <div class="toolbar">
-      <ElButton @click="onExport">导出</ElButton>
+    <div class="admin-toolbar">
+      <button type="button" class="admin-btn admin-btn--ghost" @click="onExport">导出</button>
     </div>
 
-    <div class="table-wrap">
+    <div class="admin-table-wrap">
       <ElTable
         v-if="activeTab === 'summary'"
         v-loading="loading"
@@ -634,9 +631,9 @@ onMounted(async () => {
 
     <div
       v-if="activeTab === 'summary'"
-      class="pager"
+      class="admin-pager"
     >
-      <span class="pager-total">共{{ summaryTotal }}条记录</span>
+      <span class="admin-pager__total">共{{ summaryTotal }}条记录</span>
       <ElPagination
         v-model:current-page="summaryPage"
         v-model:page-size="summaryPageSize"
@@ -648,9 +645,9 @@ onMounted(async () => {
     </div>
     <div
       v-else
-      class="pager"
+      class="admin-pager"
     >
-      <span class="pager-total">共{{ courseTotal }}条记录</span>
+      <span class="admin-pager__total">共{{ courseTotal }}条记录</span>
       <ElPagination
         v-model:current-page="coursePage"
         v-model:page-size="coursePageSize"
@@ -664,74 +661,16 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.learning-stats {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  height: calc(100dvh - 92px);
-  min-height: 0;
-  overflow: hidden;
-}
-.tabs {
-  display: flex;
-  flex: none;
-  gap: 24px;
-  border-bottom: 1px solid #ebebeb;
-}
-.tab {
-  position: relative;
-  padding: 0 0 10px;
-  border: 0;
-  background: transparent;
-  font-size: 14px;
-  color: #666;
-  cursor: pointer;
-}
-.tab.active {
-  color: var(--color-primary, #1677ff);
-  font-weight: 600;
-}
-.tab.active::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  background: var(--color-primary, #1677ff);
-}
-.filter-bar {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
-}
-.filter-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.filter-label {
-  font-size: 13px;
-  color: #666;
-  white-space: nowrap;
-}
-.toolbar {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 12px;
-}
-.table-wrap {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid #ebebeb;
-  border-radius: 4px;
-  background: #fff;
-}
+
+
+
+
+
+
+
+
+
+
 .user-cell {
   display: flex;
   align-items: center;
@@ -747,7 +686,7 @@ onMounted(async () => {
 }
 .avatar-ph {
   display: inline-block;
-  background: #e8e8e8;
+  background: var(--line-soft);
 }
 .user-name {
   overflow: hidden;
@@ -767,22 +706,11 @@ onMounted(async () => {
   padding: 0 8px;
   line-height: 22px;
   border-radius: 11px;
-  border: 1px solid #fa8c16;
-  color: #fa8c16;
+  border: 1px solid var(--gold);
+  color: var(--gold);
   font-size: 12px;
   white-space: nowrap;
 }
-.pager {
-  flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-}
-.pager-total {
-  font-size: 13px;
-  color: #666;
-  margin-right: auto;
-}
+
+
 </style>

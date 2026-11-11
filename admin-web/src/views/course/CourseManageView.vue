@@ -2,7 +2,6 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import {
-  ElButton,
   ElDropdown,
   ElDropdownItem,
   ElDropdownMenu,
@@ -58,9 +57,9 @@ const shareWatchUrl = ref("");
 
 const filters = reactive({
   keyword: "",
-  shelfStatus: "" as "" | ShelfStatus,
+  shelfStatus: "all" as "all" | ShelfStatus,
   ownerName: "",
-  riskStatus: "" as "" | RiskStatus,
+  riskStatus: "all" as "all" | RiskStatus,
 });
 const query = reactive({
   page: 1,
@@ -81,10 +80,11 @@ function timeText(raw?: string) {
   return raw.length >= 19 ? raw.slice(0, 19) : raw;
 }
 
-function shelfDotClass(status?: ShelfStatus) {
-  if (status === "on") return "dot--green";
-  if (status === "banned") return "dot--red";
-  return "dot--grey";
+function shelfTone(status?: ShelfStatus) {
+  if (status === "on") return "success";
+  if (status === "banned") return "danger";
+  if (status === "pending") return "pending";
+  return "ended";
 }
 
 function riskClass(status?: RiskStatus) {
@@ -105,9 +105,9 @@ async function fetchList() {
       sort: query.sort,
       order: query.order,
       ...(filters.keyword.trim() ? { keyword: filters.keyword.trim() } : {}),
-      ...(filters.shelfStatus ? { shelfStatus: filters.shelfStatus } : {}),
+      ...(filters.shelfStatus && filters.shelfStatus !== "all" ? { shelfStatus: filters.shelfStatus } : {}),
       ...(filters.ownerName.trim() ? { ownerName: filters.ownerName.trim() } : {}),
-      ...(filters.riskStatus ? { riskStatus: filters.riskStatus } : {}),
+      ...(filters.riskStatus && filters.riskStatus !== "all" ? { riskStatus: filters.riskStatus } : {}),
     });
     list.value = data.list ?? [];
     total.value = data.total ?? 0;
@@ -129,9 +129,9 @@ function search() {
 
 function resetFilter() {
   filters.keyword = "";
-  filters.shelfStatus = "";
+  filters.shelfStatus = "all";
   filters.ownerName = "";
-  filters.riskStatus = "";
+  filters.riskStatus = "all";
   query.page = 1;
   query.sort = "updatedTime";
   query.order = "desc";
@@ -229,10 +229,11 @@ onMounted(fetchList);
 </script>
 
 <template>
-  <div class="course-manage">
-    <div class="filter-bar">
-      <div class="filter-item">
-        <span class="filter-label">课程名称</span>
+  <div class="admin-panel admin-panel--row-72 course-manage">
+    <div class="admin-filter-bar">
+      <div class="admin-filter-fields">
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">课程名称</span>
         <ElInput
           v-model="filters.keyword"
           clearable
@@ -241,17 +242,16 @@ onMounted(fetchList);
           @keyup.enter="search"
         />
       </div>
-      <div class="filter-item">
-        <span class="filter-label">上架状态</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">上架状态</span>
         <ElSelect
           v-model="filters.shelfStatus"
-          clearable
           placeholder="全部状态"
-          style="width: 140px"
+          style="width: 120px"
         >
           <ElOption
             label="全部状态"
-            value=""
+            value="all"
           />
           <ElOption
             v-for="(label, key) in SHELF_STATUS_LABEL"
@@ -261,8 +261,8 @@ onMounted(fetchList);
           />
         </ElSelect>
       </div>
-      <div class="filter-item">
-        <span class="filter-label">归属人</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">归属人</span>
         <ElInput
           v-model="filters.ownerName"
           clearable
@@ -271,17 +271,16 @@ onMounted(fetchList);
           @keyup.enter="search"
         />
       </div>
-      <div class="filter-item">
-        <span class="filter-label">审核状态</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">审核状态</span>
         <ElSelect
           v-model="filters.riskStatus"
-          clearable
           placeholder="全部状态"
-          style="width: 140px"
+          style="width: 120px"
         >
           <ElOption
             label="全部状态"
-            value=""
+            value="all"
           />
           <ElOption
             v-for="(label, key) in RISK_STATUS_LABEL"
@@ -291,33 +290,50 @@ onMounted(fetchList);
           />
         </ElSelect>
       </div>
-      <ElButton
-        type="primary"
-        @click="search"
-      >
-        查询
-      </ElButton>
-      <ElButton @click="resetFilter">重置</ElButton>
+      </div>
+      <div class="admin-filter-actions">
+        <button
+          type="button"
+          class="admin-btn admin-btn--primary"
+          @click="search"
+        >
+          查询
+        </button>
+        <button
+          type="button"
+          class="admin-btn admin-btn--ghost"
+          @click="resetFilter"
+        >
+          重置
+        </button>
+      </div>
     </div>
 
-    <div class="toolbar">
-      <ElButton
-        type="primary"
+    <div class="admin-toolbar">
+      <button
+        type="button"
+        class="admin-btn admin-btn--primary"
         @click="router.push('/course/create')"
       >
         + 新建课程
-      </ElButton>
-      <ElButton @click="onExport">导出</ElButton>
+      </button>
+      <button
+        type="button"
+        class="admin-btn admin-btn--ghost"
+        @click="onExport"
+      >
+        导出
+      </button>
     </div>
 
     <p
       v-if="error"
-      class="err-banner"
+      class="admin-err"
     >
       {{ error }}
     </p>
 
-    <div class="table-wrap">
+    <div class="admin-table-wrap">
       <ElTable
         v-loading="loading"
         :data="list"
@@ -330,7 +346,7 @@ onMounted(fetchList);
       >
         <ElTableColumn
           type="selection"
-          width="48"
+          width="44"
         />
         <ElTableColumn
           label="课程名称"
@@ -366,14 +382,14 @@ onMounted(fetchList);
         </ElTableColumn>
         <ElTableColumn
           label="上架状态"
-          width="110"
+          width="128"
         >
           <template #default="{ row }">
-            <span class="status-dot">
-              <i
-                class="dot"
-                :class="shelfDotClass(row.shelfStatus)"
-              />
+            <span
+              class="status-dot"
+              :class="`is-${shelfTone(row.shelfStatus)}`"
+            >
+              <i class="dot" />
               {{ SHELF_STATUS_LABEL[(row as CourseListItem).shelfStatus] }}
             </span>
           </template>
@@ -453,16 +469,16 @@ onMounted(fetchList);
           fixed="right"
         >
           <template #default="{ row }">
-            <div class="ops">
+            <div class="admin-ops">
               <RouterLink
                 :to="`/course/${row.id}`"
-                class="op-link"
+                class="admin-op"
               >
                 管理
               </RouterLink>
               <RouterLink
                 :to="{ path: `/course/${row.id}`, query: { tab: 'data' } }"
-                class="op-link"
+                class="admin-op"
               >
                 数据
               </RouterLink>
@@ -473,9 +489,10 @@ onMounted(fetchList);
               >
                 <button
                   type="button"
-                  class="op-more"
+                  class="admin-op-more"
+                  aria-label="更多"
                 >
-                  ···
+                  
                 </button>
                 <template #dropdown>
                   <ElDropdownMenu>
@@ -509,12 +526,11 @@ onMounted(fetchList);
       </ElTable>
     </div>
 
-    <div class="pager">
-      <span class="pager-total">共 {{ total }} 条记录，第 {{ query.page }}/{{ pageCount }} 页</span>
+    <div class="admin-pager">
+      <span class="admin-pager__total">共 {{ total }} 条记录 第 {{ query.page }}/{{ pageCount }} 页</span>
       <ElPagination
         :current-page="query.page"
         :page-size="query.pageSize"
-        background
         layout="sizes, prev, pager, next, jumper"
         :total="total"
         :page-sizes="[10, 20, 50]"
@@ -550,69 +566,19 @@ onMounted(fetchList);
 </template>
 
 <style scoped>
-.course-manage {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  height: calc(100dvh - 92px);
-  min-height: 0;
-  overflow: hidden;
-}
-.filter-bar,
-.toolbar {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-.ops {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-.filter-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.filter-label {
-  font-size: 13px;
-  color: #666;
-  white-space: nowrap;
-}
-.err-banner {
-  flex: none;
-  margin: 0;
-  padding: 8px 12px;
-  color: #cf1322;
-  background: #fff2f0;
-  border-radius: 4px;
-}
-.table-wrap {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  background: #fff;
-  border: 1px solid #ebebeb;
-  border-radius: 4px;
-}
 .name-cell {
   display: flex;
-  gap: 12px;
   align-items: center;
-  min-width: 220px;
+  gap: 12px;
+  min-width: 0;
 }
 .cover {
+  width: 72px;
+  height: 48px;
   flex: none;
-  width: 64px;
-  height: 36px;
   overflow: hidden;
-  background: #f0f0f0;
-  border-radius: 4px;
+  border-radius: 6px;
+  background: var(--line-soft);
 }
 .cover :deep(.el-image) {
   width: 100%;
@@ -621,50 +587,44 @@ onMounted(fetchList);
 }
 .cover-ph {
   display: flex;
-  align-items: center;
-  justify-content: center;
   width: 100%;
   height: 100%;
-  color: #bfbfbf;
+  align-items: center;
+  justify-content: center;
   font-size: 10px;
+  color: var(--text-4);
+}
+.name-meta {
+  min-width: 0;
 }
 .title {
-  max-width: 220px;
   margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 22px;
+  color: var(--text);
   overflow: hidden;
-  color: #1a1a1a;
-  font-weight: 500;
-  white-space: nowrap;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sell-tag {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: #f5222d;
-}
-.status-dot {
   display: inline-flex;
-  gap: 6px;
   align-items: center;
-}
-.dot {
-  width: 6px;
-  height: 6px;
-  background: #bfbfbf;
-  border-radius: 50%;
-}
-.dot--green {
-  background: #52c41a;
-}
-.dot--red {
-  background: #f5222d;
+  height: 18px;
+  margin: 2px 0 0;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 18px;
+  background: #F1F5F9;
+  color: var(--text-3);
 }
 .ellipsis {
   display: inline-block;
   max-width: 120px;
   overflow: hidden;
-  white-space: nowrap;
   text-overflow: ellipsis;
+  white-space: nowrap;
   vertical-align: bottom;
 }
 .risk-tag {
@@ -672,63 +632,24 @@ onMounted(fetchList);
   padding: 0 8px;
   font-size: 12px;
   line-height: 22px;
-  border: 1px solid #d9d9d9;
-  border-radius: 2px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-3);
+  background: #F8FAFC;
+  white-space: nowrap;
 }
 .risk--passed {
-  color: #52c41a;
-  background: #f6ffed;
-  border-color: #b7eb8f;
+  color: var(--success);
+  background: #ecfbf3;
+  border-color: color-mix(in srgb, var(--success) 35%, #fff);
 }
 .risk--rejected {
-  color: #f5222d;
+  color: var(--danger);
   background: #fff1f0;
-  border-color: #ffa39e;
+  border-color: color-mix(in srgb, var(--danger) 35%, #fff);
 }
 .risk--pending {
-  color: #595959;
-  background: #fafafa;
-}
-.op-link {
-  padding: 0;
-  color: var(--color-primary);
-  font-size: 13px;
-  text-decoration: none;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-}
-.op-link:hover {
-  text-decoration: underline;
-}
-.op-link:disabled {
-  color: #bfbfbf;
-  cursor: not-allowed;
-  text-decoration: none;
-}
-.op-more {
-  border: 0;
-  background: transparent;
-  padding: 0 4px;
-  font-size: 14px;
-  color: #999;
-  cursor: pointer;
-  line-height: 1;
-}
-.op-more:hover {
-  color: var(--color-primary);
-}
-.pager {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  justify-content: flex-end;
-}
-.pager-total {
-  margin-right: auto;
-  color: #666;
-  font-size: 13px;
+  color: var(--text-3);
+  background: #F8FAFC;
 }
 </style>

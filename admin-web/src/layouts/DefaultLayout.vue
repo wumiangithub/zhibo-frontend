@@ -29,32 +29,33 @@ const workbenchSideNav = [
   { key: "overview", label: "概况", icon: "overview", to: "/" },
   { key: "live-console", label: "直播中控台", icon: "monitor" },
   { key: "live-data", label: "直播数据", icon: "chart" },
+  { key: "course", label: "课程", icon: "stack", to: "/course" },
+  { key: "users", label: "用户列表", icon: "user", to: "/user/list" },
+  { key: "material", label: "素材中心", icon: "grid", to: "/settings/materials" },
+  { key: "sep-more", label: "", divider: true },
   { key: "series", label: "系列课", icon: "stack" },
   { key: "mp", label: "定制小程序", icon: "target" },
   { key: "app", label: "定制App", icon: "phone" },
   { key: "circle", label: "圈子管理", icon: "people" },
   { key: "assess", label: "适应性测评", icon: "clipboard" },
   { key: "public", label: "公域概况", icon: "globe" },
-  { key: "users", label: "用户列表", icon: "user" },
   { key: "traffic", label: "流量中心", icon: "trend" },
-  { key: "material", label: "素材中心", icon: "grid", to: "/settings/materials" },
 ] as const;
 
-/** 直播模块侧栏：无图标，贴近截图 */
+/** 直播模块侧栏：一级菜单统一带图标（同源功能与工作台同 icon） */
 const liveSideNav = [
-  { key: "report-create", label: "新建直播报备", to: "/live-reports/new" },
-  { key: "report", label: "直播报备", to: "/live-reports" },
-  { key: "create", label: "新建直播", to: "/live/create" },
-  { key: "manage", label: "直播管理", to: "/live" },
-  { key: "data", label: "直播数据" },
-  { key: "console", label: "直播中控台" },
-  { key: "download", label: "软件下载" },
-  { key: "settings", label: "通用设置" },
+  { key: "report", label: "直播报备", icon: "clipboard", to: "/live-reports" },
+  { key: "manage", label: "直播管理", icon: "video", to: "/live" },
+  { key: "data", label: "直播数据", icon: "chart" },
+  { key: "console", label: "直播中控台", icon: "monitor" },
+  { key: "sep-tools", label: "", divider: true },
+  { key: "download", label: "软件下载", icon: "download" },
+  { key: "settings", label: "通用设置", icon: "settings" },
 ] as const;
 
 const courseSideNav = [
-  { key: "create", label: "新建课程", to: "/course/create" },
-  { key: "manage", label: "课程管理", to: "/course" },
+  { key: "create", label: "新建课程", icon: "plus", to: "/course/create" },
+  { key: "manage", label: "课程管理", icon: "stack", to: "/course" },
 ] as const;
 
 /** 设置模块侧栏 */
@@ -64,14 +65,14 @@ const settingsSideNav = [
   { key: "roles", label: "角色管理", icon: "user", to: "/settings/roles" },
 ] as const;
 
-/** 顶栏用户模块侧栏（D79） */
+/** 顶栏用户模块侧栏（D79）；分组头为一级（已有 icon），下列为二级无 icon */
 const userSideNav = [
   { key: "list", label: "用户列表", to: "/user/list" },
   { key: "learning-stats", label: "用户学习统计", to: "/user/learning-stats" },
   { key: "tags", label: "标签管理", to: "/user/tags" },
 ] as const;
 
-/** 顶栏交易模块侧栏：订单管理 */
+/** 顶栏交易模块侧栏：订单管理（分组头为一级） */
 const tradeSideNav = [
   { key: "orders", label: "全部订单", to: "/trade/orders" },
 ] as const;
@@ -136,15 +137,16 @@ const activeSide = computed(() => {
     return "manage";
   }
   if (isLiveModule.value) {
-    if (route.name === "live-report-create" || route.path === "/live-reports/new") return "report-create";
+    // 新建报备 / 报备列表均高亮「直播报备」
     if (route.path.startsWith("/live-reports")) return "report";
-    if (route.name === "live-create") return "create";
-    // 列表 / 详情 / 去审核均高亮「直播管理」
+    // 新建直播 / 列表 / 详情 / 去审核均高亮「直播管理」
     if (
+      route.name === "live-create" ||
       route.name === "live-manage" ||
       route.name === "live-detail" ||
       route.name === "live-audit" ||
-      route.path === "/live"
+      route.path === "/live" ||
+      route.path.startsWith("/live/")
     ) {
       return "manage";
     }
@@ -174,7 +176,12 @@ const currentSideNav = computed(() => {
   return workbenchSideNav;
 });
 
+function isSideDivider(item: object): boolean {
+  return "divider" in item && Boolean((item as { divider?: unknown }).divider);
+}
+
 function sideIconOf(item: object): string | undefined {
+  if (isSideDivider(item)) return undefined;
   if ("icon" in item && typeof (item as { icon?: unknown }).icon === "string") {
     return (item as { icon: string }).icon;
   }
@@ -219,11 +226,11 @@ async function onAccountClick() {
 </script>
 
 <template>
-  <div class="flex h-dvh flex-col overflow-hidden bg-[#f5f6f8] text-[#333] antialiased">
-    <header class="z-20 flex h-[52px] flex-none items-center border-b border-[#ebebeb] bg-white px-5">
+  <div class="app-shell flex h-dvh flex-col overflow-hidden text-[var(--text)] antialiased">
+    <header class="app-header z-20 flex h-[52px] flex-none items-center bg-white">
       <button
         type="button"
-        class="group mr-7 flex flex-none items-center gap-2.5 border-0 bg-transparent p-0 outline-none"
+        class="app-brand group flex flex-none items-center gap-2 border-0 bg-transparent p-0 outline-none"
         @click="goHome"
       >
         <img
@@ -231,7 +238,7 @@ async function onAccountClick() {
           alt="钱坤"
           class="h-7 w-7 flex-none rounded-full transition-opacity group-hover:opacity-90"
         >
-        <span class="text-[15px] font-semibold text-[#1a1a1a] transition-colors group-hover:text-[var(--color-primary)]">
+        <span class="text-[15px] font-bold text-[var(--text)] transition-colors group-hover:text-[var(--color-primary)]">
           钱坤云直播平台
         </span>
       </button>
@@ -251,7 +258,7 @@ async function onAccountClick() {
       <div class="ml-3 flex flex-none items-center gap-2">
         <button
           type="button"
-          class="flex h-8 w-8 items-center justify-center rounded border-0 bg-transparent text-[#666] outline-none transition-colors hover:bg-[#f0f0f0] hover:text-[var(--color-primary)]"
+          class="flex h-8 w-8 items-center justify-center rounded border-0 bg-transparent text-[var(--text-3)] outline-none transition-colors hover:bg-[#F8FAFC] hover:text-[var(--primary)]"
           title="搜索"
           @click="onShellClick('搜索')"
         >
@@ -271,7 +278,7 @@ async function onAccountClick() {
         </button>
         <button
           type="button"
-          class="flex items-center gap-2 rounded-full border-0 bg-transparent py-1 pl-1 pr-2 text-[13px] text-[#333] outline-none transition-colors hover:bg-[#f0f0f0]"
+          class="flex items-center gap-2 rounded-full border-0 bg-transparent py-1 pl-1 pr-2 text-[13px] text-[var(--text-2)] outline-none transition-colors hover:bg-[#F8FAFC]"
           title="退出登录"
           @click="onAccountClick"
         >
@@ -299,7 +306,7 @@ async function onAccountClick() {
           </span>
           <span>{{ auth.displayName }}</span>
           <svg
-            class="h-3 w-3 text-[#999]"
+            class="h-3 w-3 text-[var(--text-4)]"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -317,12 +324,9 @@ async function onAccountClick() {
 
     <div class="flex min-h-0 flex-1">
       <aside
-        class="side-aside flex w-[176px] flex-none flex-col border-r border-[#ebebeb] bg-[#fafbfc]"
-        :class="{
-          'is-live-module': isLiveModule || isCourseModule || isUserModule || isTradeModule,
-        }"
+        class="side-aside flex w-[220px] flex-none flex-col border-r border-[var(--line)] bg-white"
       >
-        <nav class="side-nav min-h-0 flex-1 space-y-0.5 px-2 py-3 text-[13px]">
+        <nav class="side-nav hover-scrollbar min-h-0 flex-1 space-y-0.5 px-2 py-3 text-[13px]">
           <button
             v-if="isUserModule"
             type="button"
@@ -386,8 +390,13 @@ async function onAccountClick() {
               v-for="item in currentSideNav"
               :key="item.key"
             >
+              <div
+                v-if="isSideDivider(item)"
+                class="side-nav-divider"
+                role="separator"
+              />
               <RouterLink
-                v-if="'to' in item && item.to"
+                v-else-if="'to' in item && item.to"
                 :to="item.to"
                 class="side-nav-item"
                 :class="{
@@ -467,9 +476,11 @@ async function onAccountClick() {
       <main
         class="min-h-0 min-w-0 flex-1 p-5"
         :class="
-          route.name === 'settings-employees' || route.name === 'settings-roles'
+          route.name === 'settings-employees' ||
+            route.name === 'settings-roles' ||
+            route.name === 'dashboard'
             ? 'flex flex-col overflow-hidden'
-            : 'overflow-y-auto'
+            : 'overflow-y-auto hover-scrollbar'
         "
       >
         <RouterView v-slot="{ Component }">
@@ -491,11 +502,40 @@ async function onAccountClick() {
 </template>
 
 <style scoped>
+.app-shell {
+  background: var(--bg, #F5F7FB);
+}
+
+.app-header {
+  position: relative;
+  padding: 0 20px 0 16px;
+  border-bottom: 1px solid var(--line, #E2E8F0);
+}
+
+/* 金线叠在栏内，保持现高 52，避免其它页 100dvh-92px 被撑破 */
+.app-header::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: var(--gold, #F5B942);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.app-brand {
+  box-sizing: border-box;
+  width: 204px;
+}
+
 .side-aside,
 .side-nav,
 .side-nav-item,
 .side-fav-btn,
-.top-nav-item {
+.top-nav-item,
+.side-group-toggle {
   box-sizing: border-box;
 }
 
@@ -511,11 +551,12 @@ async function onAccountClick() {
 .top-nav-item {
   flex: none;
   border: 0;
-  border-radius: 0.375rem;
+  border-radius: 8px;
   background: transparent;
-  padding: 0.375rem 0.75rem;
+  padding: 6px 14px;
   font-size: 14px;
-  color: #333;
+  font-weight: 400;
+  color: var(--text-2, #334155);
   text-decoration: none;
   outline: none;
   cursor: pointer;
@@ -530,32 +571,34 @@ async function onAccountClick() {
 
 .top-nav-item.is-active {
   color: var(--color-primary);
-  background: var(--color-primary-bg-active);
-  font-weight: 600;
+  background: var(--primary-soft, #EFF6FF);
+  font-weight: 700;
   text-decoration: none;
 }
 
 .side-group-toggle {
   display: flex;
   width: 100%;
+  height: 40px;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   border: 0;
-  border-radius: 0.375rem;
+  border-radius: 8px;
   background: transparent;
-  padding: 0.5rem 0.75rem;
+  padding: 0 12px;
   font-size: 13px;
-  font-weight: 500;
-  color: #666;
+  font-weight: 400;
+  color: var(--text-2, #334155);
   outline: none;
   cursor: pointer;
   transition: color 0.15s, background-color 0.15s;
 }
 
+/* 父级只做展开分组，不要选中底，避免与子项双高亮 */
 .side-group-toggle:hover {
-  color: var(--color-primary);
-  background: var(--color-primary-bg);
+  color: var(--text-2, #334155);
+  background: #F8FAFC;
 }
 
 .side-group-label {
@@ -569,6 +612,7 @@ async function onAccountClick() {
   flex: none;
   width: 12px;
   height: 12px;
+  color: var(--text-4, #94A3B8);
   transition: transform 0.15s;
 }
 
@@ -578,18 +622,21 @@ async function onAccountClick() {
 
 .side-nav-item {
   display: flex;
+  position: relative;
   width: 100%;
   max-width: 100%;
   align-items: center;
-  gap: 0.625rem;
+  gap: 10px;
+  height: 40px;
   border: 0;
-  border-radius: 0.375rem;
+  border-radius: 8px;
   background: transparent;
-  padding: 0.625rem 0.75rem;
+  padding: 0 12px;
   text-align: left;
   text-decoration: none;
   font-size: 13px;
-  color: #333;
+  font-weight: 400;
+  color: var(--text-2, #334155);
   outline: none;
   transition: background-color 0.15s, color 0.15s;
 }
@@ -598,33 +645,45 @@ async function onAccountClick() {
 .side-nav-item:focus,
 .side-nav-item:active {
   text-decoration: none;
-  background: var(--color-primary-bg);
+  background: #F8FAFC;
   color: var(--color-primary);
 }
 
 .side-nav-item.is-active {
-  background: var(--color-primary-bg-active);
+  background: var(--primary-soft, #EFF6FF);
   color: var(--color-primary);
-  font-weight: 600;
+  font-weight: 700;
   text-decoration: none;
 }
 
-/* 二级菜单：背景块略缩；文字再往里一点 */
+.side-nav-item.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--gold, #F5B942);
+}
+
+/* 二级菜单：左缩 22，高 36；当前项金条上下各留 6 */
 .side-nav-item.is-nested {
-  width: calc(100% - 0.75rem);
-  margin-left: 0.75rem;
-  padding-left: 1.5rem;
+  width: auto;
+  height: 36px;
+  margin-left: 22px;
+  padding-left: 12px;
 }
 
-.side-aside.is-live-module .side-nav-item.is-nested.is-active {
-  padding-left: calc(1.5rem - 3px);
+.side-nav-item.is-nested.is-active::before {
+  top: 6px;
+  bottom: 6px;
 }
 
-/* 直播模块选中：左侧蓝条，贴近参考图 */
-.side-aside.is-live-module .side-nav-item.is-active {
-  border-radius: 0 0.375rem 0.375rem 0;
-  border-left: 3px solid var(--color-primary);
-  padding-left: calc(0.75rem - 3px);
+.side-nav-divider {
+  height: 1px;
+  margin: 12px 10px;
+  background: var(--line-soft, #EEF2F7);
 }
 
 .side-nav-item :deep(svg) {

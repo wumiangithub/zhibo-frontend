@@ -16,7 +16,6 @@ import {
   Delete,
   EditPen,
   FolderAdd,
-  MoreFilled,
   Plus,
   Setting,
 } from "@element-plus/icons-vue";
@@ -566,9 +565,7 @@ watch(
                       aria-label="更多"
                       @click.stop
                     >
-                      <ElIcon :size="16">
-                        <MoreFilled />
-                      </ElIcon>
+                      <i class="admin-more-icon" aria-hidden="true" />
                     </button>
                     <template #dropdown>
                       <ElDropdownMenu>

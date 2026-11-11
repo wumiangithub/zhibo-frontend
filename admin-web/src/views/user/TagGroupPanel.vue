@@ -415,15 +415,15 @@ defineExpose({ refresh: fetchList });
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid #ebebeb;
-  border-radius: 4px;
-  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
 }
 .link-btn {
   border: 0;
   background: transparent;
   padding: 0;
-  color: var(--color-primary);
+  color: var(--primary);
   cursor: pointer;
   font-size: 13px;
 }
@@ -432,11 +432,11 @@ defineExpose({ refresh: fetchList });
 }
 .link-btn.disabled,
 .link-btn:disabled {
-  color: #c0c4cc;
+  color: var(--text-4);
   cursor: not-allowed;
 }
 .op-sep {
-  color: #ddd;
+  color: var(--line);
   margin: 0 6px;
 }
 .pager {
@@ -449,7 +449,7 @@ defineExpose({ refresh: fetchList });
 }
 .pager-total {
   font-size: 13px;
-  color: #666;
+  color: var(--text-3);
   margin-right: auto;
 }
 .form-row {
@@ -460,12 +460,12 @@ defineExpose({ refresh: fetchList });
 .label {
   flex: none;
   font-size: 14px;
-  color: #333;
+  color: var(--text-2);
   white-space: nowrap;
 }
 .label.required::before {
   content: "*";
-  color: #f56c6c;
+  color: var(--danger);
   margin-right: 4px;
 }
 .th-with-tip {
@@ -475,11 +475,11 @@ defineExpose({ refresh: fetchList });
 }
 .info-icon {
   font-size: 14px;
-  color: #c0c4cc;
+  color: var(--text-4);
   cursor: help;
 }
 .user-count {
-  color: var(--color-primary);
+  color: var(--primary);
 }
 .user-count-tip {
   max-width: 280px;
@@ -493,7 +493,7 @@ defineExpose({ refresh: fetchList });
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  color: #606266;
+  color: var(--text-3);
   font-size: 14px;
   line-height: 1.6;
 }
@@ -502,6 +502,6 @@ defineExpose({ refresh: fetchList });
   margin-top: 2px;
 }
 .fake-link {
-  color: var(--color-primary);
+  color: var(--primary);
 }
 </style>

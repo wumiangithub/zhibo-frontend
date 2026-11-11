@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from "vue-router";
-import { ElCheckbox, ElButton, ElMessage } from "element-plus";
+import { ElCheckbox, ElMessage } from "element-plus";
+import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 import { createActivity, type CreateActivityPayload } from "@/api/activity";
 import { useLeaveConfirm } from "@/composables/useLeaveConfirm";
 import { useAuthStore } from "@/stores/auth";
@@ -12,6 +13,11 @@ import {
 import BasicInfoSection from "./sections/BasicInfoSection.vue";
 import ProviderModeSection from "./sections/ProviderModeSection.vue";
 import RelatedBusinessSection from "./sections/RelatedBusinessSection.vue";
+
+const crumbs: AppBreadcrumbItem[] = [
+  { label: "直播管理", to: "/live" },
+  { label: "新建直播" },
+];
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -92,6 +98,7 @@ async function onSave() {
 
 <template>
   <div class="live-create">
+    <AppBreadcrumb :items="crumbs" />
     <div class="live-create__form">
       <div class="card">
         <BasicInfoSection
@@ -108,7 +115,7 @@ async function onSave() {
       </div>
     </div>
 
-    <div class="live-create__footer">
+    <div class="admin-page-footer live-create__footer">
       <ElCheckbox
         v-model="form.agreed"
         @change="leave.markDirty"
@@ -117,14 +124,22 @@ async function onSave() {
         <a class="link">《钱坤直播运营规范》</a>
       </ElCheckbox>
       <div class="flex items-center gap-3">
-        <ElButton @click="onCancel">取消</ElButton>
-        <ElButton
-          type="primary"
-          :loading="submitting"
+        <button
+          type="button"
+          class="admin-btn admin-btn--ghost"
+          :disabled="submitting"
+          @click="onCancel"
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          class="admin-btn admin-btn--primary"
+          :disabled="submitting"
           @click="onSave"
         >
           确定
-        </ElButton>
+        </button>
       </div>
     </div>
   </div>
@@ -141,24 +156,14 @@ async function onSave() {
   gap: 16px;
 }
 .card {
-  background: #fff;
-  border-radius: 8px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
   padding: 20px 24px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow);
 }
 .live-create__footer {
-  position: fixed;
-  left: 176px;
-  right: 0;
-  bottom: 0;
-  height: 64px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 0 32px;
-  z-index: 10;
 }
 .link {
   color: var(--color-primary);

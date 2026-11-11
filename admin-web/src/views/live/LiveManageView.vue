@@ -2,7 +2,6 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import {
-  ElButton,
   ElDatePicker,
   ElDropdown,
   ElDropdownItem,
@@ -24,13 +23,11 @@ import {
   activityReadyLabel,
   LIVE_STATE_LABEL,
   LIVE_TYPE_LABEL,
-  RISK_STATUS_LABEL,
-  sellTagText,
+  SELL_TYPE_LABEL,
   setActivityShelf,
   SHELF_STATUS_LABEL,
   type ActivityListItem,
   type ActivitySortKey,
-  type RiskStatus,
   type ShelfStatus,
 } from "@/api/activity";
 import ImagePreview from "@/components/ImagePreview.vue";
@@ -63,8 +60,8 @@ const coverPreviewItems = ref<ImagePreviewItem[]>([]);
 
 const filters = reactive({
   keyword: "",
-  shelfStatus: "" as "" | ShelfStatus,
-  state: "" as "" | number,
+  shelfStatus: "all" as "all" | ShelfStatus,
+  state: "all" as "all" | number,
   startRange: null as [string, string] | null,
 });
 
@@ -78,6 +75,20 @@ const query = reactive({
 
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageSize)));
 
+const startFrom = computed({
+  get: () => filters.startRange?.[0] || undefined,
+  set: (v: string | undefined) => setStartRange(v || "", filters.startRange?.[1] || ""),
+});
+
+const startTo = computed({
+  get: () => filters.startRange?.[1] || undefined,
+  set: (v: string | undefined) => setStartRange(filters.startRange?.[0] || "", v || ""),
+});
+
+function setStartRange(from: string, to: string) {
+  filters.startRange = from || to ? [from, to] : null;
+}
+
 function openCoverPreview(url?: string | null, title?: string) {
   if (!url) return;
   coverPreviewItems.value = [{ url, name: title || "封面" }];
@@ -89,9 +100,12 @@ function ownersText(item: ActivityListItem) {
   return names.length ? names.join("、") : "--";
 }
 
-function productsText(item: ActivityListItem) {
-  const names = (item.products ?? []).map((p) => p.productName).filter(Boolean);
-  return names.length ? names.join("、") : "--";
+function sellLabel(item: ActivityListItem) {
+  return item.sellType ? SELL_TYPE_LABEL[item.sellType] : "";
+}
+
+function validityLabelOf(item: ActivityListItem) {
+  return item.validityLabel?.trim() || "长期有效";
 }
 
 /** 缺字段时按契约新建默认：待上架 / 待审核（历史迁移应为 on/passed，由后端回填） */
@@ -99,24 +113,20 @@ function shelfOf(item: ActivityListItem): ShelfStatus {
   return item.shelfStatus ?? "pending";
 }
 
-function riskOf(item: ActivityListItem): RiskStatus {
-  return item.riskStatus ?? "pending";
+function shelfTone(status?: ShelfStatus) {
+  if (status === "on") return "success";
+  if (status === "banned") return "danger";
+  if (status === "pending") return "pending";
+  return "ended";
 }
 
-function shelfDotClass(status?: ShelfStatus) {
-  if (status === "on") return "dot--green";
-  if (status === "banned") return "dot--red";
-  return "dot--grey";
-}
-
-function stateDotClass(state: number) {
-  return state === 1 ? "dot--green" : "dot--grey";
-}
-
-function riskClass(status?: RiskStatus) {
-  if (status === "passed") return "risk--passed";
-  if (status === "rejected") return "risk--rejected";
-  return "risk--pending";
+function stateTone(state: number) {
+  if (state === 1) return "success";
+  if (state === 2) return "preview";
+  if (state === 5) return "replay";
+  if (state === 3) return "ended";
+  if (state === 4) return "replay";
+  return "muted";
 }
 
 function formatStartTime(raw?: string) {
@@ -135,8 +145,8 @@ async function fetchList() {
       pageSize: query.pageSize,
     };
     if (filters.keyword.trim()) params.keyword = filters.keyword.trim();
-    if (filters.shelfStatus) params.shelfStatus = filters.shelfStatus;
-    if (filters.state !== "" && filters.state !== 0) params.state = filters.state;
+    if (filters.shelfStatus && filters.shelfStatus !== "all") params.shelfStatus = filters.shelfStatus;
+    if (filters.state !== "all" && filters.state !== "" && filters.state !== 0) params.state = filters.state;
     if (filters.startRange?.[0]) params.startFrom = filters.startRange[0];
     if (filters.startRange?.[1]) params.startTo = filters.startRange[1];
     if (query.sort) {
@@ -164,8 +174,8 @@ function search() {
 
 function resetFilter() {
   filters.keyword = "";
-  filters.shelfStatus = "";
-  filters.state = "";
+  filters.shelfStatus = "all";
+  filters.state = "all";
   filters.startRange = null;
   query.page = 1;
   query.sort = "";
@@ -275,29 +285,29 @@ onMounted(fetchList);
 </script>
 
 <template>
-  <div class="live-manage">
-    <div class="filter-bar">
-      <div class="filter-item">
-        <span class="filter-label">直播名称</span>
+  <div class="admin-panel admin-panel--row-72 live-manage">
+    <div class="admin-filter-bar">
+      <div class="admin-filter-fields">
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">直播名称</span>
         <ElInput
           v-model="filters.keyword"
           clearable
           placeholder="请输入直播名称"
-          style="width: 180px"
+          style="width: 168px"
           @keyup.enter="search"
         />
       </div>
-      <div class="filter-item">
-        <span class="filter-label">上架状态</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">上架状态</span>
         <ElSelect
           v-model="filters.shelfStatus"
-          clearable
           placeholder="全部状态"
-          style="width: 140px"
+          style="width: 120px"
         >
           <ElOption
             label="全部状态"
-            value=""
+            value="all"
           />
           <ElOption
             v-for="(label, key) in SHELF_STATUS_LABEL"
@@ -307,17 +317,16 @@ onMounted(fetchList);
           />
         </ElSelect>
       </div>
-      <div class="filter-item">
-        <span class="filter-label">直播状态</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">直播状态</span>
         <ElSelect
           v-model="filters.state"
-          clearable
           placeholder="全部状态"
-          style="width: 140px"
+          style="width: 120px"
         >
           <ElOption
             label="全部状态"
-            value=""
+            value="all"
           />
           <ElOption
             v-for="(label, key) in LIVE_STATE_LABEL"
@@ -327,45 +336,68 @@ onMounted(fetchList);
           />
         </ElSelect>
       </div>
-      <div class="filter-item">
-        <span class="filter-label">直播开始时间</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">直播开始时间</span>
         <ElDatePicker
-          v-model="filters.startRange"
-          type="daterange"
+          v-model="startFrom"
+          type="date"
           value-format="YYYY-MM-DD"
-          start-placeholder="开始日期"
-          end-placeholder="结束日期"
-          range-separator="至"
-          style="width: 260px"
+          placeholder="开始日期"
+          style="width: 132px"
+        />
+        <span class="range-sep">至</span>
+        <ElDatePicker
+          v-model="startTo"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="结束日期"
+          style="width: 132px"
         />
       </div>
-      <ElButton @click="resetFilter">重置</ElButton>
-      <ElButton
-        type="primary"
-        @click="search"
-      >
-        查询
-      </ElButton>
+      </div>
+      <div class="admin-filter-actions">
+        <button
+          type="button"
+          class="admin-btn admin-btn--primary"
+          @click="search"
+        >
+          查询
+        </button>
+        <button
+          type="button"
+          class="admin-btn admin-btn--ghost"
+          @click="resetFilter"
+        >
+          重置
+        </button>
+      </div>
     </div>
 
-    <div class="toolbar">
-      <ElButton
-        type="primary"
+    <div class="admin-toolbar">
+      <button
+        type="button"
+        class="admin-btn admin-btn--primary"
         @click="goCreate"
       >
         + 新建直播
-      </ElButton>
-      <ElButton @click="onExport">导出</ElButton>
+      </button>
+      <button
+        type="button"
+        class="admin-btn admin-btn--ghost"
+        @click="onExport"
+      >
+        导出
+      </button>
     </div>
 
     <p
       v-if="error"
-      class="err-banner"
+      class="admin-err"
     >
       {{ error }}
     </p>
 
-    <div class="table-wrap">
+    <div class="admin-table-wrap">
       <ElTable
         v-loading="loading"
         :data="list"
@@ -377,7 +409,7 @@ onMounted(fetchList);
       >
         <ElTableColumn
           type="selection"
-          width="48"
+          width="44"
         />
         <ElTableColumn
           label="直播名称"
@@ -399,14 +431,21 @@ onMounted(fetchList);
               </div>
               <div class="name-meta">
                 <p class="title">{{ row.title }}</p>
-                <p class="sell-tag">{{ sellTagText(row) }}</p>
+                <div class="meta-tags">
+                  <span
+                    v-if="sellLabel(row as ActivityListItem)"
+                    class="meta-tag"
+                    :class="(row as ActivityListItem).sellType === 'free' ? 'is-free' : 'is-sell'"
+                  >{{ sellLabel(row as ActivityListItem) }}</span>
+                  <span class="meta-tag is-validity">{{ validityLabelOf(row as ActivityListItem) }}</span>
+                </div>
               </div>
             </div>
           </template>
         </ElTableColumn>
         <ElTableColumn
           label="直播类型"
-          width="100"
+          width="108"
         >
           <template #default="{ row }">
             {{ LIVE_TYPE_LABEL[row.type] ?? row.type }}
@@ -414,14 +453,14 @@ onMounted(fetchList);
         </ElTableColumn>
         <ElTableColumn
           label="上架状态"
-          width="110"
+          width="128"
         >
           <template #default="{ row }">
-            <span class="status-dot">
-              <i
-                class="dot"
-                :class="shelfDotClass(shelfOf(row as ActivityListItem))"
-              />
+            <span
+              class="status-dot"
+              :class="`is-${shelfTone(shelfOf(row as ActivityListItem))}`"
+            >
+              <i class="dot" />
               {{ SHELF_STATUS_LABEL[shelfOf(row as ActivityListItem)] }}
             </span>
           </template>
@@ -429,7 +468,7 @@ onMounted(fetchList);
         <ElTableColumn
           prop="startTime"
           label="直播开始时间"
-          min-width="170"
+          width="184"
           sortable="custom"
         >
           <template #default="{ row }">
@@ -438,7 +477,7 @@ onMounted(fetchList);
         </ElTableColumn>
         <ElTableColumn
           label="归属人"
-          min-width="120"
+          width="88"
         >
           <template #default="{ row }">
             <ElTooltip
@@ -453,14 +492,14 @@ onMounted(fetchList);
         </ElTableColumn>
         <ElTableColumn
           label="直播状态"
-          min-width="140"
+          width="108"
         >
           <template #default="{ row }">
-            <span class="status-dot">
-              <i
-                class="dot"
-                :class="stateDotClass(row.state)"
-              />
+            <span
+              class="status-dot"
+              :class="`is-${stateTone(row.state)}`"
+            >
+              <i class="dot" />
               {{ LIVE_STATE_LABEL[row.state] ?? row.state }}
             </span>
             <span
@@ -473,43 +512,15 @@ onMounted(fetchList);
           </template>
         </ElTableColumn>
         <ElTableColumn
-          label="关联商品"
-          min-width="120"
-        >
-          <template #default="{ row }">
-            <ElTooltip
-              v-if="productsText(row as ActivityListItem) !== '--'"
-              :content="productsText(row as ActivityListItem)"
-              placement="top"
-            >
-              <span class="ellipsis">{{ productsText(row as ActivityListItem) }}</span>
-            </ElTooltip>
-            <span v-else>--</span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn
-          label="风控合规审核"
-          width="120"
-        >
-          <template #default="{ row }">
-            <span
-              class="risk-tag"
-              :class="riskClass(riskOf(row as ActivityListItem))"
-            >
-              {{ RISK_STATUS_LABEL[riskOf(row as ActivityListItem)] }}
-            </span>
-          </template>
-        </ElTableColumn>
-        <ElTableColumn
           label="操作"
-          width="208"
+          width="220"
           fixed="right"
         >
           <template #default="{ row }">
-            <div class="ops">
+            <div class="admin-ops">
               <button
                 type="button"
-                class="op-link"
+                class="admin-op"
                 :disabled="!row.canBroadcast"
                 @click="goLive(row as ActivityListItem)"
               >
@@ -517,16 +528,23 @@ onMounted(fetchList);
               </button>
               <RouterLink
                 :to="`/live/${row.id}`"
-                class="op-link"
+                class="admin-op"
               >
-                管理
+                编辑
               </RouterLink>
               <RouterLink
                 :to="{ path: `/live/${row.id}`, query: { tab: 'data' } }"
-                class="op-link"
+                class="admin-op"
               >
                 数据
               </RouterLink>
+              <button
+                type="button"
+                class="admin-op"
+                @click="openShare(row as ActivityListItem)"
+              >
+                分享
+              </button>
               <!-- D109：去审核 / 审核记录入口暂隐藏，接口与路由保留 -->
               <ElDropdown
                 trigger="click"
@@ -534,13 +552,13 @@ onMounted(fetchList);
               >
                 <button
                   type="button"
-                  class="op-more"
+                  class="admin-op-more"
+                  aria-label="更多"
                 >
-                  ···
+                  
                 </button>
                 <template #dropdown>
                   <ElDropdownMenu>
-                    <ElDropdownItem command="share">分享</ElDropdownItem>
                     <ElDropdownItem
                       v-if="shelfOf(row as ActivityListItem) === 'pending' || shelfOf(row as ActivityListItem) === 'off'"
                       command="on"
@@ -568,12 +586,11 @@ onMounted(fetchList);
       </ElTable>
     </div>
 
-    <div class="pager">
-      <span class="pager-total">共 {{ total }} 条记录 第 {{ query.page }}/{{ pageCount }} 页</span>
+    <div class="admin-pager">
+      <span class="admin-pager__total">共 {{ total }} 条记录 第 {{ query.page }}/{{ pageCount }} 页</span>
       <ElPagination
         :current-page="query.page"
         :page-size="query.pageSize"
-        background
         layout="sizes, prev, pager, next, jumper"
         :total="total"
         :page-sizes="[10, 20, 50]"
@@ -602,68 +619,22 @@ onMounted(fetchList);
 </template>
 
 <style scoped>
-.live-manage {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  /* 顶栏 52 + main padding 20*2，与素材中心一致，避免整页滚 */
-  height: calc(100dvh - 92px);
-  min-height: 0;
-  overflow: hidden;
-}
-.filter-bar {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
-}
-.filter-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.filter-label {
-  font-size: 13px;
-  color: #666;
+.range-sep {
+  color: var(--text-3);
   white-space: nowrap;
-}
-.toolbar {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 12px;
-}
-.err-banner {
-  flex: none;
-  margin: 0;
-  padding: 8px 12px;
-  border-radius: 4px;
-  background: #fff2f0;
-  color: #cf1322;
-  font-size: 13px;
-}
-.table-wrap {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid #ebebeb;
-  border-radius: 4px;
-  background: #fff;
 }
 .name-cell {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 200px;
+  min-width: 0;
 }
 .cover {
-  width: 64px;
+  width: 72px;
   height: 48px;
   flex: none;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: 6px;
   background: #f0f0f0;
 }
 .cover img {
@@ -679,48 +650,48 @@ onMounted(fetchList);
   align-items: center;
   justify-content: center;
   font-size: 10px;
-  color: #bfbfbf;
+  color: var(--text-4);
 }
 .name-meta {
   min-width: 0;
 }
 .title {
   margin: 0;
-  font-weight: 500;
-  color: #1a1a1a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 22px;
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 220px;
 }
-.sell-tag {
-  margin: 2px 0 0;
-  font-size: 12px;
-  color: #f5222d;
+.meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
 }
-.status-dot {
+.meta-tag {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 18px;
 }
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #bfbfbf;
+.meta-tag.is-free {
+  background: var(--gold-soft);
+  color: var(--gold-deep);
 }
-.dot--green {
-  background: #52c41a;
-}
-.dot--red {
-  background: #f5222d;
-}
-.dot--grey {
-  background: #bfbfbf;
+.meta-tag.is-validity,
+.meta-tag.is-sell {
+  background: #F1F5F9;
+  color: var(--text-3);
 }
 .ellipsis {
   display: inline-block;
-  max-width: 120px;
+  max-width: 72px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -730,89 +701,17 @@ onMounted(fetchList);
   display: inline-block;
   margin-left: 6px;
   padding: 0 6px;
-  border-radius: 2px;
-  font-size: 12px;
+  border-radius: 4px;
+  font-size: 11px;
   line-height: 18px;
   vertical-align: middle;
 }
 .ready-tag.is-pending {
-  color: #d48806;
-  background: #fff7e6;
+  color: var(--gold-deep);
+  background: var(--gold-soft);
 }
 .ready-tag.is-fail {
-  color: #cf1322;
+  color: var(--danger);
   background: #fff1f0;
-}
-.risk-tag {
-  display: inline-block;
-  padding: 0 8px;
-  line-height: 22px;
-  border-radius: 2px;
-  border: 1px solid #d9d9d9;
-  font-size: 12px;
-}
-.risk--passed {
-  color: #52c41a;
-  border-color: #b7eb8f;
-  background: #f6ffed;
-}
-.risk--rejected {
-  color: #f5222d;
-  border-color: #ffa39e;
-  background: #fff1f0;
-}
-.risk--pending {
-  color: #595959;
-  border-color: #d9d9d9;
-  background: #fafafa;
-}
-.ops {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-.op-link {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  font-size: 13px;
-  color: var(--color-primary);
-  cursor: pointer;
-  text-decoration: none;
-}
-.op-link:hover {
-  text-decoration: underline;
-}
-.op-link:disabled {
-  color: #bfbfbf;
-  cursor: not-allowed;
-  text-decoration: none;
-}
-.op-more {
-  border: 0;
-  background: transparent;
-  padding: 0 4px;
-  font-size: 14px;
-  color: #999;
-  cursor: pointer;
-  line-height: 1;
-}
-.op-more:hover {
-  color: var(--color-primary);
-}
-.pager {
-  flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-}
-.pager-total {
-  font-size: 13px;
-  color: #666;
-  margin-right: auto;
 }
 </style>

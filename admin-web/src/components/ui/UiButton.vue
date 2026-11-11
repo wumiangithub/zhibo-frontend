@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 withDefaults(
   defineProps<{
     /** primary 实心蓝；outline 蓝框蓝字；default 灰框；link 纯文字链 */
@@ -61,7 +61,7 @@ withDefaults(
   gap: 4px;
   height: 32px;
   padding: 0 14px;
-  border-radius: 4px;
+  border-radius: 8px;
   border: 1px solid transparent;
   font-size: 13px;
   line-height: 1;
@@ -92,9 +92,9 @@ withDefaults(
 }
 
 .ui-btn.is-default.is-look-disabled:hover {
-  border-color: #d9d9d9;
+  border-color: var(--line, #E2E8F0);
   background: #fff;
-  color: #333;
+  color: var(--text-2, #334155);
 }
 
 .ui-btn.is-primary.is-look-disabled:hover {
@@ -111,6 +111,7 @@ withDefaults(
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: #fff;
+  font-weight: 700;
 }
 
 .ui-btn.is-primary:hover:not(:disabled) {
@@ -118,11 +119,12 @@ withDefaults(
   background: var(--color-primary-hover);
 }
 
-/* 参考图：筛选 / 批量创建 — 白底蓝框蓝字 */
+/* 筛选查询等：白底蓝框蓝字 */
 .ui-btn.is-outline {
   border-color: var(--color-primary);
   background: #fff;
   color: var(--color-primary);
+  font-weight: 700;
 }
 
 .ui-btn.is-outline:hover:not(:disabled) {
@@ -131,9 +133,9 @@ withDefaults(
 
 /* 参考图：导出 / 上架 / 下架 / 删除 / 更多操作 */
 .ui-btn.is-default {
-  border-color: #d9d9d9;
+  border-color: var(--line, #E2E8F0);
   background: #fff;
-  color: #333;
+  color: var(--text-2, #334155);
 }
 
 .ui-btn.is-default:hover:not(:disabled) {

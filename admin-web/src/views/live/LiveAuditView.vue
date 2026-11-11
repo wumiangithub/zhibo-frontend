@@ -2,7 +2,6 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import {
-  ElButton,
   ElInput,
   ElMessage,
   ElRadio,
@@ -166,13 +165,14 @@ watch(id, loadAll);
             style="max-width: 480px"
           />
         </div>
-        <ElButton
-          type="primary"
-          :loading="submitting"
+        <button
+          type="button"
+          class="admin-btn admin-btn--primary"
+          :disabled="submitting"
           @click="onSubmit"
         >
           提交
-        </ElButton>
+        </button>
       </div>
 
       <div class="card">
@@ -219,23 +219,24 @@ watch(id, loadAll);
 }
 .status {
   font-size: 13px;
-  color: #999;
+  color: var(--text-3);
 }
 .status.is-err {
-  color: #cf1322;
+  color: var(--danger);
 }
 .card {
-  background: #fff;
-  border-radius: 8px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
   padding: 20px 24px;
   margin-bottom: 16px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow);
 }
 .card-title {
   margin: 0 0 16px;
   font-size: 16px;
-  font-weight: 600;
-  color: #1a1a1a;
+  font-weight: 700;
+  color: var(--text);
 }
 .meta {
   display: flex;
@@ -243,12 +244,12 @@ watch(id, loadAll);
   gap: 8px;
   margin-bottom: 20px;
   font-size: 13px;
-  color: #333;
+  color: var(--text-2);
 }
 .meta-label {
   display: inline-block;
   width: 72px;
-  color: #999;
+  color: var(--text-3);
 }
 .form-row {
   display: flex;
@@ -261,6 +262,6 @@ watch(id, loadAll);
   width: 72px;
   line-height: 32px;
   font-size: 13px;
-  color: #666;
+  color: var(--text-2);
 }
 </style>

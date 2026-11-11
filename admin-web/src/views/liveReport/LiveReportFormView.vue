@@ -793,7 +793,7 @@ onMounted(init);
   padding-bottom: 80px;
 }
 .card {
-  background: #fff;
+  background: var(--white);
   padding: 22px 28px;
   border-radius: 6px;
 }
@@ -814,7 +814,7 @@ onMounted(init);
   font-size: 13px;
 }
 .field > label i {
-  color: var(--color-danger, #f5222d);
+  color: var(--danger));
   font-style: normal;
 }
 .times,
@@ -832,7 +832,7 @@ onMounted(init);
 }
 .material-head small {
   display: inline;
-  color: #c0c4cc;
+  color: var(--text-4);
 }
 .time-row {
   display: flex;
@@ -850,7 +850,7 @@ onMounted(init);
 }
 small {
   display: block;
-  color: #999;
+  color: var(--text-4);
   font-size: 12px;
 }
 .host-wrap {
@@ -865,7 +865,7 @@ small {
 }
 .host-option__dept,
 .host-tag__dept {
-  color: #999;
+  color: var(--text-4);
   font-size: 12px;
 }
 .host-option__avatar,
@@ -877,7 +877,7 @@ small {
   height: 22px;
   border-radius: 50%;
   overflow: hidden;
-  background: #d9d9d9;
+  background: var(--line);
   color: #fff;
   flex-shrink: 0;
 }
@@ -900,16 +900,16 @@ small {
   width: fit-content;
   max-width: 100%;
   padding: 10px 12px;
-  background: #f5f6f8;
+  background: var(--bg);
   border-radius: 6px;
 }
 .host-tag {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #fff;
-  color: #333;
-  border: 1px solid #e8e8e8;
+  background: var(--white);
+  color: var(--text-2);
+  border: 1px solid var(--line);
   border-radius: 16px;
   padding: 4px 10px 4px 4px;
   font-size: 13px;
@@ -920,27 +920,27 @@ small {
 .host-tag__x {
   cursor: pointer;
   font-style: normal;
-  color: #999;
+  color: var(--text-4);
   line-height: 1;
   font-size: 14px;
 }
 .host-tag__x:hover {
-  color: #f5222d;
+  color: var(--danger);
 }
 .cover-box {
   position: relative;
   width: 200px;
   height: 112px;
-  border: 1px dashed #d9d9d9;
-  border-radius: 4px;
-  background: #fafafa;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--bg);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .cover-box.is-empty:hover {
-  border-color: var(--color-primary);
+  border-color: var(--primary);
 }
 .cover-box > img {
   width: 100%;
@@ -952,12 +952,12 @@ small {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  color: #999;
+  color: var(--text-4);
   pointer-events: none;
 }
 .cover-placeholder > span {
   font-size: 28px;
-  color: #c0c4cc;
+  color: var(--text-4);
 }
 .cover-pick {
   position: absolute;
@@ -998,11 +998,11 @@ small {
 }
 .pick {
   width: max-content;
-  border: 1px solid var(--color-primary);
+  border: 1px solid var(--primary);
   padding: 6px 12px;
-  color: var(--color-primary);
+  color: var(--primary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 8px;
   font-size: 13px;
 }
 .pick.is-disabled {
@@ -1014,7 +1014,7 @@ small {
   grid-template-columns: 28px minmax(150px, 1fr) 70px auto auto auto;
   gap: 10px;
   align-items: center;
-  background: #f7f8fa;
+  background: var(--bg);
   padding: 10px 12px;
   font-size: 13px;
 }
@@ -1023,15 +1023,15 @@ small {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #333;
+  color: var(--text-2);
   font-size: 13px;
 }
 .status-text {
   font-size: 13px;
-  color: #999;
+  color: var(--text-4);
 }
 .status-text.is-error {
-  color: #f5222d;
+  color: var(--danger);
 }
 .file-icon {
   width: 28px;
@@ -1042,14 +1042,14 @@ small {
 .file button {
   border: 0;
   background: none;
-  color: var(--color-primary);
+  color: var(--primary);
   cursor: pointer;
   text-decoration: none;
 }
 /* 与新建直播 LiveCreateView .live-create__footer 同一套贴底悬浮 */
 .actions {
   position: fixed;
-  left: 176px;
+  left: 220px;
   right: 0;
   bottom: 0;
   z-index: 10;
@@ -1059,7 +1059,7 @@ small {
   justify-content: center;
   gap: 20px;
   padding: 0 32px;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
+  background: var(--white);
+  border-top: 1px solid var(--line);
 }
 </style>

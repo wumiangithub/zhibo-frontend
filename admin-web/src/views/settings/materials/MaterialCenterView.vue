@@ -2,22 +2,21 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
-  ElInput,
-  ElSelect,
-  ElOption,
   ElButton,
+  ElDialog,
+  ElDropdown,
+  ElDropdownItem,
+  ElDropdownMenu,
+  ElInput,
+  ElMessage,
+  ElMessageBox,
+  ElOption,
+  ElPagination,
+  ElSelect,
   ElTable,
   ElTableColumn,
-  ElPagination,
   ElTag,
-  ElMessageBox,
-  ElMessage,
-  ElDropdown,
-  ElDropdownMenu,
-  ElDropdownItem,
-  ElDialog,
 } from "element-plus";
-import { Plus, RefreshRight } from "@element-plus/icons-vue";
 import ImageCropDialog from "@/views/live/components/ImageCropDialog.vue";
 import { downloadFiles } from "@/utils/downloadFile";
 import { handleUpload } from "@/utils/upload";
@@ -104,7 +103,12 @@ const namePlaceholder = computed(() =>
 );
 
 /** 审核筛选：本迭代仅 UI 占位，不进列表 API */
-const auditFilter = ref<"" | AuditStatus>("");
+const auditFilter = ref<"all" | AuditStatus>("all");
+
+function onResetFilter() {
+  auditFilter.value = "all";
+  resetFilter();
+}
 const uploadVisible = ref(false);
 
 /** 图片：Element Plus 查看器（当前页原图列表） */
@@ -454,19 +458,13 @@ async function onEditName(row: MaterialListItem) {
 </script>
 
 <template>
-  <div class="material-page">
-    <div class="page-crumb">
-      <span class="crumb-muted">设置</span>
-      <span class="crumb-sep">/</span>
-      <span>素材中心</span>
-    </div>
-
-    <div class="type-tabs">
+  <div class="admin-panel material-page">
+    <div class="admin-tabs type-tabs">
       <button
         v-for="tab in CENTER_TYPE_TABS"
         :key="tab.key"
         type="button"
-        class="type-tab"
+        class="admin-tab"
         :class="{ 'is-active': materialType === tab.key }"
         @click="materialType = tab.key"
       >
@@ -486,13 +484,13 @@ async function onEditName(row: MaterialListItem) {
 
       <section class="list-panel">
         <div class="toolbar">
-          <ElButton
-            type="primary"
-            :icon="materialType === 'article' ? Plus : undefined"
+          <button
+            type="button"
+            class="admin-btn admin-btn--primary"
             @click="openUpload"
           >
             {{ primaryLabel }}
-          </ElButton>
+          </button>
           <div class="filters">
             <span class="filter-label">{{ NAME_FILTER_LABEL[materialType] }}</span>
             <ElInput
@@ -515,18 +513,20 @@ async function onEditName(row: MaterialListItem) {
                 :value="opt.value"
               />
             </ElSelect>
-            <ElButton
-              type="primary"
+            <button
+              type="button"
+              class="admin-btn admin-btn--primary"
               @click="search"
             >
               查询
-            </ElButton>
-            <ElButton
-              :icon="RefreshRight"
-              @click="resetFilter"
+            </button>
+            <button
+              type="button"
+              class="admin-btn admin-btn--ghost"
+              @click="onResetFilter"
             >
               重置
-            </ElButton>
+            </button>
           </div>
         </div>
 
@@ -568,15 +568,14 @@ async function onEditName(row: MaterialListItem) {
             </ElTableColumn>
             <ElTableColumn
               :label="COL_STATUS_LABEL[materialType]"
-              width="110"
+              width="128"
             >
               <template #default="{ row }">
                 <span
                   class="status-dot"
-                  :class="
-                    isMaterialSelectable(row as MaterialListItem) ? 'is-ok' : 'is-off'
-                  "
+                  :class="isMaterialSelectable(row as MaterialListItem) ? 'is-success' : 'is-muted'"
                 >
+                  <i class="dot" />
                   {{ materialAvailabilityLabel(row as MaterialListItem) }}
                 </span>
               </template>
@@ -590,7 +589,7 @@ async function onEditName(row: MaterialListItem) {
                 <button
                   v-if="canStartVhallTranscode(row as MaterialListItem)"
                   type="button"
-                  class="op-link"
+                  class="admin-op"
                   @click="onVhallTranscodeClick(row as MaterialListItem)"
                 >
                   {{ vhallTranscodeLabel(row as MaterialListItem) }}
@@ -652,14 +651,14 @@ async function onEditName(row: MaterialListItem) {
             </ElTableColumn>
             <ElTableColumn
               label="操作"
-              width="120"
+              width="160"
               fixed="right"
             >
               <template #default="{ row }">
-                <div class="op-row">
+                <div class="admin-ops">
                   <button
                     type="button"
-                    class="op-link"
+                    class="admin-op"
                     @click="openAuditRecords(row as MaterialListItem)"
                   >
                     审核记录
@@ -670,9 +669,10 @@ async function onEditName(row: MaterialListItem) {
                   >
                     <button
                       type="button"
-                      class="op-more"
+                      class="admin-op-more"
+                      aria-label="更多"
                     >
-                      ···
+                      
                     </button>
                     <template #dropdown>
                       <ElDropdownMenu>
@@ -736,7 +736,7 @@ async function onEditName(row: MaterialListItem) {
           </ElTable>
         </div>
 
-        <div class="pager">
+        <div class="admin-pager">
           <ElPagination
             :current-page="page"
             :page-size="pageSize"
@@ -835,55 +835,12 @@ async function onEditName(row: MaterialListItem) {
   overflow: hidden;
 }
 
-.page-crumb {
-  flex: none;
-  font-size: 13px;
-  color: var(--color-text);
-}
-
-.crumb-muted,
-.crumb-sep {
-  color: var(--color-text-placeholder);
-}
-
-.crumb-sep {
-  margin: 0 6px;
-}
-
-.type-tabs {
-  display: flex;
-  flex: none;
-  gap: 4px;
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.type-tab {
-  border: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  padding: 10px 16px;
-  background: transparent;
-  font-size: 14px;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-}
-
-.type-tab:hover {
-  color: var(--color-primary);
-}
-
-.type-tab.is-active {
-  color: var(--color-primary);
-  font-weight: 600;
-  border-bottom-color: var(--color-primary);
-}
-
 .material-body {
   display: flex;
   flex: 1;
   gap: 0;
   min-height: 0;
-  background: var(--color-bg-card);
+  background: var(--white);
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
@@ -940,67 +897,6 @@ async function onEditName(row: MaterialListItem) {
 
 .filter-label {
   font-size: 13px;
-  color: var(--color-text-secondary);
-}
-
-.status-dot {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-}
-
-.status-dot::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-text-disabled);
-}
-
-.status-dot.is-ok::before {
-  background: var(--color-success);
-}
-
-.op-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.op-link {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: var(--color-primary);
-  font-size: 13px;
-  cursor: pointer;
-  line-height: 1.3;
-}
-
-.op-link:hover {
-  color: var(--color-primary-hover);
-}
-
-.op-more {
-  border: 0;
-  background: transparent;
-  padding: 0 4px;
-  font-size: 14px;
-  color: #999;
-  cursor: pointer;
-  line-height: 1;
-}
-
-.op-more:hover {
-  color: var(--color-primary);
-}
-
-.pager {
-  display: flex;
-  flex: none;
-  justify-content: flex-end;
-  margin-top: 14px;
-  padding-top: 2px;
+  color: var(--text-2);
 }
 </style>

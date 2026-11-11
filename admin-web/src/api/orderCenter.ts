@@ -663,18 +663,41 @@ export function orderStatusLabel(status: number | string | undefined): string {
   return ORDER_STATUS_LABEL[n] ?? `状态${n}`;
 }
 
-/** 状态圆点色：对齐原型灰/绿/红 */
-export function orderStatusDotClass(status: number | undefined): string {
-  if (status === ORDER_STATUS.PAID || status === ORDER_STATUS.SIGNED) return "dot--green";
+export type OrderStatusTone =
+  | "wait"
+  | "paid"
+  | "refunding"
+  | "part"
+  | "refunded"
+  | "muted";
+
+/**
+ * 列表状态点色：待付款金 / 已付款绿 / 退款中蓝 / 部分退款橙 / 全部退款灰。
+ * 设计未单独规定的状态：支付待确认/部分支付→待付款；已签约→已付款；分期退款中→退款中；其余灰色。
+ */
+export function orderStatusTone(status: number | undefined): OrderStatusTone {
+  if (
+    status === ORDER_STATUS.UNPAID ||
+    status === ORDER_STATUS.PAY_CONFIRMING ||
+    status === ORDER_STATUS.PARTIAL_PAID
+  ) {
+    return "wait";
+  }
+  if (status === ORDER_STATUS.PAID || status === ORDER_STATUS.SIGNED) return "paid";
   if (
     status === ORDER_STATUS.REFUNDING ||
-    status === ORDER_STATUS.INSTALLMENT_REFUNDING ||
-    status === ORDER_STATUS.PARTIAL_REFUND ||
-    status === ORDER_STATUS.REFUNDED
+    status === ORDER_STATUS.INSTALLMENT_REFUNDING
   ) {
-    return "dot--red";
+    return "refunding";
   }
-  return "dot--gray";
+  if (status === ORDER_STATUS.PARTIAL_REFUND) return "part";
+  if (status === ORDER_STATUS.REFUNDED) return "refunded";
+  return "muted";
+}
+
+/** 兼容旧调用；新列表请用 orderStatusTone */
+export function orderStatusDotClass(status: number | undefined): string {
+  return `is-${orderStatusTone(status)}`;
 }
 
 /**

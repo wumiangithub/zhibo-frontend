@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useRouter } from "vue-router";
-import { ElButton, ElMessage } from "element-plus";
+import { ElMessage } from "element-plus";
+import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
 import {
   CourseMaterialAccess,
   createCourse,
@@ -15,6 +16,11 @@ import {
   createEmptyCourseForm,
   validateCourseBasicForm,
 } from "./composables/useCourseForm";
+
+const crumbs: AppBreadcrumbItem[] = [
+  { label: "课程管理", to: "/course" },
+  { label: "新建课程" },
+];
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -89,6 +95,7 @@ async function onSave() {
 
 <template>
   <div class="course-create">
+    <AppBreadcrumb :items="crumbs" />
     <div class="course-create__form">
       <CourseBasicForm
         ref="formRef"
@@ -98,22 +105,25 @@ async function onSave() {
       />
     </div>
 
-    <div class="course-create__footer">
+    <div class="admin-page-footer course-create__footer">
       <div />
       <div class="flex items-center gap-3">
-        <ElButton
+        <button
+          type="button"
+          class="admin-btn admin-btn--ghost"
           :disabled="submitting"
           @click="onCancel"
         >
           取消
-        </ElButton>
-        <ElButton
-          type="primary"
-          :loading="submitting"
+        </button>
+        <button
+          type="button"
+          class="admin-btn admin-btn--primary"
+          :disabled="submitting"
           @click="onSave"
         >
           确定
-        </ElButton>
+        </button>
       </div>
     </div>
   </div>
@@ -130,18 +140,7 @@ async function onSave() {
   gap: 16px;
 }
 .course-create__footer {
-  position: fixed;
-  left: 176px;
-  right: 0;
-  bottom: 0;
-  z-index: 10;
-  display: flex;
   justify-content: space-between;
   gap: 12px;
-  height: 64px;
-  padding: 0 32px;
-  align-items: center;
-  background: #fff;
-  border-top: 1px solid #f0f0f0;
 }
 </style>

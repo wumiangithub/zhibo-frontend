@@ -46,16 +46,16 @@ defineProps<{
   gap: 6px;
   margin-bottom: 16px;
   font-size: 13px;
-  color: #999;
+  color: var(--text-3);
 }
 .app-breadcrumb a {
-  color: var(--color-primary);
+  color: var(--primary);
   text-decoration: none;
 }
 .app-breadcrumb a:hover {
   text-decoration: underline;
 }
 .app-breadcrumb span:not(:last-child) {
-  color: #d9d9d9;
+  color: var(--text-4);
 }
 </style>

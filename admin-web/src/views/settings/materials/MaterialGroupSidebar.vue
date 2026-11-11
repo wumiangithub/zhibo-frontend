@@ -76,7 +76,7 @@ function canManage(g: MaterialGroup) {
       :prefix-icon="Search"
       @update:model-value="emit('update:keyword', $event)"
     />
-    <ul class="group-list">
+    <ul class="group-list hover-scrollbar">
       <li
         v-for="g in groups"
         :key="g.id"

@@ -50,6 +50,12 @@ const router = createRouter({
       component: () => import("@/views/mine/OrdersView.vue"),
     },
     {
+      path: "/orders/:orderId",
+      name: "order-detail",
+      meta: { requiresViewer: true },
+      component: () => import("@/views/mine/OrderDetailView.vue"),
+    },
+    {
       path: "/learning",
       name: "learning",
       meta: { requiresViewer: true },

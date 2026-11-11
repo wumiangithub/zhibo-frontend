@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import {
-  ElButton,
   ElInput,
   ElMessage,
   ElOption,
@@ -156,17 +155,12 @@ function onPageSizeChange(size: number) {
 
 <template>
   <div class="employee-org">
-    <div class="page-head">
-      <div class="breadcrumb">设置 / 员工组织 / 员工管理</div>
-      <h1 class="title">员工管理</h1>
-    </div>
-
     <div class="body">
       <aside class="tree-panel">
         <div class="panel-title">组织架构</div>
         <div
           v-loading="treeLoading"
-          class="tree-scroll"
+          class="tree-scroll hover-scrollbar"
         >
           <ElTree
             ref="treeRef"
@@ -184,8 +178,9 @@ function onPageSizeChange(size: number) {
       </aside>
 
       <section class="list-panel">
-        <div class="filters">
-          <label class="filter-item">
+        <div class="admin-filter-bar filters">
+          <div class="admin-filter-fields">
+          <label class="admin-filter-item">
             <span>员工姓名</span>
             <ElInput
               v-model="nameKeyword"
@@ -195,7 +190,7 @@ function onPageSizeChange(size: number) {
               @keyup.enter="onSearch"
             />
           </label>
-          <label class="filter-item">
+          <label class="admin-filter-item">
             <span>角色</span>
             <ElSelect
               v-model="selectedRoleId"
@@ -211,14 +206,16 @@ function onPageSizeChange(size: number) {
               />
             </ElSelect>
           </label>
-          <ElButton type="primary" @click="onSearch">查询</ElButton>
-          <ElButton @click="onReset">重置</ElButton>
+          </div>
+          <div class="admin-filter-actions">
+            <button type="button" class="admin-btn admin-btn--primary" @click="onSearch">查询</button>
+            <button type="button" class="admin-btn admin-btn--ghost" @click="onReset">重置</button>
+          </div>
         </div>
 
         <ElTable
           v-loading="listLoading"
           :data="list"
-          border
           height="100%"
           class="emp-table"
           empty-text="暂无数据"
@@ -232,8 +229,10 @@ function onPageSizeChange(size: number) {
           </ElTableColumn>
           <ElTableColumn label="直播账号状态" min-width="120">
             <template #default="{ row }">
-              <span class="status-dot" :class="row.liveEnabled ? 'is-on' : 'is-off'" />
-              {{ row.liveEnabled ? "已启用" : "已禁用" }}
+              <span class="status-dot" :class="row.liveEnabled ? 'is-success' : 'is-muted'">
+                <i class="dot" />
+                {{ row.liveEnabled ? "已启用" : "已禁用" }}
+              </span>
             </template>
           </ElTableColumn>
           <ElTableColumn label="总部账号状态" min-width="120">
@@ -243,24 +242,25 @@ function onPageSizeChange(size: number) {
           </ElTableColumn>
           <ElTableColumn label="操作" min-width="220" fixed="right">
             <template #default="{ row }">
-              <button type="button" class="link-btn" @click="onAssignRole">
-                {{ hasRole(row as OrgEmployeeItem) ? "更换角色" : "赋予角色" }}
-              </button>
-              <button type="button" class="link-btn" @click="onToggleLive(row as OrgEmployeeItem)">
-                {{ row.liveEnabled ? "禁用" : "启用" }}
-              </button>
+              <div class="admin-ops">
+                <button type="button" class="admin-op" @click="onAssignRole">
+                  {{ hasRole(row as OrgEmployeeItem) ? "更换角色" : "赋予角色" }}
+                </button>
+                <button type="button" class="admin-op" @click="onToggleLive(row as OrgEmployeeItem)">
+                  {{ row.liveEnabled ? "禁用" : "启用" }}
+                </button>
+              </div>
             </template>
           </ElTableColumn>
         </ElTable>
 
-        <div class="pager">
+        <div class="admin-pager">
           <ElPagination
             v-model:current-page="page"
             v-model:page-size="pageSize"
             :total="total"
             :page-sizes="[10, 20, 50]"
             layout="total, sizes, prev, pager, next"
-            background
             @current-change="onPageChange"
             @size-change="onPageSizeChange"
           />
@@ -280,22 +280,6 @@ function onPageSizeChange(size: number) {
   height: 100%;
 }
 
-.page-head {
-  flex: none;
-}
-
-.breadcrumb {
-  color: #8a919f;
-  font-size: 12px;
-}
-
-.title {
-  margin: 6px 0 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: #1f2329;
-}
-
 .body {
   display: flex;
   gap: 16px;
@@ -310,9 +294,9 @@ function onPageSizeChange(size: number) {
   display: flex;
   flex-direction: column;
   align-self: stretch;
-  border: 1px solid #ebebeb;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
   padding: 12px;
   overflow: hidden;
 }
@@ -322,7 +306,7 @@ function onPageSizeChange(size: number) {
   margin-bottom: 10px;
   font-size: 14px;
   font-weight: 600;
-  color: #1f2329;
+  color: var(--text);
 }
 
 .tree-scroll {
@@ -340,9 +324,9 @@ function onPageSizeChange(size: number) {
   min-width: 0;
   min-height: 0;
   align-self: stretch;
-  border: 1px solid #ebebeb;
-  border-radius: 8px;
-  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -363,7 +347,7 @@ function onPageSizeChange(size: number) {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #4e5969;
+  color: var(--text-3);
   white-space: nowrap;
   flex: none;
 }
@@ -388,17 +372,17 @@ function onPageSizeChange(size: number) {
 }
 
 .status-dot.is-on {
-  background: #00b42a;
+  background: var(--success);
 }
 
 .status-dot.is-off {
-  background: #c9cdd4;
+  background: var(--text-4);
 }
 
 .link-btn {
   border: 0;
   background: transparent;
-  color: #165dff;
+  color: var(--primary);
   cursor: pointer;
   padding: 0;
   margin-right: 12px;
@@ -406,7 +390,7 @@ function onPageSizeChange(size: number) {
 }
 
 .link-btn:hover {
-  color: #4080ff;
+  color: var(--primary-hover);
 }
 
 .pager {

@@ -555,10 +555,41 @@ export async function listViewerProductsForBoundSpus(
 
 /** 订单状态：待支付（对方 order_stats） */
 export const ORDER_STATUS_UNPAID = 1010;
-/** 订单状态：已支付 / 已付款 */
+/** 订单状态：部分支付 */
+export const ORDER_STATUS_PARTIAL_PAID = 1020;
+/** 订单状态：已支付 */
 export const ORDER_STATUS_PAID = 1030;
+/** 订单状态：撞单 */
+export const ORDER_STATUS_CONFLICT = 1040;
+/** 订单状态：已签约 */
+export const ORDER_STATUS_SIGNED = 1050;
+/** 订单状态：已取消 */
+export const ORDER_STATUS_CANCELLED = 1060;
+/** 订单状态：分期退款中 */
+export const ORDER_STATUS_INSTALLMENT_REFUNDING = 1070;
+/** 订单状态：退款中 */
+export const ORDER_STATUS_REFUNDING = 1071;
+/** 订单状态：部分退款 */
+export const ORDER_STATUS_PARTIAL_REFUND = 1080;
+/** 订单状态：已退款 */
+export const ORDER_STATUS_REFUNDED = 1081;
+
+const ORDER_STATUS_LABELS: Record<number, string> = {
+  [ORDER_STATUS_UNPAID]: "待支付",
+  [ORDER_STATUS_PARTIAL_PAID]: "部分支付",
+  [ORDER_STATUS_PAID]: "已支付",
+  [ORDER_STATUS_CONFLICT]: "撞单",
+  [ORDER_STATUS_SIGNED]: "已签约",
+  [ORDER_STATUS_CANCELLED]: "已取消",
+  [ORDER_STATUS_INSTALLMENT_REFUNDING]: "分期退款中",
+  [ORDER_STATUS_REFUNDING]: "退款中",
+  [ORDER_STATUS_PARTIAL_REFUND]: "部分退款",
+  [ORDER_STATUS_REFUNDED]: "已退款",
+};
 
 export interface ViewerOrderItem {
+  /** 订单主键；点进已付款详情传它 */
+  orderId: string;
   orderNo: string;
   productName: string;
   customerAccount: string;
@@ -580,13 +611,17 @@ export interface ViewerOrderListResult {
 }
 
 export function orderStatusLabel(status: number): string {
-  if (status === ORDER_STATUS_PAID) return "已付款";
-  if (status === ORDER_STATUS_UNPAID) return "待支付";
-  return status ? `状态${status}` : "";
+  if (!status) return "";
+  return ORDER_STATUS_LABELS[status] || `状态${status}`;
 }
 
 export function isPaidOrder(status: number): boolean {
   return status === ORDER_STATUS_PAID;
+}
+
+/** 「全部订单」列表：除待支付(1010)外都展示 */
+export function isListVisibleOrder(status: number): boolean {
+  return status !== ORDER_STATUS_UNPAID;
 }
 
 function asText(v: unknown): string {
@@ -599,6 +634,7 @@ function normalizeOrderItem(raw: unknown): ViewerOrderItem {
   const status = Number(r.orderStatus);
   const serviceDay = r.serviceDay;
   return {
+    orderId: asText(r.orderId),
     orderNo: asText(r.orderNo),
     productName: asText(r.productName),
     customerAccount: asText(r.customerAccount),
@@ -626,7 +662,7 @@ function asPageNumber(v: unknown, fallback: number): number {
  * 观众端我的订单列表。
  * POST /order-center/api/live/viewer/order/list
  * 头 Authorization-Live-Viewers；page 从 1 起，pageSize 1～100。
- * 不按状态筛选；页面只展示 orderStatus=1030。
+ * 接口不按状态筛选；页面除 orderStatus=1010（待支付）外都展示。
  */
 export async function listMyOrders(opts?: {
   page?: number;

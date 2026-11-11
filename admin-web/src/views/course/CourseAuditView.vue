@@ -2,7 +2,6 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import {
-  ElButton,
   ElImage,
   ElInput,
   ElMessage,
@@ -167,13 +166,14 @@ watch(id, loadAll);
             style="max-width: 480px"
           />
         </div>
-        <ElButton
-          type="primary"
-          :loading="submitting"
+        <button
+          type="button"
+          class="admin-btn admin-btn--primary"
+          :disabled="submitting"
           @click="onSubmit"
         >
           提交
-        </ElButton>
+        </button>
       </div>
       <div class="card">
         <h2>审核记录</h2>
@@ -215,20 +215,24 @@ watch(id, loadAll);
 
 <style scoped>
 .status {
-  color: #999;
+  color: var(--text-3);
 }
 .status.is-err {
-  color: #cf1322;
+  color: var(--danger);
 }
 .card {
   margin-bottom: 16px;
   padding: 20px 24px;
-  background: #fff;
-  border-radius: 8px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
 }
 .card h2 {
   margin: 0 0 16px;
   font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
 }
 .meta,
 .form-row {
@@ -245,7 +249,7 @@ watch(id, loadAll);
   display: inline-block;
   width: 72px;
   margin-right: 12px;
-  color: #666;
+  color: var(--text-3);
 }
 .cover {
   width: 120px;

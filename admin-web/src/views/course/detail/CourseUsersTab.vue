@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from "vue";
-import { MoreFilled, Plus } from "@element-plus/icons-vue";
+import { Plus } from "@element-plus/icons-vue";
 import {
   ElButton,
   ElDatePicker,
@@ -442,9 +442,7 @@ onMounted(() => {
                 class="more-btn"
                 aria-label="更多"
               >
-                <ElIcon :size="16">
-                  <MoreFilled />
-                </ElIcon>
+                <i class="admin-more-icon" aria-hidden="true" />
               </button>
               <template #dropdown>
                 <ElDropdownMenu>

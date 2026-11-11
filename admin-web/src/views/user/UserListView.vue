@@ -3,7 +3,6 @@ import { onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
   ElButton,
-  ElCheckbox,
   ElDialog,
   ElInput,
   ElInputNumber,
@@ -63,6 +62,7 @@ const tagDialogVisible = ref(false);
 const tagTarget = ref<ViewerListItem | null>(null);
 const tagDraftIds = ref<number[]>([]);
 const tagSaving = ref(false);
+const tagSelectOpen = ref(false);
 
 const blacklistDialogVisible = ref(false);
 const blacklistTarget = ref<ViewerListItem | null>(null);
@@ -204,6 +204,11 @@ function closeTagDialog() {
   tagDialogVisible.value = false;
   tagTarget.value = null;
   tagDraftIds.value = [];
+  tagSelectOpen.value = false;
+}
+
+function onTagSelectVisible(open: boolean) {
+  tagSelectOpen.value = open;
 }
 
 function goCreateTag() {
@@ -272,10 +277,11 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="user-list">
-    <div class="filter-bar">
-      <div class="filter-item">
-        <span class="filter-label">用户</span>
+  <div class="admin-panel admin-panel--row-64 user-list">
+    <div class="admin-filter-bar">
+      <div class="admin-filter-fields">
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">用户</span>
         <ElSelect
           v-model="filters.keywordType"
           style="width: 110px"
@@ -301,8 +307,8 @@ onMounted(() => {
           @keyup.enter="onSearch"
         />
       </div>
-      <div class="filter-item">
-        <span class="filter-label">标签</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">标签</span>
         <ElSelect
           v-model="filters.tagMatch"
           style="width: 110px"
@@ -338,8 +344,8 @@ onMounted(() => {
           />
         </ElSelect>
       </div>
-      <div class="filter-item">
-        <span class="filter-label">累计消费金额</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">累计消费金额</span>
         <ElInputNumber
           v-model="filters.consumeAmountMin"
           :controls="false"
@@ -357,8 +363,8 @@ onMounted(() => {
         />
         <span class="unit">元</span>
       </div>
-      <div class="filter-item">
-        <span class="filter-label">累计消费次数</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">累计消费次数</span>
         <ElInputNumber
           v-model="filters.consumeCountMin"
           :controls="false"
@@ -378,26 +384,19 @@ onMounted(() => {
         />
         <span class="unit">次</span>
       </div>
-      <ElButton @click="onReset">重置</ElButton>
-      <ElButton
-        type="primary"
-        @click="onSearch"
-      >
-        查询
-      </ElButton>
+      </div>
+      <div class="admin-filter-actions">
+        <button type="button" class="admin-btn admin-btn--primary" @click="onSearch">查询</button>
+        <button type="button" class="admin-btn admin-btn--ghost" @click="onReset">重置</button>
+      </div>
     </div>
 
-    <div class="toolbar">
-      <ElButton
-        type="primary"
-        @click="onImportPlaceholder"
-      >
-        + 导入用户
-      </ElButton>
-      <ElButton @click="onExport">导出</ElButton>
+    <div class="admin-toolbar">
+      <button type="button" class="admin-btn admin-btn--primary" @click="onImportPlaceholder">+ 导入用户</button>
+      <button type="button" class="admin-btn admin-btn--ghost" @click="onExport">导出</button>
     </div>
 
-    <div class="table-wrap">
+    <div class="admin-table-wrap">
       <ElTable
         v-loading="loading"
         :data="rows"
@@ -589,33 +588,34 @@ onMounted(() => {
           fixed="right"
         >
           <template #default="{ row }">
-            <button
-              type="button"
-              class="link-btn"
-              @click="void openTagDialog(row as ViewerListItem)"
-            >
-              贴标签
-            </button>
-            <button
-              type="button"
-              class="link-btn"
-              @click="openBlacklistDialog(row as ViewerListItem)"
-            >
-              黑名单设置
-            </button>
+            <div class="admin-ops">
+              <button
+                type="button"
+                class="admin-op"
+                @click="void openTagDialog(row as ViewerListItem)"
+              >
+                贴标签
+              </button>
+              <button
+                type="button"
+                class="admin-op"
+                @click="openBlacklistDialog(row as ViewerListItem)"
+              >
+                黑名单设置
+              </button>
+            </div>
           </template>
         </ElTableColumn>
       </ElTable>
     </div>
 
-    <div class="pager">
-      <span class="pager-total">共 {{ total }} 条记录</span>
+    <div class="admin-pager">
+      <span class="admin-pager__total">共 {{ total }} 条记录</span>
       <ElPagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
         :total="total"
         :page-sizes="[10, 20, 50]"
-        background
         layout="sizes, prev, pager, next, jumper"
         @current-change="fetchList"
         @size-change="
@@ -629,20 +629,53 @@ onMounted(() => {
 
     <ElDialog
       v-model="tagDialogVisible"
-      title="贴标签"
-      width="480px"
+      width="440px"
+      class="user-list-dlg user-list-dlg--tag"
+      align-center
+      :show-close="false"
       destroy-on-close
       @closed="closeTagDialog"
     >
-      <div class="dialog-body">
+      <template #header>
+        <div class="ul-dlg-head">
+          <div>
+            <div class="ul-dlg-title">贴标签</div>
+            <div class="ul-dlg-sub">
+              为用户 <b>{{ tagTarget?.nickname || tagTarget?.uid }}</b> 添加标签
+            </div>
+          </div>
+          <button
+            type="button"
+            class="ul-dlg-close"
+            aria-label="关闭"
+            @click="closeTagDialog"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            >
+              <path d="M4 4l8 8M12 4l-8 8" />
+            </svg>
+          </button>
+        </div>
+      </template>
+      <div class="ul-dlg-body ul-dlg-body--tag">
         <ElSelect
           v-model="tagDraftIds"
           multiple
           filterable
-          collapse-tags
-          collapse-tags-tooltip
+          :teleported="false"
           placeholder="请选择标签"
+          class="ul-tag-select"
+          :class="{ 'is-open': tagSelectOpen }"
+          popper-class="user-list-tag-popper"
           style="width: 100%"
+          @visible-change="onTagSelectVisible"
         >
           <ElOption
             v-for="t in manualTags"
@@ -653,104 +686,195 @@ onMounted(() => {
         </ElSelect>
         <button
           type="button"
-          class="link-btn create-tag"
+          class="ul-tag-create"
+          @mousedown.prevent
           @click="goCreateTag"
         >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+          >
+            <path d="M7 2.5v9M2.5 7h9" />
+          </svg>
           新建标签
         </button>
       </div>
       <template #footer>
-        <ElButton @click="closeTagDialog">取消</ElButton>
-        <ElButton
-          type="primary"
-          :loading="tagSaving"
-          @click="confirmTags"
-        >
-          确定
-        </ElButton>
+        <div class="ul-dlg-foot">
+          <ElButton
+            class="ul-dlg-btn ul-dlg-btn--ghost"
+            @click="closeTagDialog"
+          >
+            取消
+          </ElButton>
+          <ElButton
+            class="ul-dlg-btn ul-dlg-btn--primary"
+            type="primary"
+            :loading="tagSaving"
+            @click="confirmTags"
+          >
+            确定
+          </ElButton>
+        </div>
       </template>
     </ElDialog>
 
     <ElDialog
       v-model="blacklistDialogVisible"
-      title="黑名单设置"
-      width="420px"
+      width="440px"
+      class="user-list-dlg"
+      align-center
+      :show-close="false"
       destroy-on-close
       @closed="closeBlacklistDialog"
     >
-      <div class="bl-dialog">
-        <label class="bl-row">
-          <span>禁止评论</span>
-          <ElCheckbox v-model="blacklistDraft.banComment" />
-        </label>
-        <label class="bl-row">
-          <span>禁止购买</span>
-          <ElCheckbox v-model="blacklistDraft.banPurchase" />
-        </label>
-        <label class="bl-row">
-          <span>禁止访问</span>
-          <ElCheckbox v-model="blacklistDraft.banAccess" />
-        </label>
+      <template #header>
+        <div class="ul-dlg-head">
+          <div>
+            <div class="ul-dlg-title">黑名单设置</div>
+            <div class="ul-dlg-sub">
+              为用户 <b>{{ blacklistTarget?.nickname || blacklistTarget?.uid }}</b> 设置限制
+            </div>
+          </div>
+          <button
+            type="button"
+            class="ul-dlg-close"
+            aria-label="关闭"
+            @click="closeBlacklistDialog"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            >
+              <path d="M4 4l8 8M12 4l-8 8" />
+            </svg>
+          </button>
+        </div>
+      </template>
+      <div class="ul-dlg-body ul-dlg-body--bl">
+        <button
+          type="button"
+          class="ul-bl-opt"
+          :class="{ 'is-on': blacklistDraft.banComment }"
+          @click="blacklistDraft.banComment = !blacklistDraft.banComment"
+        >
+          <span class="ul-bl-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H12l-4 3.2V15H7.5A2.5 2.5 0 0 1 5 12.5v-6z" />
+              <path d="M9 9.5h6" />
+            </svg>
+          </span>
+          <span class="ul-bl-copy">
+            <span class="ul-bl-title">禁止评论</span>
+            <span class="ul-bl-desc">该用户无法在直播间发表评论</span>
+          </span>
+          <span
+            class="ul-bl-switch"
+            :class="{ 'is-on': blacklistDraft.banComment }"
+          />
+        </button>
+        <button
+          type="button"
+          class="ul-bl-opt"
+          :class="{ 'is-on': blacklistDraft.banPurchase }"
+          @click="blacklistDraft.banPurchase = !blacklistDraft.banPurchase"
+        >
+          <span class="ul-bl-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="9.2" cy="19" r="1.15" />
+              <circle cx="17" cy="19" r="1.15" />
+              <path d="M4.5 5.5h1.8l1.7 9.2h9.4l1.7-6.2H7.2" />
+            </svg>
+          </span>
+          <span class="ul-bl-copy">
+            <span class="ul-bl-title">禁止购买</span>
+            <span class="ul-bl-desc">该用户无法购买本场商品</span>
+          </span>
+          <span
+            class="ul-bl-switch"
+            :class="{ 'is-on': blacklistDraft.banPurchase }"
+          />
+        </button>
+        <button
+          type="button"
+          class="ul-bl-opt is-warn"
+          :class="{ 'is-on': blacklistDraft.banAccess }"
+          @click="blacklistDraft.banAccess = !blacklistDraft.banAccess"
+        >
+          <span class="ul-bl-icon">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="8.2" />
+              <path d="M8.2 8.2l7.6 7.6" />
+            </svg>
+          </span>
+          <span class="ul-bl-copy">
+            <span class="ul-bl-title">禁止访问</span>
+            <span class="ul-bl-desc">该用户将无法进入直播间</span>
+          </span>
+          <span
+            class="ul-bl-switch"
+            :class="{ 'is-on': blacklistDraft.banAccess }"
+          />
+        </button>
       </div>
       <template #footer>
-        <ElButton @click="closeBlacklistDialog">取消</ElButton>
-        <ElButton
-          type="primary"
-          :loading="blacklistSaving"
-          @click="confirmBlacklist"
-        >
-          确定
-        </ElButton>
+        <div class="ul-dlg-foot">
+          <ElButton
+            class="ul-dlg-btn ul-dlg-btn--ghost"
+            @click="closeBlacklistDialog"
+          >
+            取消
+          </ElButton>
+          <ElButton
+            class="ul-dlg-btn ul-dlg-btn--primary"
+            type="primary"
+            :loading="blacklistSaving"
+            @click="confirmBlacklist"
+          >
+            确定
+          </ElButton>
+        </div>
       </template>
     </ElDialog>
   </div>
 </template>
 
 <style scoped>
-.user-list {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  height: calc(100dvh - 92px);
-  min-height: 0;
-  overflow: hidden;
-}
-.filter-bar {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
-}
-.filter-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.filter-label {
-  font-size: 13px;
-  color: #666;
-  white-space: nowrap;
-}
 .sep,
 .unit {
   font-size: 13px;
-  color: #999;
-}
-.toolbar {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 12px;
-}
-.table-wrap {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid #ebebeb;
-  border-radius: 4px;
-  background: #fff;
+  color: var(--text-4);
 }
 .user-cell {
   display: flex;
@@ -766,7 +890,7 @@ onMounted(() => {
   flex: none;
 }
 .avatar-ph {
-  background: #e8e8e8;
+  background: var(--line-soft);
 }
 .user-meta {
   display: flex;
@@ -782,6 +906,8 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+  font-weight: 700;
+  color: var(--text);
 }
 .ban-line {
   display: flex;
@@ -795,9 +921,9 @@ onMounted(() => {
   flex: none;
   font-size: 11px;
   line-height: 16px;
-  color: #999;
-  border: 1px solid #ddd;
-  border-radius: 2px;
+  color: var(--text-4);
+  border: 1px solid var(--line);
+  border-radius: 4px;
   padding: 0 3px;
   white-space: nowrap;
 }
@@ -814,57 +940,397 @@ onMounted(() => {
   padding: 0 8px;
   line-height: 22px;
   border-radius: 11px;
-  border: 1px solid #fa8c16;
-  color: #fa8c16;
+  border: 1px solid var(--gold);
+  color: var(--gold-deep);
   font-size: 12px;
   white-space: nowrap;
 }
-.link-btn {
-  border: 0;
-  background: transparent;
-  padding: 0 6px 0 0;
-  color: var(--color-primary);
-  cursor: pointer;
-  font-size: 13px;
+</style>
+
+<style>
+/* 用户列表弹窗：ElDialog 传送到 body，用独立类避免影响其它页 */
+.user-list-dlg {
+  padding: 0;
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
 }
-.link-btn:hover {
-  opacity: 0.85;
-}
-.dialog-body {
+.user-list-dlg--tag {
+  height: 400px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
 }
-.create-tag {
+.user-list-dlg--tag .el-dialog__header,
+.user-list-dlg--tag .el-dialog__footer {
+  flex: none;
+}
+.user-list-dlg--tag .el-dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.user-list-dlg .el-dialog__header {
+  padding: 0;
+  margin: 0;
+}
+.user-list-dlg .el-dialog__body,
+.user-list-dlg .el-dialog__footer {
   padding: 0;
 }
-.bl-dialog {
+.ul-dlg-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 20px 14px 24px;
+}
+.ul-dlg-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text, #0F172A);
+  line-height: 24px;
+}
+.ul-dlg-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-3, #64748B);
+  line-height: 18px;
+}
+.ul-dlg-sub b {
+  color: var(--text-2, #334155);
+  font-weight: 600;
+}
+.ul-dlg-close {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--text-4, #94A3B8);
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: -2px;
+  padding: 0;
+}
+.ul-dlg-close:hover {
+  background: #F8FAFC;
+  color: var(--text-3, #64748B);
+}
+.ul-dlg-body {
+  padding: 4px 24px 8px 24px;
+}
+.ul-dlg-body--tag {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 4px 0;
+  padding: 4px 24px 0;
 }
-.bl-row {
+.ul-dlg-body--bl {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ul-dlg-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px 20px;
+  margin-top: 8px;
+  border-top: 1px solid var(--line-soft, #EEF2F7);
+}
+.user-list-dlg .ul-dlg-btn.el-button {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.user-list-dlg .ul-dlg-btn--ghost.el-button {
+  background: #fff;
+  border: 1px solid var(--line, #E2E8F0);
+  color: var(--text-2, #334155);
+  font-weight: 600;
+}
+.user-list-dlg .ul-dlg-btn--ghost.el-button:hover,
+.user-list-dlg .ul-dlg-btn--ghost.el-button:focus {
+  background: #F8FAFC;
+  border-color: var(--line, #E2E8F0);
+  color: var(--text-2, #334155);
+}
+.user-list-dlg .ul-dlg-btn--primary.el-button {
+  background: var(--primary, #2563EB);
+  border-color: var(--primary, #2563EB);
+  color: #fff;
+  font-weight: 700;
+}
+.user-list-dlg .ul-dlg-btn--primary.el-button:hover,
+.user-list-dlg .ul-dlg-btn--primary.el-button:focus {
+  background: #1D4ED8;
+  border-color: #1D4ED8;
+  color: #fff;
+}
+
+.ul-bl-opt {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line-soft, #EEF2F7);
+  background: #F8FAFC;
+  border-radius: 12px;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+.ul-bl-opt.is-on {
+  background: #EFF6FF;
+  border-color: #DBEAFE;
+}
+.ul-bl-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: #EEF2F7;
+  color: var(--text-2, #334155);
+}
+.ul-bl-opt.is-on .ul-bl-icon {
+  background: #DBEAFE;
+  color: var(--primary, #2563EB);
+}
+.ul-bl-opt.is-warn .ul-bl-icon,
+.ul-bl-opt.is-warn.is-on .ul-bl-icon {
+  background: #FEE2E2;
+  color: #EF4444;
+}
+.ul-bl-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+.ul-bl-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ul-bl-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text, #0F172A);
+  line-height: 20px;
+}
+.ul-bl-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-3, #64748B);
+  line-height: 18px;
+}
+.ul-bl-switch {
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: #CBD5E1;
+  position: relative;
+  flex-shrink: 0;
+}
+.ul-bl-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.16);
+  transition: left 0.15s ease;
+}
+.ul-bl-switch.is-on {
+  background: var(--primary, #2563EB);
+}
+.ul-bl-switch.is-on::after {
+  left: 20px;
+}
+
+.ul-dlg-body--tag .ul-tag-create {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  color: var(--primary, #2563EB);
+  font-size: 13px;
+  font-weight: 600;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 20px;
+  border-radius: 0;
+}
+.ul-tag-select.is-open + .ul-tag-create {
+  border: 1px solid var(--line, #E2E8F0);
+  border-top: 1px solid var(--line-soft, #EEF2F7);
+  border-radius: 0 0 10px 10px;
+  margin-top: 0;
+}
+.ul-tag-create:hover {
+  color: #1D4ED8;
+}
+.ul-tag-create svg {
+  display: block;
+}
+
+.user-list-dlg .ul-tag-select .el-select__wrapper {
+  min-height: 36px;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 8px;
+  padding: 4px 8px 4px 8px;
+  box-shadow: none;
+  border: 1px solid var(--line, #E2E8F0);
+  background: #fff;
+  gap: 6px;
+}
+.user-list-dlg .ul-tag-select .el-select__wrapper.is-focused,
+.user-list-dlg .ul-tag-select .el-select__wrapper.is-hovering.is-focused {
+  border-color: var(--primary, #2563EB);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.user-list-dlg .ul-tag-select .el-select__selection {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.user-list-dlg .ul-tag-select .el-tag {
+  height: 24px;
+  padding: 0 4px 0 8px;
+  background: #EFF6FF;
+  color: var(--primary, #2563EB);
+  border: 0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0;
+}
+.user-list-dlg .ul-tag-select .el-tag .el-tag__close {
+  color: var(--primary, #2563EB);
+}
+.user-list-dlg .ul-tag-select .el-tag .el-tag__close:hover {
+  background: #DBEAFE;
+  color: var(--primary, #2563EB);
+}
+
+/* 选择器只占输入行，下拉进下方预留区滚动，避免箭头随整列居中 */
+.ul-dlg-body--tag {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-columns: 1fr;
+}
+.user-list-dlg--tag .ul-tag-select {
+  display: contents !important;
+}
+.user-list-dlg--tag .ul-tag-select .el-select__wrapper {
+  grid-row: 1;
+  grid-column: 1;
+  width: 100%;
+}
+.user-list-dlg--tag .ul-tag-select .el-select__popper,
+.user-list-dlg--tag .user-list-tag-popper {
+  position: static !important;
+  transform: none !important;
+  inset: auto !important;
+  width: 100% !important;
+  max-width: 100%;
+  grid-row: 2;
+  grid-column: 1;
+  min-height: 0;
+  margin-top: 6px;
+  align-self: stretch;
+}
+.ul-dlg-body--tag .ul-tag-create {
+  grid-row: 3;
+  grid-column: 1;
+}
+.user-list-dlg .user-list-tag-popper .el-popper__arrow {
+  display: none;
+}
+.user-list-dlg--tag .user-list-tag-popper.el-select__popper,
+.user-list-dlg--tag .user-list-tag-popper {
+  border: 1px solid var(--line, #E2E8F0);
+  border-radius: 10px;
+  box-shadow: none;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+.user-list-dlg--tag .ul-tag-select.is-open .user-list-tag-popper,
+.user-list-dlg--tag .ul-tag-select.is-open .el-select__popper {
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+}
+.user-list-dlg--tag .user-list-tag-popper .el-select-dropdown {
+  flex: 1;
+  min-height: 0;
+  max-height: none !important;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.user-list-dlg--tag .user-list-tag-popper .el-scrollbar {
+  flex: 1;
+  min-height: 0;
+}
+.user-list-dlg--tag .user-list-tag-popper .el-select-dropdown__wrap,
+.user-list-dlg--tag .user-list-tag-popper .el-scrollbar__wrap {
+  max-height: none !important;
+  height: 100%;
+  overflow: auto;
+}
+.user-list-dlg .user-list-tag-popper .el-select-dropdown {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.user-list-dlg .user-list-tag-popper .el-select-dropdown__item {
+  height: 36px;
+  line-height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--text, #0F172A);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+}
+.user-list-dlg .user-list-tag-popper .el-select-dropdown__item.is-hovering {
+  background: #F8FAFC;
+}
+.user-list-dlg .user-list-tag-popper .el-select-dropdown__item.is-selected {
+  background: #EFF6FF;
+  color: var(--text, #0F172A);
+  font-weight: 600;
+}
+.user-list-dlg .user-list-tag-popper .el-select-dropdown__item.is-selected.is-hovering {
+  background: #EFF6FF;
+}
+.user-list-dlg .user-list-tag-popper .el-select-dropdown__item .el-icon {
+  margin-left: auto;
+  color: var(--primary, #2563EB);
   font-size: 14px;
-  color: #333;
-  cursor: pointer;
 }
-.pager {
-  flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-}
-.pager-total {
-  font-size: 13px;
-  color: #666;
-  margin-right: auto;
+.user-list-dlg .user-list-tag-popper .el-select-dropdown__footer {
+  padding: 0;
+  border-top: 1px solid var(--line-soft, #EEF2F7);
 }
 </style>

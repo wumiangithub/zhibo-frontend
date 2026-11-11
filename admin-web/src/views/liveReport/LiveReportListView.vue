@@ -2,7 +2,6 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import {
-  ElButton,
   ElDatePicker,
   ElDropdown,
   ElDropdownItem,
@@ -50,7 +49,7 @@ const coverPreviewItems = ref<ImagePreviewItem[]>([]);
 const filters = reactive({
   title: "",
   hostName: "",
-  status: "" as "" | ReportStatus,
+  status: "all" as "all" | ReportStatus,
   range: null as [string, string] | null,
 });
 
@@ -76,10 +75,10 @@ function fmtTimes(r: LiveReport) {
   return r.planTimes.map((x) => `${x.startTime} 至 ${x.endTime}`).join("；");
 }
 
-function statusClass(status: ReportStatus) {
-  if (status === "passed") return "risk--passed";
-  if (status === "rejected") return "risk--rejected";
-  return "risk--pending";
+function statusTone(status: ReportStatus) {
+  if (status === "passed") return "success";
+  if (status === "rejected") return "danger";
+  return "pending";
 }
 
 async function fetchList() {
@@ -92,7 +91,7 @@ async function fetchList() {
       pageSize: query.pageSize,
       title: filters.title.trim() || undefined,
       hostName: filters.hostName.trim() || undefined,
-      status: filters.status || undefined,
+      status: filters.status && filters.status !== "all" ? filters.status : undefined,
       startFrom: filters.range?.[0],
       startTo: filters.range?.[1],
     });
@@ -115,7 +114,7 @@ function search() {
 function resetFilter() {
   filters.title = "";
   filters.hostName = "";
-  filters.status = "";
+  filters.status = "all";
   filters.range = null;
   query.page = 1;
   void fetchList();
@@ -183,10 +182,11 @@ onMounted(fetchList);
 </script>
 
 <template>
-  <div class="live-report-list">
-    <div class="filter-bar">
-      <div class="filter-item">
-        <span class="filter-label">报备名称</span>
+  <div class="admin-panel admin-panel--row-72 live-report-list">
+    <div class="admin-filter-bar">
+      <div class="admin-filter-fields">
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">报备名称</span>
         <ElInput
           v-model="filters.title"
           clearable
@@ -195,8 +195,8 @@ onMounted(fetchList);
           @keyup.enter="search"
         />
       </div>
-      <div class="filter-item">
-        <span class="filter-label">主播姓名</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">主播姓名</span>
         <ElInput
           v-model="filters.hostName"
           clearable
@@ -205,17 +205,16 @@ onMounted(fetchList);
           @keyup.enter="search"
         />
       </div>
-      <div class="filter-item">
-        <span class="filter-label">审核状态</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">审核状态</span>
         <ElSelect
           v-model="filters.status"
-          clearable
           placeholder="全部状态"
-          style="width: 140px"
+          style="width: 120px"
         >
           <ElOption
             label="全部状态"
-            value=""
+            value="all"
           />
           <ElOption
             v-for="(label, key) in REPORT_STATUS_LABEL"
@@ -225,8 +224,8 @@ onMounted(fetchList);
           />
         </ElSelect>
       </div>
-      <div class="filter-item">
-        <span class="filter-label">计划时间</span>
+      <div class="admin-filter-item">
+        <span class="admin-filter-label">计划时间</span>
         <ElDatePicker
           v-model="filters.range"
           type="datetimerange"
@@ -237,32 +236,43 @@ onMounted(fetchList);
           style="width: 360px"
         />
       </div>
-      <ElButton @click="resetFilter">重置</ElButton>
-      <ElButton
-        type="primary"
-        @click="search"
-      >
-        查询
-      </ElButton>
+      </div>
+      <div class="admin-filter-actions">
+        <button
+          type="button"
+          class="admin-btn admin-btn--primary"
+          @click="search"
+        >
+          查询
+        </button>
+        <button
+          type="button"
+          class="admin-btn admin-btn--ghost"
+          @click="resetFilter"
+        >
+          重置
+        </button>
+      </div>
     </div>
 
-    <div class="toolbar">
-      <ElButton
-        type="primary"
+    <div class="admin-toolbar">
+      <button
+        type="button"
+        class="admin-btn admin-btn--primary"
         @click="goCreate"
       >
         + 新建直播报备
-      </ElButton>
+      </button>
     </div>
 
     <p
       v-if="error"
-      class="err-banner"
+      class="admin-err"
     >
       {{ error }}
     </p>
 
-    <div class="table-wrap">
+    <div class="admin-table-wrap">
       <ElTable
         v-loading="loading"
         :data="list"
@@ -273,7 +283,7 @@ onMounted(fetchList);
       >
         <ElTableColumn
           type="selection"
-          width="48"
+          width="44"
         />
         <ElTableColumn
           label="报备ID"
@@ -350,13 +360,14 @@ onMounted(fetchList);
         </ElTableColumn>
         <ElTableColumn
           label="审核状态"
-          width="110"
+          width="128"
         >
           <template #default="{ row }">
             <span
-              class="risk-tag"
-              :class="statusClass(row.status)"
+              class="status-dot"
+              :class="`is-${statusTone(row.status)}`"
             >
+              <i class="dot" />
               {{ REPORT_STATUS_LABEL[(row as LiveReport).status] }}
             </span>
           </template>
@@ -367,16 +378,16 @@ onMounted(fetchList);
           fixed="right"
         >
           <template #default="{ row }">
-            <div class="ops">
+            <div class="admin-ops">
               <RouterLink
                 :to="`/live-reports/${row.id}`"
-                class="op-link"
+                class="admin-op"
               >
                 查看
               </RouterLink>
               <button
                 type="button"
-                class="op-link"
+                class="admin-op"
                 @click="openAuditRecords(row as LiveReport)"
               >
                 审核记录
@@ -387,9 +398,10 @@ onMounted(fetchList);
               >
                 <button
                   type="button"
-                  class="op-more"
+                  class="admin-op-more"
+                  aria-label="更多"
                 >
-                  ···
+                  
                 </button>
                 <template #dropdown>
                   <ElDropdownMenu>
@@ -414,12 +426,11 @@ onMounted(fetchList);
       </ElTable>
     </div>
 
-    <div class="pager">
-      <span class="pager-total">共 {{ total }} 条记录 第 {{ query.page }}/{{ pageCount }} 页</span>
+    <div class="admin-pager">
+      <span class="admin-pager__total">共 {{ total }} 条记录 第 {{ query.page }}/{{ pageCount }} 页</span>
       <ElPagination
         :current-page="query.page"
         :page-size="query.pageSize"
-        background
         layout="sizes, prev, pager, next, jumper"
         :total="total"
         :page-sizes="[10, 20, 50]"
@@ -443,69 +454,19 @@ onMounted(fetchList);
 </template>
 
 <style scoped>
-.live-report-list {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  /* 顶栏 52 + main padding 20*2，与直播管理 / 素材中心一致，避免整页滚 */
-  height: calc(100dvh - 92px);
-  min-height: 0;
-  overflow: hidden;
-}
-.filter-bar {
-  display: flex;
-  flex: none;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 16px;
-}
-.filter-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-.filter-label {
-  font-size: 13px;
-  color: #666;
-  white-space: nowrap;
-}
-.toolbar {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 12px;
-}
-.err-banner {
-  flex: none;
-  margin: 0;
-  padding: 8px 12px;
-  border-radius: 4px;
-  background: #fff2f0;
-  color: #cf1322;
-  font-size: 13px;
-}
-.table-wrap {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid #ebebeb;
-  border-radius: 4px;
-  background: #fff;
-}
 .name-cell {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-width: 200px;
+  min-width: 0;
 }
 .cover {
-  width: 64px;
+  width: 72px;
   height: 48px;
   flex: none;
   overflow: hidden;
-  border-radius: 4px;
-  background: #f0f0f0;
+  border-radius: 6px;
+  background: var(--line-soft);
 }
 .cover img {
   width: 100%;
@@ -520,7 +481,7 @@ onMounted(fetchList);
   align-items: center;
   justify-content: center;
   font-size: 10px;
-  color: #bfbfbf;
+  color: var(--text-4);
 }
 .name-meta {
   min-width: 0;
@@ -530,9 +491,10 @@ onMounted(fetchList);
 .name-meta :deep(.el-tooltip__trigger),
 .title {
   margin: 0;
-  font-weight: 500;
-  color: #1a1a1a;
-  line-height: 1.4;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 22px;
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -573,83 +535,11 @@ onMounted(fetchList);
   background: transparent;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
-  color: var(--color-primary);
+  color: var(--primary);
   text-align: left;
   cursor: pointer;
 }
 .id-copy:hover {
   text-decoration: underline;
-}
-.risk-tag {
-  display: inline-block;
-  padding: 0 8px;
-  line-height: 22px;
-  border-radius: 2px;
-  border: 1px solid #d9d9d9;
-  font-size: 12px;
-}
-.risk--passed {
-  color: #52c41a;
-  border-color: #b7eb8f;
-  background: #f6ffed;
-}
-.risk--rejected {
-  color: #f5222d;
-  border-color: #ffa39e;
-  background: #fff1f0;
-}
-.risk--pending {
-  color: #595959;
-  border-color: #d9d9d9;
-  background: #fafafa;
-}
-.ops {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-.op-link {
-  border: 0;
-  background: transparent;
-  padding: 0;
-  font-size: 13px;
-  color: var(--color-primary);
-  cursor: pointer;
-  text-decoration: none;
-}
-.op-link:hover {
-  text-decoration: underline;
-}
-.op-link:disabled {
-  color: #bfbfbf;
-  cursor: not-allowed;
-  text-decoration: none;
-}
-.op-more {
-  border: 0;
-  background: transparent;
-  padding: 0 4px;
-  font-size: 14px;
-  color: #999;
-  cursor: pointer;
-  line-height: 1;
-}
-.op-more:hover {
-  color: var(--color-primary);
-}
-.pager {
-  flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-}
-.pager-total {
-  font-size: 13px;
-  color: #666;
-  margin-right: auto;
 }
 </style>
