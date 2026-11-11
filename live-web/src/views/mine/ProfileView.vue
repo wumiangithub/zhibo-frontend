@@ -6,7 +6,7 @@ import { updateViewerProfile, uploadViewerFile } from "@/api/viewerProfile";
 import AudienceFrame from "@/components/audience/AudienceFrame.vue";
 import { useToast } from "@/composables/useToast";
 import {
-  getViewerId,
+  getViewerUid,
   getViewerProfile,
   saveViewerProfile,
   saveViewerSession,
@@ -134,13 +134,13 @@ async function persist(name: string): Promise<ViewerAuthUser> {
   const file = pendingFile.value;
   if (!file) return updateViewerProfile({ nickname: name });
   if (file.size > MAX_BYTES) throw new Error("图片不能超过2MB");
-  const viewerId = getViewerId();
-  if (!viewerId) throw new Error("请重新登录");
+  const uid = getViewerUid();
+  if (!uid) throw new Error("请重新登录");
   const ext = extOf(file);
   if (!ext) throw new Error("请选择 jpg、png、gif 或 webp 图片");
   const uploaded = await uploadViewerFile(
     file,
-    `viewer/avatar/${viewerId}.${ext}`,
+    `viewer/avatar/${uid}.${ext}`,
     contentTypeOf(ext),
   );
   if (!uploaded?.url || !uploaded.objectKey) throw new Error("上传失败");

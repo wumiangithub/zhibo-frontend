@@ -117,6 +117,30 @@ const router = createRouter({
       component: () => import("@/views/watch/WatchReplayView.vue"),
     },
     {
+      path: "/watch/:id/order/risk",
+      name: "watch-order-risk",
+      meta: { requiresViewer: true },
+      component: () => import("@/views/watch/WatchOrderRiskView.vue"),
+    },
+    {
+      path: "/watch/:id/order/pay",
+      name: "watch-order-pay",
+      meta: { requiresViewer: true },
+      component: () => import("@/views/watch/WatchOrderPayView.vue"),
+    },
+    {
+      path: "/watch/:id/order/pay-success",
+      name: "watch-order-pay-success",
+      meta: { requiresViewer: true },
+      component: () => import("@/views/watch/WatchOrderPaySuccessView.vue"),
+    },
+    {
+      path: "/watch/:id/order/realname",
+      name: "watch-order-realname",
+      meta: { requiresViewer: true },
+      component: () => import("@/views/watch/WatchOrderRealnameView.vue"),
+    },
+    {
       path: "/course/:id",
       name: "course-watch",
       component: () => import("@/views/course/CourseWatchView.vue"),

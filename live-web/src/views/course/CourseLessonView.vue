@@ -10,7 +10,7 @@ import {
 import {
   getViewerAccessToken,
   syncViewerAccessTokenFromUrl,
-  syncViewerIdFromUrl,
+  syncViewerUidFromUrl,
 } from "@/utils/viewerAuth";
 import { decodeCourseShareToken } from "@/utils/courseShareToken";
 import { goViewerLogin } from "@/utils/viewerLogin";
@@ -38,7 +38,7 @@ const router = useRouter();
 const courseId = String(route.params.courseId ?? "").trim().toLowerCase();
 const lessonNodeId = Number(route.params.lessonNodeId);
 
-syncViewerIdFromUrl(route.query as Record<string, unknown>);
+syncViewerUidFromUrl(route.query as Record<string, unknown>);
 syncViewerAccessTokenFromUrl(route.query as Record<string, unknown>);
 
 const SHARE_STORAGE_PREFIX = "zhibo.courseShare.";
@@ -171,7 +171,7 @@ async function report(
 }
 
 function forwardQuery(): string {
-  const keep = ["viewerId", "nickname"] as const;
+  const keep = ["uid", "nickname"] as const;
   const parts: string[] = [];
   for (const key of keep) {
     const raw = route.query[key];

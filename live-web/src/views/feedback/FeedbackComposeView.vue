@@ -8,7 +8,7 @@ import {
 } from "@/api/feedback";
 import AudienceFrame from "@/components/audience/AudienceFrame.vue";
 import { useToast } from "@/composables/useToast";
-import { getViewerId } from "@/utils/viewerAuth";
+import { getViewerUid } from "@/utils/viewerAuth";
 import {
   isViewerLoginRequiredError,
   recoverViewerAuth,
@@ -68,10 +68,10 @@ function contentTypeOf(ext: string): string {
   return "image/jpeg";
 }
 
-/** 对齐小程序 buildObjectKey：viewer/feedback/{viewerId}_{timestamp}_{rand}.{ext} */
-function buildObjectKey(viewerId: number, ext: string): string {
+/** 对齐小程序 buildObjectKey：viewer/feedback/{uid}_{timestamp}_{rand}.{ext} */
+function buildObjectKey(uid: number, ext: string): string {
   const rand = Math.floor(Math.random() * 1000);
-  return `viewer/feedback/${viewerId}_${Date.now()}_${rand}.${ext}`;
+  return `viewer/feedback/${uid}_${Date.now()}_${rand}.${ext}`;
 }
 
 function onContentInput(e: Event) {
@@ -125,8 +125,8 @@ function onRemoveImage(index: number) {
 
 async function uploadAll(): Promise<FeedbackImageRef[]> {
   if (!images.value.length) return [];
-  const viewerId = getViewerId();
-  if (!viewerId) throw new Error("请重新登录");
+  const uid = getViewerUid();
+  if (!uid) throw new Error("请重新登录");
   const out: FeedbackImageRef[] = [];
   for (const shot of images.value) {
     if (shot.file.size > MAX_BYTES) throw new Error("图片不能超过2MB");
@@ -134,7 +134,7 @@ async function uploadAll(): Promise<FeedbackImageRef[]> {
     if (!ext) throw new Error("仅支持 jpg/png/gif/webp 图片");
     const uploaded = await uploadFeedbackImage(
       shot.file,
-      buildObjectKey(viewerId, ext),
+      buildObjectKey(uid, ext),
       contentTypeOf(ext),
     );
     if (!uploaded?.url || !uploaded.objectKey) throw new Error("上传失败");

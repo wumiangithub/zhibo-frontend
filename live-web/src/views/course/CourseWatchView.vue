@@ -5,7 +5,7 @@ import { enrollCourse } from "@/api/courseEnroll";
 import {
   getViewerAccessToken,
   syncViewerAccessTokenFromUrl,
-  syncViewerIdFromUrl,
+  syncViewerUidFromUrl,
 } from "@/utils/viewerAuth";
 import { decodeCourseShareToken } from "@/utils/courseShareToken";
 import { goViewerLogin } from "@/utils/viewerLogin";
@@ -14,7 +14,7 @@ const route = useRoute();
 const courseId = String(route.params.id ?? "").trim().toLowerCase();
 
 const routeQuery = route.query as Record<string, unknown>;
-syncViewerIdFromUrl(routeQuery);
+syncViewerUidFromUrl(routeQuery);
 syncViewerAccessTokenFromUrl(routeQuery);
 
 const SHARE_STORAGE_PREFIX = "zhibo.courseShare.";

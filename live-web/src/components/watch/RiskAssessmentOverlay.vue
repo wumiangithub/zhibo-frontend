@@ -14,6 +14,7 @@ import {
   saveRiskQuizProgress,
   writeRiskQuizFingerprint,
 } from "@/utils/riskQuizProgress";
+import { isLikelyMiniProgramWebView } from "@/utils/miniProgram";
 
 const props = defineProps<{
   open: boolean;
@@ -28,6 +29,9 @@ const emit = defineEmits<{
   /** 答完后把答案交给父级：create（若需）→ submitRisk → 开支付 */
   submit: [answers: RiskAnswerItem[]];
 }>();
+
+/** 小程序 web-view 已有原生导航栏，勿再叠 H5 返回头（对齐 WatchView / OrderPayOverlay） */
+const inMiniProgram = isLikelyMiniProgramWebView();
 
 type Phase = "intro" | "quiz";
 
@@ -163,6 +167,8 @@ watch(
       void loadQuestions();
     }
   },
+  // 独立风测页挂载时 open 已是 true，无 immediate 则不会拉 /risk/questions
+  { immediate: true },
 );
 
 watch(current, (q) => {
@@ -283,7 +289,10 @@ function onPrimary() {
         aria-modal="true"
         aria-label="风险测评"
       >
-        <header class="risk-nav">
+        <header
+          v-if="!inMiniProgram"
+          class="risk-nav"
+        >
           <button
             type="button"
             class="risk-nav-back"

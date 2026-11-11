@@ -1,5 +1,5 @@
 import type { RiskQuestion } from "@/api/orderCenter";
-import { getViewerId, getViewerOrderCenterUsername } from "@/utils/viewerAuth";
+import { getViewerUid, getViewerOrderCenterUsername } from "@/utils/viewerAuth";
 
 /** 全局题库按观众隔离：`zhibo.riskQuiz.{viewerKey}` */
 const KEY_PREFIX = "zhibo.riskQuiz.";
@@ -15,7 +15,7 @@ export interface RiskQuizProgress {
 function resolveViewerKey(): string {
   const username = getViewerOrderCenterUsername().trim();
   if (username) return username;
-  const id = getViewerId();
+  const id = getViewerUid();
   return id != null ? String(id) : "";
 }
 

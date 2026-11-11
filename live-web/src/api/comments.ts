@@ -23,7 +23,7 @@ export interface ReportCommentBody {
   commentTime?: string;
 }
 
-/** 评论上报。发送成功时调用；viewerId 只从 Authorization 取；Body 不传 guestId / viewerId。 */
+/** 评论上报。发送成功时调用；uid 只从 Authorization 取；Body 不传 guestId / uid。 */
 export function reportComment(activityId: string, body: ReportCommentBody) {
   const token = getViewerAccessToken();
   const headers: Record<string, string> = {};

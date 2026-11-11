@@ -1,7 +1,8 @@
 /** 与小程序 utils/auth.js 同键，便于 H5 登录或 web-view 注入共用。 */
 const ACCESS_KEY = "viewerAccessToken";
 const REFRESH_KEY = "viewerRefreshToken";
-const VIEWER_ID_KEY = "viewerId";
+const VIEWER_UID_KEY = "viewerUid";
+const VIEWER_ID_KEY_LEGACY = "viewerId";
 const PHONE_KEY = "viewerPhoneMasked";
 const NICK_KEY = "viewerNickname";
 const AVATAR_KEY = "viewerAvatarUrl";
@@ -44,9 +45,10 @@ export function setViewerRefreshToken(token: string): void {
   }
 }
 
-export function getViewerId(): number | null {
+export function getViewerUid(): number | null {
   try {
-    const raw = localStorage.getItem(VIEWER_ID_KEY);
+    const raw =
+      localStorage.getItem(VIEWER_UID_KEY) ?? localStorage.getItem(VIEWER_ID_KEY_LEGACY);
     if (!raw) return null;
     const n = Number(raw);
     return Number.isInteger(n) && n > 0 ? n : null;
@@ -55,11 +57,12 @@ export function getViewerId(): number | null {
   }
 }
 
-/** 写入观众数字 id（小程序 web-view URL `viewerId` 同步进 localStorage）。 */
-export function setViewerId(viewerId: number): void {
-  if (!Number.isInteger(viewerId) || viewerId <= 0) return;
+/** 写入用户中心 uid（小程序 web-view URL `uid` 同步进 localStorage）。 */
+export function setViewerUid(uid: number): void {
+  if (!Number.isInteger(uid) || uid <= 0) return;
   try {
-    localStorage.setItem(VIEWER_ID_KEY, String(viewerId));
+    localStorage.setItem(VIEWER_UID_KEY, String(uid));
+    localStorage.removeItem(VIEWER_ID_KEY_LEGACY);
   } catch {
     /* ignore */
   }
@@ -69,16 +72,16 @@ export function setViewerId(viewerId: number): void {
 export function saveViewerSession(data: {
   accessToken?: string;
   refreshToken?: string;
-  user?: { id?: number; phoneMasked?: string; nickname?: string } | null;
+  user?: { uid?: number; phoneMasked?: string; nickname?: string } | null;
 }): void {
   if (!data) return;
   if (data.accessToken) setViewerAccessToken(data.accessToken);
   if (data.refreshToken) setViewerRefreshToken(data.refreshToken);
   const user = data.user;
   if (!user || typeof user !== "object") return;
-  if (user.id != null) {
-    const id = Number(user.id);
-    if (Number.isInteger(id) && id > 0) setViewerId(id);
+  if (user.uid != null) {
+    const uid = Number(user.uid);
+    if (Number.isInteger(uid) && uid > 0) setViewerUid(uid);
   }
   if (Object.prototype.hasOwnProperty.call(user, "phoneMasked")) {
     try {
@@ -107,13 +110,14 @@ function queryParam(
 }
 
 /**
- * 从路由 query / location.search 读 `viewerId`（正整数）。
- * 小程序打开观看页时以此为准，优先于旧 localStorage。
+ * 从路由 query / location.search 读 `uid`（正整数）。
+ * 兼容旧链 `viewerId` 只读一次。
  */
-export function readViewerIdFromSearch(
+export function readViewerUidFromSearch(
   query?: Record<string, unknown> | { [key: string]: unknown },
 ): number | null {
-  const raw = queryParam(query, "viewerId");
+  let raw = queryParam(query, "uid");
+  if (!raw) raw = queryParam(query, "viewerId");
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
@@ -126,18 +130,18 @@ export function readNicknameFromSearch(
 }
 
 /**
- * URL 有 `viewerId` 时写入 localStorage 并返回；否则退回已有 localStorage。
- * URL 是小程序身份来源，覆盖过期的本地 id。
+ * URL 有 `uid` 时写入 localStorage 并返回；否则退回已有 localStorage。
+ * URL 是小程序身份来源，覆盖过期的本地 uid。
  */
-export function syncViewerIdFromUrl(
+export function syncViewerUidFromUrl(
   query?: Record<string, unknown> | { [key: string]: unknown },
 ): number | null {
-  const fromUrl = readViewerIdFromSearch(query);
+  const fromUrl = readViewerUidFromSearch(query);
   if (fromUrl != null) {
-    setViewerId(fromUrl);
+    setViewerUid(fromUrl);
     return fromUrl;
   }
-  return getViewerId();
+  return getViewerUid();
 }
 
 /**
@@ -160,7 +164,7 @@ export function syncViewerAccessTokenFromUrl(
 
 /** 是否应从路由转发中排除（避免 SPA 跳转把 JWT 再写进 query）。 */
 export function isViewerAuthQueryKey(key: string): boolean {
-  return key === "viewerAccessToken" || key === "accessToken";
+  return key === "viewerAccessToken" || key === "accessToken" || key === "uid";
 }
 
 function stripAccessTokenFromLocation(): void {
@@ -188,7 +192,7 @@ export function isViewerLoggedIn(): boolean {
 
 /**
  * 从观众 access JWT 解出订单中心 `username` claim（不验签，仅读 payload）。
- * 对齐 oms-go：优先手机号，否则 openid / viewerId。
+ * 对齐 oms-go：优先手机号，否则 openid / uid。
  */
 export function getViewerOrderCenterUsername(): string {
   const token = getViewerAccessToken();
@@ -205,8 +209,8 @@ export function getViewerOrderCenterUsername(): string {
   } catch {
     /* ignore */
   }
-  const id = getViewerId();
-  return id != null ? String(id) : "";
+  const uid = getViewerUid();
+  return uid != null ? String(uid) : "";
 }
 
 /** 上次登录记下的脱敏手机号；没有则空串。 */
@@ -266,12 +270,13 @@ export function clearViewerProfile(): void {
   }
 }
 
-/** 清本地观众会话（access / refresh / id / 脱敏手机号）。 */
+/** 清本地观众会话（access / refresh / uid / 脱敏手机号）。 */
 export function clearViewerSession(): void {
   try {
     localStorage.removeItem(ACCESS_KEY);
     localStorage.removeItem(REFRESH_KEY);
-    localStorage.removeItem(VIEWER_ID_KEY);
+    localStorage.removeItem(VIEWER_UID_KEY);
+    localStorage.removeItem(VIEWER_ID_KEY_LEGACY);
     localStorage.removeItem(PHONE_KEY);
   } catch {
     /* ignore */

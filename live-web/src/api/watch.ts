@@ -19,9 +19,9 @@ export interface WatchData {
 
 /** 后端只下发签名/init 鉴权；脚本 CDN 由适配器按 provider 加载（D93） */
 export interface SdkInitPayload {
-  /** = String(viewerId) 回显；3.9.1 init 不要传 account（与 email 互斥） */
+  /** = String(uid) 回显；3.9.1 init 不要传 account（与 email 互斥） */
   account: string;
-  /** 已签名 `{viewerId}@qkzb.com`，不要在前端改，否则签名失效 */
+  /** 已签名 `{uid}@qkzb.com`，不要在前端改，否则签名失效 */
   email: string;
   username: string;
   /** 观众头像 URL；无头像为 ""。仅非空参与签名；init 原样传（空串即可） */
@@ -37,6 +37,8 @@ export interface SdkInitPayload {
 export interface WatchSummaryData {
   id: string;
   title: string;
+  /** 活动详情封面；无则省略 */
+  coverUrl?: string;
   state: number;
   type: number;
   startTime?: string;
@@ -58,8 +60,8 @@ export interface WatchSummaryData {
 export interface WatchSdkSignData {
   id: string;
   nickname: string;
-  /** 观众数字 id；与 sdk.email 一致 */
-  viewerId: number;
+  /** 用户中心 uid；与 sdk.email 一致 */
+  uid: number;
   provider?: LiveProvider;
   sdk: SdkInitPayload;
 }
@@ -71,11 +73,11 @@ export type WatchSdkData = WatchSummaryData & Partial<WatchSdkSignData>;
 export interface WatchParams {
   guestId?: string;
   nickname?: string;
-  viewerId?: number;
+  uid?: number;
 }
 
 export interface WatchSdkSignParams {
-  /** 展示昵称；viewerId 只从 Authorization 观众 JWT 取（D96） */
+  /** 展示昵称；uid 只从 Authorization 观众 JWT 取（D96） */
   nickname?: string;
 }
 

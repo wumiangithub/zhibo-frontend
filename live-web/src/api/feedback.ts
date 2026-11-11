@@ -55,7 +55,7 @@ function normalizeImage(raw: unknown): FeedbackImageRef | null {
   return { url, objectKey };
 }
 
-/** 意见反馈截图。objectKey 由调用方按 viewer/feedback/{viewerId}_{timestamp}_{rand}.{ext} 拼好。 */
+/** 意见反馈截图。objectKey 由调用方按 viewer/feedback/{uid}_{timestamp}_{rand}.{ext} 拼好。 */
 export function uploadFeedbackImage(file: File, objectKey: string, contentType?: string) {
   const form = new FormData();
   form.append("file", file);

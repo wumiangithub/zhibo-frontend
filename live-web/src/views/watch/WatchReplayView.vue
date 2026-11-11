@@ -8,8 +8,6 @@ import WatchRoomShell from "@/components/watch/WatchRoomShell.vue";
 import WatchSidePanel from "@/components/watch/WatchSidePanel.vue";
 import ProductSheet from "@/components/watch/ProductSheet.vue";
 import CheckoutSheet from "@/components/watch/CheckoutSheet.vue";
-import RiskAssessmentOverlay from "@/components/watch/RiskAssessmentOverlay.vue";
-import OrderPayOverlay from "@/components/watch/OrderPayOverlay.vue";
 import CouponSheet from "@/components/watch/CouponSheet.vue";
 import AccessPasswordDialog from "@/components/watch/AccessPasswordDialog.vue";
 import AccessBlockedScreen from "@/components/watch/AccessBlockedScreen.vue";
@@ -25,7 +23,7 @@ import {
   isViewerLoggedIn,
   readNicknameFromSearch,
   syncViewerAccessTokenFromUrl,
-  syncViewerIdFromUrl,
+  syncViewerUidFromUrl,
 } from "@/utils/viewerAuth";
 import { storeNickname } from "@/api/watch";
 import { ensureWxJsSdk, isLikelyMiniProgramWebView } from "@/utils/miniProgram";
@@ -55,7 +53,7 @@ const summary = ref<WatchSummaryData | null>(null);
 const record = ref<WatchRecordItem | null>(null);
 
 const routeQuery = route.query as Record<string, unknown>;
-syncViewerIdFromUrl(routeQuery);
+syncViewerUidFromUrl(routeQuery);
 syncViewerAccessTokenFromUrl(routeQuery);
 const urlNickname = readNicknameFromSearch(routeQuery);
 if (urlNickname) storeNickname(urlNickname);
@@ -113,18 +111,7 @@ const {
   selectCoupon,
   submitCheckoutOrder,
   checkoutSubmitting,
-  riskOpen,
-  riskSubmitting,
-  riskSubmitError,
-  pendingOrderId,
-  riskGrade,
-  riskGradeName,
-  closeRiskAssessment,
-  onRiskAnswersSubmit,
-  payOpen,
-  closePay,
-  onConfirmPay,
-} = useWatchCart(() => activityId.value);
+} = useWatchCart(() => activityId.value, { watchMode: "replay" });
 const {
   couponOpen,
   couponLoading,
@@ -351,24 +338,6 @@ onMounted(() => {
       @close-coupons="closeCouponPicker"
       @select-coupon="selectCoupon"
       @submit="submitCheckoutOrder"
-    />
-
-    <RiskAssessmentOverlay
-      :open="riskOpen"
-      :submitting="riskSubmitting"
-      :submit-error="riskSubmitError"
-      @close="closeRiskAssessment"
-      @submit="onRiskAnswersSubmit"
-    />
-
-    <OrderPayOverlay
-      :open="payOpen"
-      :order-id="pendingOrderId"
-      :cover-img="checkoutCoverImg"
-      :risk-grade="riskGrade"
-      :risk-grade-name="riskGradeName"
-      @close="closePay"
-      @pay="onConfirmPay"
     />
 
     <CouponSheet

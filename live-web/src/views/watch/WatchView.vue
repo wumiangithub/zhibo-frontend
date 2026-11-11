@@ -19,8 +19,6 @@ import AccessPasswordDialog from "@/components/watch/AccessPasswordDialog.vue";
 import AccessBlockedScreen from "@/components/watch/AccessBlockedScreen.vue";
 import ProductSheet from "@/components/watch/ProductSheet.vue";
 import CheckoutSheet from "@/components/watch/CheckoutSheet.vue";
-import RiskAssessmentOverlay from "@/components/watch/RiskAssessmentOverlay.vue";
-import OrderPayOverlay from "@/components/watch/OrderPayOverlay.vue";
 import CouponSheet from "@/components/watch/CouponSheet.vue";
 import UiPageHeader from "@/components/UiPageHeader.vue";
 import { listWatchRecords, type WatchRecordItem } from "@/api/replayWatch";
@@ -34,12 +32,12 @@ import { pingViewerPresence } from "@/api/presence";
 import {
   clearViewerSession,
   getViewerAccessToken,
-  getViewerId,
+  getViewerUid,
   isViewerAuthQueryKey,
   isViewerLoggedIn,
   readNicknameFromSearch,
   syncViewerAccessTokenFromUrl,
-  syncViewerIdFromUrl,
+  syncViewerUidFromUrl,
 } from "@/utils/viewerAuth";
 import { ensureWxJsSdk, isLikelyMiniProgramWebView } from "@/utils/miniProgram";
 import { goViewerLogin, recoverViewerAuth } from "@/utils/viewerLogin";
@@ -81,24 +79,13 @@ const {
   selectCoupon,
   submitCheckoutOrder,
   checkoutSubmitting,
-  riskOpen,
-  riskSubmitting,
-  riskSubmitError,
-  pendingOrderId,
-  riskGrade,
-  riskGradeName,
-  closeRiskAssessment,
-  onRiskAnswersSubmit,
-  payOpen,
-  closePay,
-  onConfirmPay,
 } = useWatchCart(() => id);
 /** session 的发券自定义消息回调会用到；在 useWatchCoupons 初始化后赋值 */
 let refreshCoupons: () => Promise<void> = async () => {};
 
 const routeQuery = route.query as Record<string, unknown>;
-/** 小程序 web-view：viewerId + JWT + nickname 写入本地，再拉 /watch/sdk-sign */
-const syncedViewerId = syncViewerIdFromUrl(routeQuery);
+/** 小程序 web-view：uid + JWT + nickname 写入本地，再拉 /watch/sdk-sign */
+syncViewerUidFromUrl(routeQuery);
 syncViewerAccessTokenFromUrl(routeQuery);
 const urlNickname = readNicknameFromSearch(routeQuery);
 if (urlNickname) {
@@ -145,7 +132,7 @@ function tryAttributeInvite() {
 
 /** 已登录且无展示昵称时才填；未登录先走 /login，不挡在昵称表单 */
 const showNicknameForm = ref(
-  !!getViewerAccessToken() && syncedViewerId == null && !getStoredNickname(),
+  !!getViewerAccessToken() && getViewerUid() == null && !getStoredNickname(),
 );
 const nicknameSaving = ref(false);
 
@@ -256,7 +243,7 @@ async function onPasswordSubmit(password: string) {
   if (ok) await load();
 }
 
-const hasViewerId = computed(() => getViewerId() != null);
+const hasViewerUid = computed(() => getViewerUid() != null);
 
 const displayNickname = computed(() => getStoredNickname() || "观众");
 
@@ -515,7 +502,7 @@ onMounted(() => {
               昵称：<span class="text-[var(--lw-text-primary)]">{{ displayNickname }}</span>
             </p>
             <button
-              v-if="!hasViewerId"
+              v-if="!hasViewerUid"
               type="button"
               class="bg-transparent text-xs text-[var(--lw-text-muted)] hover:text-[var(--lw-text-secondary)]"
               @click="changeNickname"
@@ -658,24 +645,6 @@ onMounted(() => {
       @close-coupons="closeCouponPicker"
       @select-coupon="selectCoupon"
       @submit="submitCheckoutOrder"
-    />
-
-    <RiskAssessmentOverlay
-      :open="riskOpen"
-      :submitting="riskSubmitting"
-      :submit-error="riskSubmitError"
-      @close="closeRiskAssessment"
-      @submit="onRiskAnswersSubmit"
-    />
-
-    <OrderPayOverlay
-      :open="payOpen"
-      :order-id="pendingOrderId"
-      :cover-img="checkoutCoverImg"
-      :risk-grade="riskGrade"
-      :risk-grade-name="riskGradeName"
-      @close="closePay"
-      @pay="onConfirmPay"
     />
 
     <CouponSheet

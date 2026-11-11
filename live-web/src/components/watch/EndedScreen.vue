@@ -52,6 +52,19 @@ function goHome() {
   >
     <div class="ended-panel">
       <div class="ended-stack">
+        <div
+          v-if="data.coverUrl"
+          class="ended-cover"
+        >
+          <img
+            class="ended-cover-img"
+            :src="data.coverUrl"
+            :alt="data.title || '直播封面'"
+            loading="lazy"
+            decoding="async"
+          >
+        </div>
+
         <!-- 2026-11-09：标题在上、状态胶囊在下（见 live-结束页.md） -->
         <h2 class="ended-title">
           {{ data.title }}
@@ -203,6 +216,23 @@ function goHome() {
   align-items: center;
   gap: 20px;
   text-align: center;
+}
+
+.ended-cover {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  aspect-ratio: 16 / 9;
+  box-shadow: none;
+}
+
+.ended-cover-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .ended-title {
@@ -425,6 +455,12 @@ function goHome() {
     rgba(37, 99, 235, 0.06),
     transparent 70%
   );
+}
+
+.ended-root.is-light .ended-cover {
+  border-color: #e2e8f0;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .ended-root.is-light .ended-title {

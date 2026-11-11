@@ -225,7 +225,7 @@ function onSortChange(payload: { prop: string | null; order: string | null }) {
 
 const addVisible = ref(false);
 const addTab = ref<"single" | "bulk" | "tag">("single");
-const addMethod = ref<"phone" | "viewerId">("phone");
+const addMethod = ref<"phone" | "uid">("phone");
 const addPhone = ref("");
 const addPhoneCode = ref("+86");
 const addViewerId = ref("");
@@ -374,7 +374,7 @@ function onAddMethodChange() {
 async function submitAdd() {
   if (addTab.value !== "single") return;
 
-  let body: { phone: string } | { viewerId: number };
+  let body: { phone: string } | { uid: number };
   if (addMethod.value === "phone") {
     const phone = addPhone.value.trim().replace(/\D/g, "");
     if (!phone) {
@@ -392,7 +392,7 @@ async function submitAdd() {
       ElMessage.warning("用户ID须为正整数");
       return;
     }
-    body = { viewerId: Number(raw) };
+    body = { uid: Number(raw) };
   }
 
   addSaving.value = true;
@@ -957,7 +957,7 @@ onUnmounted(() => {
                 @change="onAddMethodChange"
               >
                 <ElRadio value="phone">手机号</ElRadio>
-                <ElRadio value="viewerId">用户ID</ElRadio>
+                <ElRadio value="uid">用户ID</ElRadio>
               </ElRadioGroup>
             </ElFormItem>
             <ElFormItem

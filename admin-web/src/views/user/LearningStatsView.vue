@@ -467,7 +467,7 @@ onMounted(async () => {
         </ElTableColumn>
         <ElTableColumn
           label="用户ID"
-          prop="id"
+          prop="uid"
           width="100"
         />
         <ElTableColumn
@@ -481,7 +481,7 @@ onMounted(async () => {
             >
               <span
                 v-for="(name, i) in row.tagLabels"
-                :key="`${row.id}-${i}`"
+                :key="`${row.uid}-${i}`"
                 class="tag-pill"
               >{{ name }}</span>
             </div>
@@ -555,7 +555,7 @@ onMounted(async () => {
         </ElTableColumn>
         <ElTableColumn
           label="用户ID"
-          prop="viewerId"
+          prop="uid"
           width="100"
         />
         <ElTableColumn

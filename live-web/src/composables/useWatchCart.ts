@@ -1,56 +1,39 @@
 import { computed, ref } from "vue";
-import { getAudienceSalesman } from "@/api/audienceAttribute";
+import { useRouter } from "vue-router";
 import { listWatchProducts } from "@/api/watchProducts";
-import { getStoredNickname } from "@/api/watch";
 import {
-  createViewerOrder,
   getViewerProductDetail,
   getViewerRiskStatus,
   listSelectableCoupons,
   listViewerProductsForBoundSpus,
-  submitRiskTest,
   VIEWER_ORDER_SOURCE_LIVE,
-  type RiskAnswerItem,
   type SelectableCouponItem,
   type ViewerProductDetail,
 } from "@/api/orderCenter";
 import type { CartProductDisplay } from "@/components/watch/ProductSheet.vue";
 import { useToast } from "@/composables/useToast";
+import { useViewerOrderFlow } from "@/composables/useViewerOrderFlow";
+import { isViewerLoggedIn } from "@/utils/viewerAuth";
 import {
-  getViewerProfile,
-  isViewerLoggedIn,
-} from "@/utils/viewerAuth";
-import { clearRiskQuizProgress } from "@/utils/riskQuizProgress";
+  saveViewerOrderCheckoutSession,
+  type WatchOrderRoomMode,
+} from "@/utils/viewerOrderCheckoutSession";
 
 function formatYuan(n: number): string {
   if (!Number.isFinite(n) || n < 0) return "0.00";
   return n.toFixed(2);
 }
 
-/** 本场业务员：activity_audience 邀请人优先，否则导入人；失败/皆无则不下传。 */
-async function resolveSalesmanId(activityId: string): Promise<string | undefined> {
-  const id = activityId?.trim();
-  if (!id) return undefined;
-  try {
-    const salesmanId = await getAudienceSalesman(id);
-    if (salesmanId != null && salesmanId > 0) return String(salesmanId);
-  } catch {
-    /* 无关系行或接口失败：订单中心 salesmanId 可选 */
-  }
-  return undefined;
-}
-
-function resolveCustomerName(): string {
-  const nick = getStoredNickname()?.trim();
-  if (nick) return nick;
-  const profileNick = getViewerProfile().nickname?.trim();
-  if (profileNick) return profileNick;
-  return "微信用户";
-}
-
-/** 直播 / 回放共用小黄车拉数 + 去抢购确认单 + 风测 + 支付页。 */
-export function useWatchCart(getActivityId: () => string) {
+/** 直播 / 回放共用小黄车拉数 + 去抢购确认单；风测 / 支付走独立路由。 */
+export function useWatchCart(
+  getActivityId: () => string,
+  opts?: { watchMode?: WatchOrderRoomMode },
+) {
+  const router = useRouter();
   const { toast } = useToast();
+  const { goToRisk, goToPay, createOrderFromSession } = useViewerOrderFlow();
+  const watchMode = opts?.watchMode ?? "live";
+
   const cartOpen = ref(false);
   const cartLoading = ref(false);
   const cartError = ref("");
@@ -93,15 +76,6 @@ export function useWatchCart(getActivityId: () => string) {
     return formatYuan(pay);
   });
 
-  const riskOpen = ref(false);
-  const riskSubmitting = ref(false);
-  const riskSubmitError = ref("");
-  const pendingOrderId = ref("");
-  const riskGrade = ref("");
-  const riskGradeName = ref("");
-
-  const payOpen = ref(false);
-
   async function openCart() {
     cartOpen.value = true;
     const seq = ++cartFetchSeq;
@@ -136,7 +110,6 @@ export function useWatchCart(getActivityId: () => string) {
       const fromOc = await listViewerProductsForBoundSpus(boundIds);
       if (seq !== cartFetchSeq) return;
 
-      // by-ids 只回上架；绑定但未出现 → 仍展示，标下架（用本站快照名）
       const bySpu = new Map(fromOc.map((p) => [p.spuId, p]));
       cartProducts.value = bound.map((b) => {
         const oc = bySpu.get(String(b.spuId));
@@ -214,9 +187,6 @@ export function useWatchCart(getActivityId: () => string) {
     }
   }
 
-  /**
-   * 去抢购：关小黄车 → 商品详情取 SKU → 可用券 → 确认单弹层。
-   */
   async function buyProduct(item: CartProductDisplay) {
     if (item.offShelf) {
       toast("该商品已下架");
@@ -286,30 +256,22 @@ export function useWatchCart(getActivityId: () => string) {
     couponPickerOpen.value = false;
   }
 
-  /** 用确认单缓存建单；成功写入 pendingOrderId */
-  async function createOrderFromCheckout(): Promise<string> {
+  function buildCheckoutSession() {
+    const activityId = getActivityId()?.trim();
     const detail = checkoutDetail.value;
-    if (!detail?.sku) throw new Error("商品信息已失效，请返回重新下单");
-    const selected = selectedCouponUserId.value
-      ? checkoutCoupons.value.find((c) => c.couponUserId === selectedCouponUserId.value)
-      : null;
-    const salesmanId = await resolveSalesmanId(getActivityId());
-    const created = await createViewerOrder({
-      productId: detail.spuId,
-      productSkuId: detail.sku.skuId,
-      customerName: resolveCustomerName(),
-      orderSource: VIEWER_ORDER_SOURCE_LIVE,
-      couponId: selected?.couponId,
-      salesmanId,
-    });
-    pendingOrderId.value = created.orderId;
-    return created.orderId;
+    if (!activityId || !detail?.sku) return null;
+    return {
+      activityId,
+      watchMode,
+      checkoutDetail: detail,
+      selectedCouponUserId: selectedCouponUserId.value,
+      coverImg: checkoutCoverImg.value,
+    };
   }
 
   /**
    * 确认单「提交订单」：先查风测状态。
-   * risk_valid && risk_match_product → 跳过风测，直接建单进支付页；
-   * 否则关确认单、开风测（仍不建单，答完再建）。
+   * 满足风测 → 建单后进支付独立页；否则进风测独立页（仍不建单，答完再建）。
    */
   async function submitCheckoutOrder() {
     if (checkoutSubmitting.value || checkoutLoading.value || checkoutError.value) {
@@ -322,97 +284,58 @@ export function useWatchCart(getActivityId: () => string) {
     }
 
     checkoutSubmitting.value = true;
-    pendingOrderId.value = "";
-    riskGrade.value = "";
-    riskGradeName.value = "";
-    riskSubmitError.value = "";
-    riskSubmitting.value = false;
 
     try {
       const status = await getViewerRiskStatus(detail.sku.skuId);
       const skipRisk = status.riskValid && status.riskMatchProduct;
 
-      checkoutOpen.value = false;
-      couponPickerOpen.value = false;
-
-      if (skipRisk) {
-        riskGrade.value = status.riskLevelId > 0 ? `C${status.riskLevelId}` : "";
-        riskGradeName.value = status.riskLevelName;
-        await createOrderFromCheckout();
-        if (!pendingOrderId.value) {
-          toast("创建订单失败，请重试");
-          checkoutOpen.value = true;
-          return;
-        }
-        payOpen.value = true;
+      const baseSession = buildCheckoutSession();
+      if (!baseSession) {
+        toast("活动或商品无效");
         return;
       }
 
-      riskOpen.value = true;
+      const couponsSnapshot = [...checkoutCoupons.value];
+
+      if (skipRisk) {
+        const riskGrade =
+          status.riskLevelId > 0 ? `C${status.riskLevelId}` : "";
+        const riskGradeName = status.riskLevelName;
+        const session = {
+          ...baseSession,
+          riskGrade,
+          riskGradeName,
+          checkoutCoupons: couponsSnapshot,
+        };
+        saveViewerOrderCheckoutSession(session);
+        checkoutOpen.value = false;
+        couponPickerOpen.value = false;
+        try {
+          const orderId = await createOrderFromSession(session, couponsSnapshot);
+          resetCheckout();
+          goToPay(router, session, orderId, {
+            riskGrade,
+            riskGradeName,
+          });
+        } catch (e) {
+          checkoutOpen.value = true;
+          toast(e instanceof Error ? e.message : "创建订单失败");
+        }
+        return;
+      }
+
+      checkoutOpen.value = false;
+      couponPickerOpen.value = false;
+      resetCheckout();
+      goToRisk(router, {
+        ...baseSession,
+        checkoutCoupons: couponsSnapshot,
+      });
     } catch (e) {
       toast(e instanceof Error ? e.message : "提交失败");
     } finally {
       checkoutSubmitting.value = false;
     }
-  }
-
-  function closeRiskAssessment() {
-    riskOpen.value = false;
-    riskSubmitting.value = false;
-    riskSubmitError.value = "";
-  }
-
-  /**
-   * 风测答完提交：无 orderId 时先 create，再 submitRisk；已有 orderId 则只重试风测。
-   * 建单失败留在风测页；风测失败保留 orderId 可再试。
-   */
-  async function onRiskAnswersSubmit(answers: RiskAnswerItem[]) {
-    if (riskSubmitting.value) return;
-    if (!checkoutDetail.value?.sku) {
-      riskSubmitError.value = "商品信息已失效，请返回重新下单";
-      return;
-    }
-
-    riskSubmitting.value = true;
-    riskSubmitError.value = "";
-    try {
-      if (!pendingOrderId.value) {
-        await createOrderFromCheckout();
-      }
-
-      const orderId = pendingOrderId.value;
-      if (!orderId) {
-        riskSubmitError.value = "创建订单失败，请重试";
-        return;
-      }
-
-      try {
-        const result = await submitRiskTest({ answers, orderId });
-        riskGrade.value = result.riskGrade?.trim() || "";
-        riskGradeName.value = result.riskGradeName?.trim() || "";
-        clearRiskQuizProgress();
-        riskOpen.value = false;
-        riskSubmitError.value = "";
-        payOpen.value = true;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "提交风测失败";
-        riskSubmitError.value = msg;
-        toast(msg);
-      }
-    } catch (e) {
-      riskSubmitError.value = e instanceof Error ? e.message : "创建订单失败";
-    } finally {
-      riskSubmitting.value = false;
-    }
-  }
-
-  function closePay() {
-    payOpen.value = false;
-  }
-
-  function onConfirmPay() {
-    // 后续接 prepay
-    toast("支付功能开发中");
   }
 
   return {
@@ -441,18 +364,5 @@ export function useWatchCart(getActivityId: () => string) {
     closeCouponPicker,
     selectCoupon,
     submitCheckoutOrder,
-
-    riskOpen,
-    riskSubmitting,
-    riskSubmitError,
-    pendingOrderId,
-    riskGrade,
-    riskGradeName,
-    closeRiskAssessment,
-    onRiskAnswersSubmit,
-
-    payOpen,
-    closePay,
-    onConfirmPay,
   };
 }

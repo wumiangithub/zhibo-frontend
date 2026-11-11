@@ -24,7 +24,7 @@ export function updateViewerProfile(body: {
   });
 }
 
-/** 中转上传。objectKey 由调用方按 viewer/avatar/{viewerId}.{ext} 拼好。 */
+/** 中转上传。objectKey 由调用方按 viewer/avatar/{uid}.{ext} 拼好。 */
 export function uploadViewerFile(file: File, objectKey: string, contentType?: string) {
   const form = new FormData();
   form.append("file", file);

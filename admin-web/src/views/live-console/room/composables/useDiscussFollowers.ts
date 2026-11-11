@@ -64,7 +64,7 @@ export function useDiscussFollowers(activityId: Ref<string> | (() => string)) {
         total = res.total ?? 0;
         const list = res.list ?? [];
         for (const row of list) {
-          const vid = String(row.viewerId);
+          const vid = String(row.uid);
           const nick = (row.nickname || "").trim();
           if (nick && !nickAmbiguous.has(nick)) {
             const prevNick = nickMap.get(nick);

@@ -479,12 +479,12 @@ export function importCourseUsersByTags(
   );
 }
 
-/** phone 与 viewerId 二选一；created=false 表示本课已有该学员；expireTime 选填仅新建生效 */
+/** phone 与 uid 二选一；created=false 表示本课已有该学员；expireTime 选填仅新建生效 */
 export function createCourseUser(
   courseId: string,
-  body: ({ phone: string } | { viewerId: number }) & { expireTime?: string },
+  body: ({ phone: string } | { uid: number }) & { expireTime?: string },
 ) {
-  return post<{ id: number; viewerId: number; created: boolean }>(
+  return post<{ id: number; uid: number; created: boolean }>(
     `/courses/users/create/${encodeURIComponent(courseId)}`,
     body,
   );
@@ -681,7 +681,7 @@ export type CourseAnalyticsParticipateStatus = 0 | 1 | 2;
 export type CourseAnalyticsEntitlementDisplay = "valid" | "expired" | "invalid";
 
 export interface CourseAnalyticsUserItem {
-  viewerId: number;
+  uid: number;
   nickname: string;
   avatarUrl?: string;
   participateStatus: CourseAnalyticsParticipateStatus;
@@ -739,7 +739,7 @@ export interface CourseAnalyticsUserLessonItem {
 }
 
 export interface CourseAnalyticsUserLessonListResult {
-  viewerId: number;
+  uid: number;
   nickname: string;
   avatarUrl?: string;
   completedLessonCount: number;
@@ -753,13 +753,13 @@ export interface CourseAnalyticsUserLessonListResult {
 
 export function listCourseAnalyticsUserLessons(
   courseId: string,
-  params: { viewerId: number; page?: number; pageSize?: number },
+  params: { uid: number; page?: number; pageSize?: number },
 ) {
   return get<CourseAnalyticsUserLessonListResult>(
     `/courses/analytics/users/lessons/${encodeURIComponent(courseId)}`,
     {
       params: {
-        viewerId: params.viewerId,
+        uid: params.uid,
         page: params.page ?? 1,
         pageSize: params.pageSize ?? 10,
       },

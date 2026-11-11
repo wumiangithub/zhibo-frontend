@@ -216,7 +216,7 @@ async function confirmTags() {
   if (!row) return;
   tagSaving.value = true;
   try {
-    const res = await updateViewerTags(row.id, [...tagDraftIds.value]);
+    const res = await updateViewerTags(row.uid, [...tagDraftIds.value]);
     row.tagIds = res.tagIds ?? [];
     row.tagLabels = res.tagLabels ?? [];
     ElMessage.success("标签已更新");
@@ -251,7 +251,7 @@ async function confirmBlacklist() {
   };
   blacklistSaving.value = true;
   try {
-    const res = await updateViewerBlacklist(row.id, next);
+    const res = await updateViewerBlacklist(row.uid, next);
     row.banComment = res.banComment;
     row.banPurchase = res.banPurchase;
     row.banAccess = res.banAccess;
@@ -446,7 +446,7 @@ onMounted(() => {
           </template>
         </ElTableColumn>
         <ElTableColumn
-          prop="id"
+          prop="uid"
           label="用户ID"
           min-width="100"
         />
@@ -575,7 +575,7 @@ onMounted(() => {
               <div class="tag-line">
                 <span
                   v-for="(tag, idx) in row.tagLabels"
-                  :key="`${row.id}-${idx}`"
+                  :key="`${row.uid}-${idx}`"
                   class="tag-pill"
                 >{{ tag }}</span>
               </div>

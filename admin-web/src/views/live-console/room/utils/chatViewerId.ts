@@ -1,7 +1,7 @@
 import { parsePresenceUserId } from "./presenceEmail";
 
 /**
- * 本站 TOS 头像路径：`.../viewer/avatar/{viewerId}.png`（不含 default-avatar）。
+ * 本站 TOS 头像路径：`.../viewer/avatar/{uid}.png`（不含 default-avatar）。
  * 解析顺序里排在 query {@code v=} 之后（D111）。
  */
 const AVATAR_VIEWER = /\/viewer\/avatar\/([1-9]\d{0,18})(?:\.[a-z0-9]+)?(?:\?|#|$)/i;

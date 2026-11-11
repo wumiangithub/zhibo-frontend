@@ -57,7 +57,7 @@ const userLoading = ref(false);
 const userRows = ref<CourseAnalyticsUserItem[]>([]);
 
 const progressLoading = ref(false);
-const progressViewerId = ref<number | null>(null);
+const progressUid = ref<number | null>(null);
 const progressSummary = ref<CourseAnalyticsUserLessonListResult | null>(null);
 const progressRows = ref<CourseAnalyticsUserLessonItem[]>([]);
 
@@ -66,8 +66,8 @@ function syncFromRoute() {
   if (sub === "progress") {
     dataView.value = "progress";
     learningSub.value = "users";
-    const vid = Number(route.query.viewerId);
-    progressViewerId.value = Number.isFinite(vid) && vid > 0 ? vid : null;
+    const uid = Number(route.query.uid);
+    progressUid.value = Number.isFinite(uid) && uid > 0 ? uid : null;
     return;
   }
   dataView.value = "list";
@@ -75,7 +75,7 @@ function syncFromRoute() {
 }
 
 watch(
-  () => [route.query.sub, route.query.viewerId],
+  () => [route.query.sub, route.query.uid],
   () => syncFromRoute(),
   { immediate: true },
 );
@@ -97,16 +97,16 @@ function setLearningSub(sub: LearningSub) {
 }
 
 function openProgress(row: CourseAnalyticsUserItem) {
-  progressViewerId.value = row.viewerId;
+  progressUid.value = row.uid;
   dataView.value = "progress";
   page.value = 1;
-  replaceQuery({ sub: "progress", viewerId: String(row.viewerId) });
+  replaceQuery({ sub: "progress", uid: String(row.uid) });
 }
 
 function backFromProgress() {
   dataView.value = "list";
   learningSub.value = "users";
-  progressViewerId.value = null;
+  progressUid.value = null;
   progressSummary.value = null;
   progressRows.value = [];
   page.value = 1;
@@ -186,7 +186,7 @@ async function fetchUsers() {
 }
 
 async function fetchProgress() {
-  if (!props.courseId || !progressViewerId.value) {
+  if (!props.courseId || !progressUid.value) {
     progressRows.value = [];
     progressSummary.value = null;
     total.value = 0;
@@ -195,7 +195,7 @@ async function fetchProgress() {
   progressLoading.value = true;
   try {
     const data = await listCourseAnalyticsUserLessons(props.courseId, {
-      viewerId: progressViewerId.value,
+      uid: progressUid.value,
       page: page.value,
       pageSize: pageSize.value,
     });
@@ -262,7 +262,7 @@ async function onExport() {
 }
 
 const progressNickname = computed(
-  () => progressSummary.value?.nickname || `用户 ${progressViewerId.value ?? ""}`,
+  () => progressSummary.value?.nickname || `用户 ${progressUid.value ?? ""}`,
 );
 
 watch(
@@ -273,7 +273,7 @@ watch(
       dataView.value,
       page.value,
       pageSize.value,
-      progressViewerId.value,
+      progressUid.value,
     ] as const,
   () => {
     if (dataView.value === "progress") {

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { axiosErrorMessage } from "@/utils/axiosErrorMessage";
+import { isLikelyMiniProgramWebView } from "@/utils/miniProgram";
 import {
   getViewerAccessToken,
   getViewerOrderCenterUsername,
@@ -58,7 +59,227 @@ function stringifyBigIntIds(raw: string): string {
     .replace(/"skuId"\s*:\s*(\d+)/g, '"skuId":"$1"')
     .replace(/"orderId"\s*:\s*(\d+)/g, '"orderId":"$1"')
     .replace(/"orderNo"\s*:\s*(\d+)/g, '"orderNo":"$1"')
-    .replace(/"couponUserId"\s*:\s*(\d+)/g, '"couponUserId":"$1"');
+    .replace(/"couponUserId"\s*:\s*(\d+)/g, '"couponUserId":"$1"')
+    .replace(/"chargeId"\s*:\s*(\d+)/g, '"chargeId":"$1"');
+}
+
+/** 单笔支付（prepay payMethod） */
+export const VIEWER_PREPAY_METHOD_SINGLE = 1;
+
+/**
+ * pay_way 兜底（与本库 sys_dict 快照一致；按中文 label）。
+ * 支付页应先 GET /api/v1/dicts/data/pay_way，再把 label→value 传入 resolve。
+ * 勿把 42（微信公众号）当支付宝。
+ */
+export const VIEWER_PREPAY_PAY_WAY = {
+  /** 微信支付 */
+  WECHAT: 41,
+  /** 支付宝 */
+  ALIPAY: 2,
+  /** 微信公众号（wx_pub 场景预留） */
+  WX_PUB: 42,
+} as const;
+
+/** 同 VIEWER_PREPAY_PAY_WAY.WECHAT */
+export const VIEWER_PAY_WAY_WECHAT = VIEWER_PREPAY_PAY_WAY.WECHAT;
+
+/** 同 VIEWER_PREPAY_PAY_WAY.ALIPAY（2，不是 42） */
+export const VIEWER_PAY_WAY_ALIPAY = VIEWER_PREPAY_PAY_WAY.ALIPAY;
+
+/**
+ * pay_channel 兜底（与本库 sys_dict 快照一致）。
+ * 支付页应先 GET /api/v1/dicts/data/pay_channel，再把 label→value 传入 resolve。
+ */
+export const VIEWER_PREPAY_PAY_CHANNEL = {
+  ALIPAY: 1,
+  ALIPAY_WAP: 2,
+  WX: 3,
+  WX_WAP: 4,
+  WX_PUB: 5,
+  WX_LITE: 6,
+} as const;
+
+export type ViewerPrepayUiChannel = "wechat" | "alipay";
+
+function pickDictValue(
+  kind: "支付渠道" | "支付方式",
+  label: string,
+  dict?: Record<string, number> | null,
+  fallback?: number,
+): number {
+  const fromDict = dict?.[label];
+  if (fromDict != null && Number.isInteger(fromDict) && fromDict > 0) {
+    return fromDict;
+  }
+  if (fallback != null && Number.isInteger(fallback) && fallback > 0) {
+    return fallback;
+  }
+  throw new Error(`${kind}字典缺少 ${label}`);
+}
+
+/**
+ * UI 微信/支付宝 → prepay payChannel + payway。
+ * @param payChannelDict 本站 `/dicts/data/pay_channel` 的 label→value；缺项回退常量
+ * @param payWayDict 本站 `/dicts/data/pay_way` 的 label→value；缺项回退常量
+ */
+export function resolveViewerPrepayParams(
+  uiChannel: ViewerPrepayUiChannel,
+  payChannelDict?: Record<string, number> | null,
+  payWayDict?: Record<string, number> | null,
+): {
+  payChannel: number;
+  payway: number;
+} {
+  if (uiChannel === "alipay") {
+    return {
+      payChannel: pickDictValue(
+        "支付渠道",
+        "alipay_wap",
+        payChannelDict,
+        VIEWER_PREPAY_PAY_CHANNEL.ALIPAY_WAP,
+      ),
+      payway: pickDictValue(
+        "支付方式",
+        "支付宝",
+        payWayDict,
+        VIEWER_PREPAY_PAY_WAY.ALIPAY,
+      ),
+    };
+  }
+  const wechatLabel = isLikelyMiniProgramWebView() ? "wx_lite" : "wx_wap";
+  const wechatFallback = isLikelyMiniProgramWebView()
+    ? VIEWER_PREPAY_PAY_CHANNEL.WX_LITE
+    : VIEWER_PREPAY_PAY_CHANNEL.WX_WAP;
+  return {
+    payChannel: pickDictValue(
+      "支付渠道",
+      wechatLabel,
+      payChannelDict,
+      wechatFallback,
+    ),
+    payway: pickDictValue(
+      "支付方式",
+      "微信支付",
+      payWayDict,
+      VIEWER_PREPAY_PAY_WAY.WECHAT,
+    ),
+  };
+}
+
+function normalizePrepayMoneyYuan(raw: string | undefined): string {
+  const t = (raw ?? "").trim().replace(/^¥\s*/, "");
+  if (!t) throw new Error("订单金额无效");
+  const n = Number(t);
+  if (Number.isFinite(n) && n > 0) return n.toFixed(2);
+  if (/^\d+(\.\d{1,2})?$/.test(t)) return t;
+  throw new Error("订单金额无效");
+}
+
+export interface PrepayViewerOrderInput {
+  orderId: string;
+  /** UI 所选微信 / 支付宝 */
+  uiChannel: ViewerPrepayUiChannel;
+  /** 本站 pay_channel 字典 label→value；缺省用常量兜底 */
+  payChannelDict?: Record<string, number> | null;
+  /** 本站 pay_way 字典 label→value；缺省用常量兜底 */
+  payWayDict?: Record<string, number> | null;
+  /** 申报支付金额（元）；默认用订单应付 */
+  payMoney?: string;
+  payMethod?: number;
+  riskResultId?: string | number;
+  /**
+   * 微信小程序 openid。仅当解析渠道为 wx_lite 且有真实值时写入 body.openId；
+   * 纯 H5 wx_wap / 支付宝不要传假值。主路径小程序收银在原生页传。
+   */
+  openId?: string;
+}
+
+export interface ViewerPrepayResult {
+  /** 支付单 id（charge），供 pay/result 查询 */
+  chargeId: string;
+  channel: string;
+  orderNo: string;
+  amount: number;
+  credential?: string;
+}
+
+/**
+ * 观众端拉起支付。
+ * POST /order-center/api/live/viewer/order/prepay
+ */
+export async function prepayViewerOrder(
+  input: PrepayViewerOrderInput,
+): Promise<ViewerPrepayResult> {
+  const id = String(input.orderId ?? "").trim();
+  if (!id) throw new Error("订单无效");
+
+  const { payChannel, payway } = resolveViewerPrepayParams(
+    input.uiChannel,
+    input.payChannelDict,
+    input.payWayDict,
+  );
+  const payMoney = input.payMoney?.trim()
+    ? normalizePrepayMoneyYuan(input.payMoney)
+    : undefined;
+  if (!payMoney) throw new Error("请填写支付金额");
+
+  const body: Record<string, unknown> = {
+    id,
+    payChannel,
+    payMoney,
+    payway,
+    payMethod:
+      input.payMethod != null && Number.isFinite(input.payMethod)
+        ? Math.floor(input.payMethod)
+        : VIEWER_PREPAY_METHOD_SINGLE,
+  };
+
+  if (input.riskResultId != null && String(input.riskResultId).trim()) {
+    const riskId = Number(input.riskResultId);
+    if (Number.isInteger(riskId) && riskId > 0) body.riskResultId = riskId;
+  }
+
+  // 仅 wx_lite 带真实 openId；wx_wap / alipay 不硬塞
+  const openId = input.openId?.trim() ?? "";
+  if (openId && payChannel === VIEWER_PREPAY_PAY_CHANNEL.WX_LITE) {
+    body.openId = openId;
+  }
+
+  const env = await postViewerOrderCenter<Record<string, unknown>>(
+    "/order-center/api/live/viewer/order/prepay",
+    body,
+    { timeout: 30000, loginRequiredMessage: "请先登录后再支付" },
+  );
+
+  if (isOrderCenterAuthExpired(env.httpStatus, env.code)) {
+    throw new Error(env.message || env.msg || "登录状态已失效，请重新登录");
+  }
+  if (!isOrderCenterSuccess(env.code)) {
+    throw new Error(env.message || env.msg || "拉起支付失败");
+  }
+
+  const data = env.data ?? {};
+  const chargeId = data.id != null ? String(data.id) : "";
+  if (!chargeId) throw new Error("拉起支付成功但未返回支付单号");
+
+  const amountRaw = data.amount;
+  const amount =
+    typeof amountRaw === "number"
+      ? amountRaw
+      : amountRaw != null
+        ? Number(amountRaw)
+        : NaN;
+
+  return {
+    chargeId,
+    channel: typeof data.channel === "string" ? data.channel : String(data.channel ?? ""),
+    orderNo: data.orderNo != null ? String(data.orderNo) : "",
+    amount: Number.isFinite(amount) ? Math.floor(amount) : 0,
+    credential:
+      typeof data.credential === "string" && data.credential.trim()
+        ? data.credential.trim()
+        : undefined,
+  };
 }
 
 interface OrderCenterEnvelope<T = unknown> {
@@ -890,10 +1111,14 @@ export async function submitRiskTest(input: {
 export interface CreateViewerOrderInput {
   productId: string | number;
   productSkuId: string | number;
+  /** 观众 JWT claim `username`（订单中心账号），非展示昵称 */
   customerName: string;
   orderSource?: number;
   couponId?: string | number;
+  /** hr_uimsyhxx.identifier */
   salesmanId?: string;
+  /** hr_uimsyhgwxx.bmid */
+  salesmanDeptId?: number;
   remark?: string;
 }
 
@@ -914,7 +1139,7 @@ export async function createViewerOrder(
   if (!Number.isInteger(productId) || productId <= 0) throw new Error("商品无效");
   if (!Number.isInteger(productSkuId) || productSkuId <= 0) throw new Error("商品规格无效");
   const customerName = input.customerName?.trim();
-  if (!customerName) throw new Error("请先填写昵称后再下单");
+  if (!customerName) throw new Error("登录状态异常，请重新登录后再下单");
 
   const body: Record<string, unknown> = {
     productId,
@@ -927,6 +1152,13 @@ export async function createViewerOrder(
   };
   const salesmanId = input.salesmanId?.trim();
   if (salesmanId) body.salesmanId = salesmanId;
+  if (
+    input.salesmanDeptId != null &&
+    Number.isFinite(input.salesmanDeptId) &&
+    input.salesmanDeptId > 0
+  ) {
+    body.salesmanDeptId = Math.floor(input.salesmanDeptId);
+  }
   if (input.couponId != null && String(input.couponId).trim()) {
     const couponId = Number(input.couponId);
     if (Number.isInteger(couponId) && couponId > 0) body.couponId = couponId;
@@ -1009,3 +1241,189 @@ export async function getViewerOrderPaidDetail(
     salesmanId: data.salesmanId != null ? String(data.salesmanId) : "",
   };
 }
+
+export interface ViewerPayResult {
+  id: string;
+  orderNo: string;
+  paid: boolean;
+  amount: number;
+  channel: string;
+  transactionNo: string;
+  failureMsg: string;
+}
+
+/**
+ * 观众端支付结果查询。
+ * POST /order-center/api/live/viewer/pay/result
+ * Body：chargeId = 预下单返回的支付单 id
+ */
+export async function getViewerPayResult(
+  chargeId: string,
+): Promise<ViewerPayResult> {
+  const id = String(chargeId ?? "").trim();
+  if (!id) throw new Error("支付单无效");
+
+  const env = await postViewerOrderCenter<Record<string, unknown>>(
+    "/order-center/api/live/viewer/pay/result",
+    { chargeId: id },
+    { loginRequiredMessage: "请先登录后再查询支付结果" },
+  );
+
+  if (isOrderCenterAuthExpired(env.httpStatus, env.code)) {
+    throw new Error(env.message || env.msg || "登录状态已失效，请重新登录");
+  }
+  if (!isOrderCenterSuccess(env.code)) {
+    throw new Error(env.message || env.msg || "查询支付结果失败");
+  }
+
+  const data = env.data ?? {};
+  const amountRaw = data.amount;
+  const amount =
+    typeof amountRaw === "number"
+      ? amountRaw
+      : amountRaw != null
+        ? Number(amountRaw)
+        : NaN;
+
+  return {
+    id: data.id != null ? String(data.id) : id,
+    orderNo: data.orderNo != null ? String(data.orderNo) : "",
+    paid: data.paid === true,
+    amount: Number.isFinite(amount) ? Math.floor(amount) : 0,
+    channel:
+      typeof data.channel === "string" ? data.channel : String(data.channel ?? ""),
+    transactionNo:
+      data.transactionNo != null ? String(data.transactionNo) : "",
+    failureMsg: typeof data.failureMsg === "string" ? data.failureMsg : "",
+  };
+}
+
+export interface ViewerOrderPaidInfo {
+  orderNo: string;
+  productName: string;
+  productImg: string;
+  totalDays: number | null;
+  buyDays: number | null;
+  giftDays: number | null;
+  orderMoney: string;
+  payTime: string;
+  payWayText: string;
+  paySerialNo: string;
+  orderStatus: number | null;
+  merchant: string;
+}
+
+/**
+ * 观众端订单详情（已付款 / 支付完成页）。
+ * POST /order-center/api/live/viewer/order/paid-info
+ * Body：orderId = 订单主键
+ */
+export async function getViewerOrderPaidInfo(
+  orderId: string | number,
+): Promise<ViewerOrderPaidInfo> {
+  const id = String(orderId ?? "").trim();
+  if (!id) throw new Error("订单无效");
+
+  const env = await postViewerOrderCenter<Record<string, unknown>>(
+    "/order-center/api/live/viewer/order/paid-info",
+    { orderId: id },
+    { loginRequiredMessage: "请先登录后再查看订单" },
+  );
+
+  if (isOrderCenterAuthExpired(env.httpStatus, env.code)) {
+    throw new Error(env.message || env.msg || "登录状态已失效，请重新登录");
+  }
+  if (!isOrderCenterSuccess(env.code)) {
+    throw new Error(env.message || env.msg || "拉取已付款订单失败");
+  }
+
+  const data = env.data ?? {};
+  const totalDays = Number(data.totalDays);
+  const buyDays = Number(data.buyDays);
+  const giftDays = Number(data.giftDays);
+  const orderStatus = Number(data.orderStatus);
+  return {
+    orderNo: data.orderNo != null ? String(data.orderNo) : "",
+    productName:
+      typeof data.productName === "string" ? data.productName.trim() : "",
+    productImg:
+      typeof data.productImg === "string" ? data.productImg.trim() : "",
+    totalDays: Number.isFinite(totalDays) ? Math.floor(totalDays) : null,
+    buyDays: Number.isFinite(buyDays) ? Math.floor(buyDays) : null,
+    giftDays: Number.isFinite(giftDays) ? Math.floor(giftDays) : null,
+    orderMoney: data.orderMoney != null ? String(data.orderMoney) : "",
+    payTime: typeof data.payTime === "string" ? data.payTime : "",
+    payWayText: typeof data.payWayText === "string" ? data.payWayText : "",
+    paySerialNo: data.paySerialNo != null ? String(data.paySerialNo) : "",
+    orderStatus: Number.isFinite(orderStatus) ? Math.floor(orderStatus) : null,
+    merchant: typeof data.merchant === "string" ? data.merchant.trim() : "",
+  };
+}
+
+export interface ViewerCustomerByOrderId {
+  id: string;
+  phone: string;
+  username: string;
+  realname: string;
+  idCard: string;
+  cardType: string;
+  avatar: string;
+  gender: number | null;
+  age: number | null;
+  status: number | null;
+}
+
+/**
+ * 观众端客户信息（按订单 id）。
+ * POST /order-center/api/live/viewer/customer/orderid
+ * Body：id = 订单主键
+ */
+export async function getViewerCustomerByOrderId(
+  orderId: string | number,
+): Promise<ViewerCustomerByOrderId> {
+  const id = String(orderId ?? "").trim();
+  if (!id) throw new Error("订单无效");
+
+  const env = await postViewerOrderCenter<Record<string, unknown>>(
+    "/order-center/api/live/viewer/customer/orderid",
+    { id },
+    { loginRequiredMessage: "请先登录后再查看客户信息" },
+  );
+
+  if (isOrderCenterAuthExpired(env.httpStatus, env.code)) {
+    throw new Error(env.message || env.msg || "登录状态已失效，请重新登录");
+  }
+  if (!isOrderCenterSuccess(env.code)) {
+    throw new Error(env.message || env.msg || "拉取客户信息失败");
+  }
+
+  const data = env.data ?? {};
+  const gender = Number(data.gender);
+  const age = Number(data.age);
+  const status = Number(data.status);
+  return {
+    id: data.id != null ? String(data.id) : "",
+    phone: typeof data.phone === "string" ? data.phone : String(data.phone ?? ""),
+    username:
+      typeof data.username === "string"
+        ? data.username
+        : String(data.username ?? ""),
+    realname:
+      typeof data.realname === "string" ? data.realname.trim() : "",
+    idCard: typeof data.idCard === "string" ? data.idCard.trim() : "",
+    cardType: typeof data.cardType === "string" ? data.cardType : "",
+    avatar: typeof data.avatar === "string" ? data.avatar : "",
+    gender: Number.isFinite(gender) ? Math.floor(gender) : null,
+    age: Number.isFinite(age) ? Math.floor(age) : null,
+    status: Number.isFinite(status) ? Math.floor(status) : null,
+  };
+}
+
+/** idCard + realname 均非空视为已实名（证件号可为脱敏）。 */
+export function isViewerCustomerRealNamed(
+  customer: Pick<ViewerCustomerByOrderId, "idCard" | "realname"> | null | undefined,
+): boolean {
+  if (!customer) return false;
+  return Boolean(customer.idCard?.trim() && customer.realname?.trim());
+}
+

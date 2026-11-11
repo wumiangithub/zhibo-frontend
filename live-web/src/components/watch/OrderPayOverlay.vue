@@ -1,6 +1,20 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { getViewerOrderPaidDetail, type ViewerOrderPaidDetail } from "@/api/orderCenter";
+import { dictLabelValueMap, getDictData } from "@/api/dict";
+import {
+  getViewerOrderPaidDetail,
+  prepayViewerOrder,
+  type ViewerOrderPaidDetail,
+  type ViewerPrepayResult,
+} from "@/api/orderCenter";
+import { useToast } from "@/composables/useToast";
+import { isLikelyMiniProgramWebView } from "@/utils/miniProgram";
+import { isWeChatInAppBrowser } from "@/utils/viewerPendingPaySession";
+import { invokeViewerPayCredential } from "@/utils/viewerPayInvoke";
+import payWechatIcon from "@/assets/images/pay-wechat.png";
+import payAlipayIcon from "@/assets/images/pay-alipay.png";
+
+type PayChannel = "wechat" | "alipay";
 
 const props = defineProps<{
   open: boolean;
@@ -13,16 +27,39 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  pay: [payload: { orderId: string; payChannel: "wechat" | "alipay"; detail: ViewerOrderPaidDetail }];
+  pay: [
+    payload: {
+      orderId: string;
+      payChannel: PayChannel;
+      detail: ViewerOrderPaidDetail;
+      prepay: ViewerPrepayResult;
+      /** 微信内支付宝：已复制链接，未跳转 */
+      deferredAlipayCopy?: boolean;
+    },
+  ];
 }>();
 
-type PayChannel = "wechat" | "alipay";
+const { toast } = useToast();
+/** 小程序 web-view 已有原生导航栏，勿再叠 H5 返回头（对齐 WatchView / WatchReplayView） */
+const inMiniProgram = isLikelyMiniProgramWebView();
 
 const loading = ref(false);
 const error = ref("");
 const detail = ref<ViewerOrderPaidDetail | null>(null);
+/** 本站 /dicts/data/pay_channel 的 label→value；进页拉取 */
+const payChannelDict = ref<Record<string, number> | null>(null);
+/** 本站 /dicts/data/pay_way 的 label→value；进页拉取 */
+const payWayDict = ref<Record<string, number> | null>(null);
 const payChannel = ref<PayChannel>("wechat");
 const agreed = ref(false);
+const prepaying = ref(false);
+const alipayCopyOpen = ref(false);
+const alipayCopyUrl = ref("");
+const alipayCopyPending = ref<{
+  orderId: string;
+  detail: ViewerOrderPaidDetail;
+  prepay: ViewerPrepayResult;
+} | null>(null);
 
 const riskBannerText = computed(() => {
   const grade = (props.riskGrade || detail.value?.customerRiskLevel || "").trim();
@@ -58,19 +95,47 @@ watch(
     agreed.value = false;
     error.value = "";
     detail.value = null;
+    payChannelDict.value = null;
+    payWayDict.value = null;
     if (!orderId) {
       error.value = "订单无效";
       return;
     }
-    void loadDetail(orderId);
+    void loadPayPage(orderId);
   },
+  { immediate: true },
 );
 
-async function loadDetail(orderId: string) {
+async function loadPayChannelDict() {
+  try {
+    const data = await getDictData("pay_channel");
+    payChannelDict.value = dictLabelValueMap(data);
+  } catch (e) {
+    payChannelDict.value = null;
+    console.warn("拉支付渠道字典失败，将用本地兜底", e);
+  }
+}
+
+async function loadPayWayDict() {
+  try {
+    const data = await getDictData("pay_way");
+    payWayDict.value = dictLabelValueMap(data);
+  } catch (e) {
+    payWayDict.value = null;
+    console.warn("拉支付方式字典失败，将用本地兜底", e);
+  }
+}
+
+async function loadPayPage(orderId: string) {
   loading.value = true;
   error.value = "";
   try {
-    detail.value = await getViewerOrderPaidDetail(orderId);
+    const [, , paid] = await Promise.all([
+      loadPayChannelDict(),
+      loadPayWayDict(),
+      getViewerOrderPaidDetail(orderId),
+    ]);
+    detail.value = paid;
   } catch (e) {
     detail.value = null;
     error.value = e instanceof Error ? e.message : "加载订单失败";
@@ -79,18 +144,131 @@ async function loadDetail(orderId: string) {
   }
 }
 
-function onConfirmPay() {
-  if (!detail.value || !props.orderId) return;
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fallback below */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+async function onCopyAlipayLink() {
+  const url = alipayCopyUrl.value.trim();
+  const pending = alipayCopyPending.value;
+  if (!url || !pending) {
+    toast("支付链接无效");
+    return;
+  }
+  const ok = await copyText(url);
+  if (!ok) {
+    toast("复制失败，请长按链接手动复制");
+    return;
+  }
+  alipayCopyOpen.value = false;
+  emit("pay", {
+    orderId: pending.orderId,
+    payChannel: "alipay",
+    detail: pending.detail,
+    prepay: pending.prepay,
+    deferredAlipayCopy: true,
+  });
+  alipayCopyPending.value = null;
+  alipayCopyUrl.value = "";
+}
+
+function onCloseAlipayCopy() {
+  alipayCopyOpen.value = false;
+  alipayCopyUrl.value = "";
+  alipayCopyPending.value = null;
+}
+
+async function onConfirmPay() {
+  if (!detail.value || !props.orderId || prepaying.value) return;
   if (!agreed.value) {
     error.value = "请先阅读并同意相关协议";
     return;
   }
   error.value = "";
-  emit("pay", {
-    orderId: props.orderId,
-    payChannel: payChannel.value,
-    detail: detail.value,
-  });
+  prepaying.value = true;
+  try {
+    const reload: Promise<void>[] = [];
+    if (!payChannelDict.value) reload.push(loadPayChannelDict());
+    if (!payWayDict.value) reload.push(loadPayWayDict());
+    if (reload.length) await Promise.all(reload);
+    const prepay = await prepayViewerOrder({
+      orderId: props.orderId,
+      uiChannel: payChannel.value,
+      payChannelDict: payChannelDict.value,
+      payWayDict: payWayDict.value,
+      payMoney: detail.value.orderMoney,
+    });
+
+    // 先解析凭证（WAP 不立刻跳转），成功后再 emit pending / 跳转或复制链接
+    const deferAlipay =
+      payChannel.value === "alipay" && isWeChatInAppBrowser();
+    const parsed = await invokeViewerPayCredential(prepay, {
+      deferRedirect: true,
+    });
+    error.value = "";
+
+    if (deferAlipay) {
+      if (!parsed.redirectUrl) {
+        throw new Error("支付凭证缺少支付宝跳转链接");
+      }
+      alipayCopyUrl.value = parsed.redirectUrl;
+      alipayCopyPending.value = {
+        orderId: props.orderId,
+        detail: detail.value,
+        prepay,
+      };
+      alipayCopyOpen.value = true;
+      return;
+    }
+
+    if (parsed.redirectUrl) {
+      emit("pay", {
+        orderId: props.orderId,
+        payChannel: payChannel.value,
+        detail: detail.value,
+        prepay,
+      });
+      window.location.href = parsed.redirectUrl;
+      return;
+    }
+
+    // wx_lite / wx_pub stub 等：再走一遍非 defer 唤起
+    emit("pay", {
+      orderId: props.orderId,
+      payChannel: payChannel.value,
+      detail: detail.value,
+      prepay,
+    });
+    const invoke = await invokeViewerPayCredential(prepay);
+    if (invoke.stub) {
+      toast(invoke.stub);
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : "拉起支付失败";
+  } finally {
+    prepaying.value = false;
+  }
 }
 </script>
 
@@ -104,7 +282,10 @@ function onConfirmPay() {
         aria-modal="true"
         aria-label="订单支付"
       >
-        <header class="pay-nav">
+        <header
+          v-if="!inMiniProgram"
+          class="pay-nav"
+        >
           <button
             type="button"
             class="pay-nav-back"
@@ -155,7 +336,7 @@ function onConfirmPay() {
             <button
               type="button"
               class="pay-retry"
-              @click="loadDetail(orderId)"
+              @click="loadPayPage(orderId)"
             >
               重试
             </button>
@@ -234,7 +415,14 @@ function onConfirmPay() {
                 @click="payChannel = 'wechat'"
               >
                 <span class="pay-method-left">
-                  <span class="pay-method-logo wechat" aria-hidden="true">微</span>
+                  <img
+                    class="pay-method-logo"
+                    :src="payWechatIcon"
+                    alt=""
+                    width="28"
+                    height="28"
+                    aria-hidden="true"
+                  >
                   <span>微信支付</span>
                 </span>
                 <span
@@ -250,7 +438,14 @@ function onConfirmPay() {
                 @click="payChannel = 'alipay'"
               >
                 <span class="pay-method-left">
-                  <span class="pay-method-logo alipay" aria-hidden="true">支</span>
+                  <img
+                    class="pay-method-logo"
+                    :src="payAlipayIcon"
+                    alt=""
+                    width="28"
+                    height="28"
+                    aria-hidden="true"
+                  >
                   <span>支付宝</span>
                 </span>
                 <span
@@ -311,11 +506,43 @@ function onConfirmPay() {
           <button
             type="button"
             class="pay-primary"
-            :disabled="!agreed"
+            :disabled="!agreed || prepaying"
             @click="onConfirmPay"
           >
-            确认支付
+            {{ prepaying ? "发起支付中…" : "确认支付" }}
           </button>
+        </div>
+
+        <div
+          v-if="alipayCopyOpen"
+          class="pay-alipay-mask"
+          role="dialog"
+          aria-modal="true"
+          aria-label="支付宝支付"
+        >
+          <div class="pay-alipay-card">
+            <h3>请复制链接完成支付</h3>
+            <p>微信内无法直接打开支付宝，请复制链接后在系统浏览器中打开。</p>
+            <p class="pay-alipay-url">
+              {{ alipayCopyUrl }}
+            </p>
+            <div class="pay-alipay-actions">
+              <button
+                type="button"
+                class="pay-alipay-cancel"
+                @click="onCloseAlipayCopy"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                class="pay-alipay-ok"
+                @click="onCopyAlipayLink"
+              >
+                复制链接
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </Transition>
@@ -612,23 +839,12 @@ function onConfirmPay() {
 }
 
 .pay-method-logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
+  flex: none;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.pay-method-logo.wechat {
-  background: #07c160;
-}
-
-.pay-method-logo.alipay {
-  background: #1677ff;
+  border-radius: 999px;
+  object-fit: cover;
 }
 
 .pay-radio {
@@ -739,5 +955,80 @@ function onConfirmPay() {
 .pay-fade-enter-from,
 .pay-fade-leave-to {
   opacity: 0;
+}
+
+.pay-alipay-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.pay-alipay-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 20px 18px 16px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
+}
+
+.pay-alipay-card h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.pay-alipay-card > p {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #5c6570;
+  text-align: center;
+}
+
+.pay-alipay-url {
+  word-break: break-all;
+  font-size: 12px !important;
+  color: #8a9199 !important;
+  max-height: 72px;
+  overflow: auto;
+  text-align: left !important;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f5f7fb;
+}
+
+.pay-alipay-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+}
+
+.pay-alipay-cancel,
+.pay-alipay-ok {
+  flex: 1;
+  height: 42px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pay-alipay-cancel {
+  border: 1px solid #d5dbe6;
+  background: #fff;
+  color: #5c6570;
+}
+
+.pay-alipay-ok {
+  border: 0;
+  background: #2f6bff;
+  color: #fff;
 }
 </style>

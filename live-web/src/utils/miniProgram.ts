@@ -4,6 +4,41 @@ const VIEWER_LOGIN_URL = "/pages/login/login";
 /** 小程序打开远端文档（downloadFile + openDocument）。 */
 const OPEN_DOCUMENT_URL = "/pages/file/open";
 
+/** 小程序原生订单收银台（完整支付 UI）。 */
+const ORDER_CHECKOUT_URL = "/pages/pay/checkout";
+
+/** 小程序原生支付唤起页（仅 wx.requestPayment；H5 已 prepay 后的辅助入口）。 */
+const REQUEST_PAYMENT_URL = "/pages/pay/request";
+
+/** 跳转原生收银台所需参数（封面等可选；过长时会丢 coverImg）。 */
+export type MiniOrderCheckoutPayload = {
+  orderId: string;
+  activityId?: string;
+  coverImg?: string;
+  riskGrade?: string;
+  riskGradeName?: string;
+};
+
+/** JSAPI 支付凭证（wx.requestPayment 字段）。 */
+export type MiniRequestPaymentPayload = {
+  timeStamp: string;
+  nonceStr: string;
+  package: string;
+  signType: string;
+  paySign: string;
+};
+
+/** UTF-8 → base64url（query 紧凑传凭证，避开长度与特殊字符）。 */
+function encodeBase64UrlUtf8(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) {
+    bin += String.fromCharCode(bytes[i]!);
+  }
+  const b64 = btoa(bin);
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
 /**
  * 微信 JS-SDK（含 `wx.miniProgram`）。
  * 对齐 admin-web TOS：放 `public/jweixin-1.3.2.js`，同源 script 注入，不走外网 CDN。
@@ -150,4 +185,67 @@ export async function navigateToOpenDocument(opts: {
     `mode=${encodeURIComponent(opts.mode || "preview")}`,
   ].join("&");
   return navigateMiniProgram(`${OPEN_DOCUMENT_URL}?${q}`);
+}
+
+/**
+ * 从 web-view H5 跳小程序原生订单收银台（完整支付 UI）。
+ * query：`c` = base64url(JSON)：orderId 必填；activityId / coverImg / riskGrade / riskGradeName 可选。
+ * URL 过长时丢弃 coverImg 再试（paid-detail 无封面）。
+ * 成功发起跳转返回 true；SDK 失败 / 非小程序返回 false。
+ */
+export async function navigateToOrderCheckout(
+  payload: MiniOrderCheckoutPayload,
+): Promise<boolean> {
+  const orderId = (payload.orderId || "").trim();
+  if (!orderId) return false;
+
+  const buildUrl = (includeCover: boolean): string => {
+    const body: Record<string, string> = { orderId };
+    const activityId = (payload.activityId || "").trim();
+    const coverImg = (payload.coverImg || "").trim();
+    const riskGrade = (payload.riskGrade || "").trim();
+    const riskGradeName = (payload.riskGradeName || "").trim();
+    if (activityId) body.activityId = activityId;
+    if (includeCover && coverImg) body.coverImg = coverImg;
+    if (riskGrade) body.riskGrade = riskGrade;
+    if (riskGradeName) body.riskGradeName = riskGradeName;
+    const c = encodeBase64UrlUtf8(JSON.stringify(body));
+    return `${ORDER_CHECKOUT_URL}?c=${encodeURIComponent(c)}`;
+  };
+
+  let url = buildUrl(true);
+  // 微信 navigateTo url 长度约 1024；预留余量
+  if (url.length > 900) {
+    url = buildUrl(false);
+  }
+  return navigateMiniProgram(url);
+}
+
+/**
+ * 从 web-view H5 跳小程序原生支付唤起页（`wx.requestPayment`）。
+ * query：`c` = base64url(JSON.stringify({ timeStamp, nonceStr, package, signType, paySign }))。
+ * 完整收银台优先走 `navigateToOrderCheckout`；本函数供 H5 已 prepay 后的辅助唤起。
+ * 成功发起跳转返回 true；SDK 失败 / 非小程序返回 false。
+ */
+export async function navigateToRequestPayment(
+  payload: MiniRequestPaymentPayload,
+): Promise<boolean> {
+  const timeStamp = (payload.timeStamp || "").trim();
+  const nonceStr = (payload.nonceStr || "").trim();
+  const pkg = (payload.package || "").trim();
+  const signType = (payload.signType || "").trim() || "MD5";
+  const paySign = (payload.paySign || "").trim();
+  if (!timeStamp || !nonceStr || !pkg || !paySign) return false;
+  const c = encodeBase64UrlUtf8(
+    JSON.stringify({
+      timeStamp,
+      nonceStr,
+      package: pkg,
+      signType,
+      paySign,
+    }),
+  );
+  return navigateMiniProgram(
+    `${REQUEST_PAYMENT_URL}?c=${encodeURIComponent(c)}`,
+  );
 }

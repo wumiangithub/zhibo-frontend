@@ -41,7 +41,7 @@ export interface ConsoleSummaryData {
 /** 对照观看页类型名，便于 copy 组件少改 */
 export type WatchSummaryData = ConsoleSummaryData;
 
-/** 中控台 SDK 签名（employeeId 对照观看 viewerId） */
+/** 中控台 SDK 签名（employeeId 对照观看 uid） */
 export interface ConsoleSdkSignData {
   id: string;
   nickname: string;
@@ -51,7 +51,7 @@ export interface ConsoleSdkSignData {
   sdk: SdkInitPayload;
 }
 
-/** 适配器仍用此名；形状与观看 sdk-sign 对齐（无 viewerId） */
+/** 适配器仍用此名；形状与观看 sdk-sign 对齐（无观看 uid） */
 export type WatchSdkSignData = ConsoleSdkSignData;
 
 /** 默认勿传 nickname；省略则服务端按本场成员 → 员工姓名解析（D110） */

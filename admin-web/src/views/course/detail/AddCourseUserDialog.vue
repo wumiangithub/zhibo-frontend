@@ -44,7 +44,7 @@ const emit = defineEmits<{
 }>();
 
 const addTab = ref<"single" | "bulk" | "tag">("single");
-const addMethod = ref<"phone" | "viewerId">("phone");
+const addMethod = ref<"phone" | "uid">("phone");
 const addPhone = ref("");
 const addPhoneCode = ref("+86");
 const addViewerId = ref("");
@@ -180,7 +180,7 @@ async function submitTagImport() {
 async function submitAdd() {
   if (addTab.value !== "single") return;
 
-  let body: ({ phone: string } | { viewerId: number }) & { expireTime?: string };
+  let body: ({ phone: string } | { uid: number }) & { expireTime?: string };
   if (addMethod.value === "phone") {
     const phone = addPhone.value.trim().replace(/\D/g, "");
     if (!phone) {
@@ -198,7 +198,7 @@ async function submitAdd() {
       ElMessage.warning("用户ID须为正整数");
       return;
     }
-    body = { viewerId: Number(raw) };
+    body = { uid: Number(raw) };
   }
   const expire = customExpireDate.value?.trim();
   if (expire) body.expireTime = expire;
@@ -313,7 +313,7 @@ async function onDownloadFailures(row: CourseUserImportHistoryItem) {
               @change="onAddMethodChange"
             >
               <ElRadio value="phone">手机号</ElRadio>
-              <ElRadio value="viewerId">用户ID</ElRadio>
+              <ElRadio value="uid">用户ID</ElRadio>
             </ElRadioGroup>
           </ElFormItem>
           <ElFormItem
