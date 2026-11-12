@@ -11,6 +11,9 @@ const router = useRouter();
 const auth = useAuthStore();
 const { message, visible, toast } = useToast();
 
+/** 顶栏通知未读数 Mock（UI 示意，接口未接） */
+const mockUnreadNotificationCount = 5;
+
 /** 用户模块侧栏「用户管理」分组是否展开 */
 const userGroupOpen = ref(true);
 /** 交易模块侧栏「订单管理」分组是否展开 */
@@ -104,7 +107,13 @@ const activeTop = computed(() => {
   if (isTradeModule.value) return "trade";
   if (isSettingsModule.value) return "settings";
   if (isUserModule.value) return "user";
-  if (route.name === "dashboard" || route.path === "/") return "workbench";
+  if (
+    route.name === "dashboard" ||
+    route.name === "notification-center" ||
+    route.path === "/"
+  ) {
+    return "workbench";
+  }
   return "";
 });
 
@@ -152,7 +161,11 @@ const activeSide = computed(() => {
     }
     return "";
   }
-  return route.name === "dashboard" || route.path === "/" ? "overview" : "";
+  return route.name === "dashboard" ||
+    route.name === "notification-center" ||
+    route.path === "/"
+    ? "overview"
+    : "";
 });
 
 /**
@@ -208,6 +221,10 @@ function onSideClick(item: { key: string; label: string }) {
 
 function goHome() {
   void router.push("/");
+}
+
+function goNotificationCenter() {
+  void router.push({ name: "notification-center" });
 }
 
 async function onAccountClick() {
@@ -275,6 +292,50 @@ async function onAccountClick() {
               d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"
             />
           </svg>
+        </button>
+        <button
+          type="button"
+          class="header-notify-btn"
+          title="通知中心"
+          aria-label="通知中心"
+          @click="goNotificationCenter"
+        >
+          <span class="header-notify-icon-wrap">
+            <svg
+              class="header-notify-bell"
+              viewBox="0 0 20 22"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <path
+                stroke="currentColor"
+                stroke-width="1.35"
+                stroke-linecap="round"
+                fill="none"
+                d="M3.4 6.1c.5-.9 1.25-1.6 2.2-2"
+              />
+              <path
+                stroke="currentColor"
+                stroke-width="1.35"
+                stroke-linecap="round"
+                fill="none"
+                d="M16.6 6.1c-.5-.9-1.25-1.6-2.2-2"
+              />
+              <path
+                fill="currentColor"
+                d="M10 2.1c.28 0 .5.22.5.5v.92c2.02.29 3.68 1.98 3.9 4.12l.12 1.52h1.06c.28 0 .5.22.5.5s-.22.5-.5.5h-.8l.32 3.48a2.12 2.12 0 0 1-2.1 1.92H8.88a2.12 2.12 0 0 1-2.1-1.92l.32-3.48H6.42c-.28 0-.5-.22-.5-.5s.22-.5.5-.5h1.06l.12-1.52c.22-2.14 1.88-3.83 3.9-4.12V2.6c0-.28.22-.5.5-.5Z"
+              />
+              <path
+                fill="currentColor"
+                d="M8.65 17.75h2.7a1.1 1.1 0 0 1 0 2.2h-2.7a1.1 1.1 0 0 1 0-2.2Z"
+              />
+            </svg>
+            <span
+              v-if="mockUnreadNotificationCount > 0"
+              class="header-notify-badge"
+            >{{ mockUnreadNotificationCount }}</span>
+          </span>
         </button>
         <button
           type="button"
@@ -715,5 +776,57 @@ async function onAccountClick() {
 
 header a {
   text-decoration: none;
+}
+
+.header-notify-btn {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  overflow: visible;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--primary, #2563EB);
+  outline: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.header-notify-btn:hover {
+  background: #F8FAFC;
+}
+
+.header-notify-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.header-notify-bell {
+  display: block;
+  width: 18px;
+  height: 20px;
+}
+
+.header-notify-badge {
+  position: absolute;
+  top: -5px;
+  right: -8px;
+  box-sizing: border-box;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 9999px;
+  background: var(--danger, #EF4444);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
 }
 </style>

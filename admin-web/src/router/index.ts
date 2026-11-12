@@ -27,6 +27,11 @@ const router = createRouter({
           component: () => import("@/views/dashboard/DashboardView.vue"),
         },
         {
+          path: "notifications",
+          name: "notification-center",
+          component: () => import("@/views/dashboard/NotificationCenterView.vue"),
+        },
+        {
           path: "live-reports/new",
           name: "live-report-create",
           component: () => import("@/views/liveReport/LiveReportFormView.vue"),

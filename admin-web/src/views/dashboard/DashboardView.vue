@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useRouter } from "vue-router";
 import { ElTable, ElTableColumn } from "element-plus";
 import { useToast } from "@/composables/useToast";
 
+const router = useRouter();
 const { toast } = useToast();
 
 /** 经营数据 Mock：只画 UI，后续再接接口 */
@@ -286,7 +288,7 @@ function onMockAction(label: string) {
       <button
         type="button"
         class="notice-head"
-        @click="onMockAction('通知中心')"
+        @click="router.push({ name: 'notification-center' })"
       >
         <span>通知中心</span>
         <svg
