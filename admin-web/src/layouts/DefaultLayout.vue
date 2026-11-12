@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { ElMessageBox } from "element-plus";
 import SideIcon from "@/components/SideIcon.vue";
@@ -18,6 +18,14 @@ const mockUnreadNotificationCount = 5;
 const userGroupOpen = ref(true);
 /** 交易模块侧栏「订单管理」分组是否展开 */
 const tradeGroupOpen = ref(true);
+/** 工作台 / 直播模块「直播中控台」分组是否展开 */
+const consoleGroupOpen = ref(true);
+
+const consoleSubNav = [
+  { key: "console-list", label: "直播列表", icon: "video", segment: "list" },
+  { key: "console-quick-send", label: "快捷发送", icon: "plus", segment: "quick-send" },
+  { key: "console-settings", label: "通用设置", icon: "settings", segment: "settings" },
+] as const;
 
 const topNav = [
   { key: "workbench", label: "工作台", to: "/" },
@@ -80,7 +88,10 @@ const tradeSideNav = [
   { key: "orders", label: "全部订单", to: "/trade/orders" },
 ] as const;
 
+const isWorkbenchConsole = computed(() => route.path.startsWith("/console"));
+
 const isLiveModule = computed(() => {
+  if (isWorkbenchConsole.value) return false;
   const name = route.name;
   return (
     name === "live-manage" ||
@@ -90,6 +101,26 @@ const isLiveModule = computed(() => {
     route.path.startsWith("/live")
   );
 });
+
+const isOnConsoleRoutes = computed(
+  () => isWorkbenchConsole.value || route.path.startsWith("/live/console"),
+);
+
+const activeConsoleSide = computed(() => {
+  if (!isOnConsoleRoutes.value) return "";
+  const name = String(route.name ?? "");
+  if (name.includes("quick-send")) return "console-quick-send";
+  if (name.includes("settings")) return "console-settings";
+  return "console-list";
+});
+
+watch(
+  isOnConsoleRoutes,
+  (on) => {
+    if (on) consoleGroupOpen.value = true;
+  },
+  { immediate: true },
+);
 
 const isCourseModule = computed(() => route.path === "/course" || route.path.startsWith("/course/"));
 
@@ -108,6 +139,7 @@ const activeTop = computed(() => {
   if (isSettingsModule.value) return "settings";
   if (isUserModule.value) return "user";
   if (
+    isWorkbenchConsole.value ||
     route.name === "dashboard" ||
     route.name === "notification-center" ||
     route.path === "/"
@@ -148,6 +180,7 @@ const activeSide = computed(() => {
   if (isLiveModule.value) {
     // 新建报备 / 报备列表均高亮「直播报备」
     if (route.path.startsWith("/live-reports")) return "report";
+    if (route.path.startsWith("/live/console")) return activeConsoleSide.value;
     // 新建直播 / 列表 / 详情 / 去审核均高亮「直播管理」
     if (
       route.name === "live-create" ||
@@ -155,12 +188,13 @@ const activeSide = computed(() => {
       route.name === "live-detail" ||
       route.name === "live-audit" ||
       route.path === "/live" ||
-      route.path.startsWith("/live/")
+      (route.path.startsWith("/live/") && !route.path.startsWith("/live/console"))
     ) {
       return "manage";
     }
     return "";
   }
+  if (isWorkbenchConsole.value) return activeConsoleSide.value;
   return route.name === "dashboard" ||
     route.name === "notification-center" ||
     route.path === "/"
@@ -205,17 +239,16 @@ function onShellClick(label: string) {
   toast(`「${label}」暂未开放`);
 }
 
-/** 侧栏「直播中控台」：新窗口打开独立列表页 */
-function openLiveConsole() {
-  const url = `${window.location.origin}/live-console`;
-  window.open(url, "_blank", "noopener");
+function isConsoleNavParent(item: { key: string }) {
+  return item.key === "console" || item.key === "live-console";
+}
+
+function consoleSubTo(segment: string) {
+  if (isLiveModule.value) return `/live/console/${segment}`;
+  return `/console/${segment}`;
 }
 
 function onSideClick(item: { key: string; label: string }) {
-  if (item.key === "console" || item.key === "live-console") {
-    openLiveConsole();
-    return;
-  }
   onShellClick(item.label);
 }
 
@@ -456,6 +489,47 @@ async function onAccountClick() {
                 class="side-nav-divider"
                 role="separator"
               />
+              <template v-else-if="isConsoleNavParent(item)">
+                <button
+                  type="button"
+                  class="side-group-toggle"
+                  :class="{ 'is-parent-active': Boolean(activeConsoleSide) }"
+                  :aria-expanded="consoleGroupOpen"
+                  @click="consoleGroupOpen = !consoleGroupOpen"
+                >
+                  <span class="side-group-label">
+                    <SideIcon name="monitor" />
+                    <span>直播中控台</span>
+                  </span>
+                  <svg
+                    class="side-group-chevron"
+                    :class="{ 'is-collapsed': !consoleGroupOpen }"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+                <template v-if="consoleGroupOpen">
+                  <RouterLink
+                    v-for="sub in consoleSubNav"
+                    :key="sub.key"
+                    :to="consoleSubTo(sub.segment)"
+                    class="side-nav-item is-console-sub"
+                    :class="{ 'is-active': activeSide === sub.key }"
+                  >
+                    <SideIcon :name="sub.icon" />
+                    <span>{{ sub.label }}</span>
+                  </RouterLink>
+                </template>
+              </template>
               <RouterLink
                 v-else-if="'to' in item && item.to"
                 :to="item.to"
@@ -660,6 +734,23 @@ async function onAccountClick() {
 .side-group-toggle:hover {
   color: var(--text-2, #334155);
   background: #F8FAFC;
+}
+
+.side-group-toggle.is-parent-active {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.side-nav-item.is-console-sub {
+  width: auto;
+  height: 36px;
+  margin-left: 12px;
+  padding-left: 12px;
+}
+
+.side-nav-item.is-console-sub.is-active::before {
+  top: 6px;
+  bottom: 6px;
 }
 
 .side-group-label {

@@ -59,9 +59,47 @@ const router = createRouter({
           component: () => import("@/views/liveReport/LiveReportDetailView.vue"),
         },
         {
+          path: "console/list",
+          name: "workbench-console-list",
+          component: () => import("@/views/live-console/home/LiveConsoleHomeListView.vue"),
+        },
+        {
+          path: "console/quick-send",
+          name: "workbench-console-quick-send",
+          component: () => import("@/views/live-console/home/LiveConsoleQuickSendView.vue"),
+        },
+        {
+          path: "console/settings",
+          name: "workbench-console-settings",
+          component: () => import("@/views/live-console/home/LiveConsoleSettingsView.vue"),
+        },
+        {
+          path: "console",
+          redirect: "/console/list",
+        },
+        {
           path: "live/create",
           name: "live-create",
           component: () => import("@/views/live/LiveCreateView.vue"),
+        },
+        {
+          path: "live/console/list",
+          name: "live-console-home-list",
+          component: () => import("@/views/live-console/home/LiveConsoleHomeListView.vue"),
+        },
+        {
+          path: "live/console/quick-send",
+          name: "live-console-home-quick-send",
+          component: () => import("@/views/live-console/home/LiveConsoleQuickSendView.vue"),
+        },
+        {
+          path: "live/console/settings",
+          name: "live-console-home-settings",
+          component: () => import("@/views/live-console/home/LiveConsoleSettingsView.vue"),
+        },
+        {
+          path: "live/console",
+          redirect: "/live/console/list",
         },
         {
           path: "live",
@@ -216,17 +254,10 @@ const router = createRouter({
       name: "live-studio",
       component: () => import("@/views/live/LiveStudioView.vue"),
     },
-    /** 直播中控台列表：侧栏新窗口打开，独立壳，不套 DefaultLayout */
+    /** 旧中控台列表壳：迁入 DefaultLayout，书签重定向到工作台列表 */
     {
       path: "/live-console",
-      component: () => import("@/layouts/LiveConsoleLayout.vue"),
-      children: [
-        {
-          path: "",
-          name: "live-console-list",
-          component: () => import("@/views/live/LiveConsoleListView.vue"),
-        },
-      ],
+      redirect: "/console/list",
     },
     /**
      * 单场中控台全页（D110）：与列表壳并列，不嵌 LiveConsoleLayout 侧栏。

@@ -23,11 +23,13 @@ import {
   activityReadyLabel,
   LIVE_STATE_LABEL,
   LIVE_TYPE_LABEL,
+  RISK_STATUS_LABEL,
   SELL_TYPE_LABEL,
   setActivityShelf,
   SHELF_STATUS_LABEL,
   type ActivityListItem,
   type ActivitySortKey,
+  type RiskStatus,
   type ShelfStatus,
 } from "@/api/activity";
 import ImagePreview from "@/components/ImagePreview.vue";
@@ -106,6 +108,21 @@ function sellLabel(item: ActivityListItem) {
 
 function validityLabelOf(item: ActivityListItem) {
   return item.validityLabel?.trim() || "长期有效";
+}
+
+function productsText(item: ActivityListItem) {
+  const names = (item.products ?? []).map((p) => p.productName).filter(Boolean);
+  return names.length ? names.join("、") : "--";
+}
+
+function riskOf(item: ActivityListItem): RiskStatus {
+  return item.riskStatus ?? "pending";
+}
+
+function riskClass(status?: RiskStatus) {
+  if (status === "passed") return "risk--passed";
+  if (status === "rejected") return "risk--rejected";
+  return "risk--pending";
 }
 
 /** 缺字段时按契约新建默认：待上架 / 待审核（历史迁移应为 on/passed，由后端回填） */
@@ -512,6 +529,34 @@ onMounted(fetchList);
           </template>
         </ElTableColumn>
         <ElTableColumn
+          label="关联商品"
+          min-width="140"
+        >
+          <template #default="{ row }">
+            <ElTooltip
+              v-if="productsText(row as ActivityListItem) !== '--'"
+              :content="productsText(row as ActivityListItem)"
+              placement="top"
+            >
+              <span class="product-ellipsis">{{ productsText(row as ActivityListItem) }}</span>
+            </ElTooltip>
+            <span v-else>--</span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
+          label="风控合规审核"
+          width="132"
+        >
+          <template #default="{ row }">
+            <span
+              class="risk-tag"
+              :class="riskClass(riskOf(row as ActivityListItem))"
+            >
+              {{ RISK_STATUS_LABEL[riskOf(row as ActivityListItem)] }}
+            </span>
+          </template>
+        </ElTableColumn>
+        <ElTableColumn
           label="操作"
           width="220"
           fixed="right"
@@ -530,7 +575,7 @@ onMounted(fetchList);
                 :to="`/live/${row.id}`"
                 class="admin-op"
               >
-                编辑
+                管理
               </RouterLink>
               <RouterLink
                 :to="{ path: `/live/${row.id}`, query: { tab: 'data' } }"
@@ -713,5 +758,39 @@ onMounted(fetchList);
 .ready-tag.is-fail {
   color: var(--danger);
   background: #fff1f0;
+}
+.product-ellipsis {
+  display: inline-block;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.risk-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.risk--passed {
+  color: var(--success, #16a34a);
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.risk--rejected {
+  color: var(--danger);
+  background: #fff1f0;
+  border-color: #fecaca;
+}
+.risk--pending {
+  color: var(--text-3);
+  background: #f8fafc;
+  border-color: #e2e8f0;
 }
 </style>
