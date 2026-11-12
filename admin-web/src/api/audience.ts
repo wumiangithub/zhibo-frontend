@@ -14,7 +14,7 @@ export type AudienceDurationOp = "gte" | "lte";
 
 export interface AudienceListItem {
   id: number;
-  uid: number;
+  username: string;
   nickname: string;
   avatarUrl?: string;
   entitlementStatus: number;
@@ -44,7 +44,7 @@ export interface AudienceListResult {
 
 export interface AudienceCommentItem {
   id: number;
-  uid?: number;
+  username?: string;
   guestId?: string;
   nickname?: string;
   content: string;
@@ -114,12 +114,12 @@ export function listAudiences(activityId: ActivityId, params: AudienceListQuery 
   });
 }
 
-/** phone 与 uid 二选一；created=false 表示本场已有该观众 */
+/** phone 与 username 二选一；created=false 表示本场已有该观众 */
 export function createAudience(
   activityId: ActivityId,
-  body: { phone: string } | { uid: number },
+  body: { phone: string } | { username: string },
 ) {
-  return post<{ id: number; uid: number; created: boolean }>(
+  return post<{ id: number; username: string; created: boolean }>(
     `/activities/audiences/create/${activityId}`,
     body,
   );

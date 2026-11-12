@@ -637,6 +637,7 @@ function mapOrderItem(row: unknown): SalerOrderItem | null {
     userId:
       asOptionalString(o.userId) ??
       asOptionalString(o.customerUserId) ??
+      asOptionalString(o.username) ??
       asOptionalString(o.uid),
     weComFriend: asOptionalBool(o.weComFriend) ?? asOptionalBool(o.isWeComFriend),
     coverImg: asOptionalString(o.coverImg) ?? asOptionalString(o.productCover),

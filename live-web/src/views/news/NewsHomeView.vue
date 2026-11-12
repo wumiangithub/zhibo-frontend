@@ -73,7 +73,7 @@ function openDetail(id: string) {
                 :class="expanded[item.id] ? 'expanded' : 'clamped'"
                 @click="toggleLive(item.id)"
               >
-                {{ item.content }}
+                <span class="card-text">{{ item.content }}</span>
               </button>
             </div>
           </div>
@@ -210,6 +210,8 @@ function openDetail(id: string) {
 .card {
   display: block;
   width: 100%;
+  margin: 0;
+  border: 0;
   text-align: left;
   background: #ffffff;
   border-radius: 6px;
@@ -219,12 +221,18 @@ function openDetail(id: string) {
   line-height: 1.65;
   color: #262626;
   cursor: pointer;
+  overflow: hidden;
 }
-.card.clamped {
+.card-text {
+  display: block;
+}
+/* clamp 必须打在非 button 的内层：Chromium 对 button + -webkit-line-clamp 会算对高度但不裁切绘制 */
+.card.clamped .card-text {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   overflow: hidden;
+  word-break: break-word;
 }
 .list {
   padding: 8px 12px 12px;

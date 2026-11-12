@@ -83,6 +83,11 @@ async function tryRefreshAndReplay(config: InternalAxiosRequestConfig) {
   return instance.request(retryConfig);
 }
 
+instance.interceptors.request.use((config) => {
+  config.baseURL = apiV1();
+  return config;
+});
+
 instance.interceptors.response.use(
   (resp): any => {
     const body = resp.data as ApiResult<unknown>;

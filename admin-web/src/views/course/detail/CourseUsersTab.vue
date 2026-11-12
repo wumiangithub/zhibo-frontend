@@ -101,7 +101,7 @@ const filters = reactive({
 
 const keywordPlaceholder: Record<CourseUserKeywordType, string> = {
   nickname: "请输入学员昵称",
-  id: "请输入用户ID",
+  id: "请输入用户名",
   phone: "请输入手机号",
 };
 
@@ -248,7 +248,7 @@ onMounted(() => {
             value="nickname"
           />
           <ElOption
-            label="用户ID"
+            label="用户名"
             value="id"
           />
           <ElOption

@@ -63,7 +63,7 @@ const courseFilters = reactive({
 
 const keywordPlaceholder: Record<ViewerKeywordType, string> = {
   nickname: "请输入用户昵称",
-  id: "请输入用户ID",
+  id: "请输入用户名",
   phone: "请输入手机号",
 };
 
@@ -262,7 +262,7 @@ onMounted(async () => {
             value="nickname"
           />
           <ElOption
-            label="用户ID"
+            label="用户名"
             value="id"
           />
           <ElOption
@@ -361,7 +361,7 @@ onMounted(async () => {
             value="nickname"
           />
           <ElOption
-            label="用户ID"
+            label="用户名"
             value="id"
           />
           <ElOption
@@ -463,8 +463,8 @@ onMounted(async () => {
           </template>
         </ElTableColumn>
         <ElTableColumn
-          label="用户ID"
-          prop="uid"
+          label="用户名"
+          prop="username"
           width="100"
         />
         <ElTableColumn
@@ -478,7 +478,7 @@ onMounted(async () => {
             >
               <span
                 v-for="(name, i) in row.tagLabels"
-                :key="`${row.uid}-${i}`"
+                :key="`${row.username}-${i}`"
                 class="tag-pill"
               >{{ name }}</span>
             </div>
@@ -551,8 +551,8 @@ onMounted(async () => {
           </template>
         </ElTableColumn>
         <ElTableColumn
-          label="用户ID"
-          prop="uid"
+          label="用户名"
+          prop="username"
           width="100"
         />
         <ElTableColumn

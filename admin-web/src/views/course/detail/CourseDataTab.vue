@@ -57,7 +57,7 @@ const userLoading = ref(false);
 const userRows = ref<CourseAnalyticsUserItem[]>([]);
 
 const progressLoading = ref(false);
-const progressUid = ref<number | null>(null);
+const progressUsername = ref<string | null>(null);
 const progressSummary = ref<CourseAnalyticsUserLessonListResult | null>(null);
 const progressRows = ref<CourseAnalyticsUserLessonItem[]>([]);
 
@@ -66,8 +66,8 @@ function syncFromRoute() {
   if (sub === "progress") {
     dataView.value = "progress";
     learningSub.value = "users";
-    const uid = Number(route.query.uid);
-    progressUid.value = Number.isFinite(uid) && uid > 0 ? uid : null;
+    const name = String(route.query.username ?? "").trim();
+    progressUsername.value = name || null;
     return;
   }
   dataView.value = "list";
@@ -75,7 +75,7 @@ function syncFromRoute() {
 }
 
 watch(
-  () => [route.query.sub, route.query.uid],
+  () => [route.query.sub, route.query.username],
   () => syncFromRoute(),
   { immediate: true },
 );
@@ -97,16 +97,16 @@ function setLearningSub(sub: LearningSub) {
 }
 
 function openProgress(row: CourseAnalyticsUserItem) {
-  progressUid.value = row.uid;
+  progressUsername.value = row.username;
   dataView.value = "progress";
   page.value = 1;
-  replaceQuery({ sub: "progress", uid: String(row.uid) });
+  replaceQuery({ sub: "progress", username: row.username });
 }
 
 function backFromProgress() {
   dataView.value = "list";
   learningSub.value = "users";
-  progressUid.value = null;
+  progressUsername.value = null;
   progressSummary.value = null;
   progressRows.value = [];
   page.value = 1;
@@ -186,7 +186,7 @@ async function fetchUsers() {
 }
 
 async function fetchProgress() {
-  if (!props.courseId || !progressUid.value) {
+  if (!props.courseId || !progressUsername.value) {
     progressRows.value = [];
     progressSummary.value = null;
     total.value = 0;
@@ -195,7 +195,7 @@ async function fetchProgress() {
   progressLoading.value = true;
   try {
     const data = await listCourseAnalyticsUserLessons(props.courseId, {
-      uid: progressUid.value,
+      username: progressUsername.value,
       page: page.value,
       pageSize: pageSize.value,
     });
@@ -262,7 +262,7 @@ async function onExport() {
 }
 
 const progressNickname = computed(
-  () => progressSummary.value?.nickname || `用户 ${progressUid.value ?? ""}`,
+  () => progressSummary.value?.nickname || `用户 ${progressUsername.value ?? ""}`,
 );
 
 watch(
@@ -273,7 +273,7 @@ watch(
       dataView.value,
       page.value,
       pageSize.value,
-      progressUid.value,
+      progressUsername.value,
     ] as const,
   () => {
     if (dataView.value === "progress") {

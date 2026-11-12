@@ -9,7 +9,7 @@ import {
 export function exportViewerRows(rows: ViewerListItem[]) {
   const data = rows.map((item) => ({
     用户: item.nickname,
-    用户ID: item.uid,
+    用户名: item.username,
     来源渠道: registerChannelLabel(item.registerChannel),
     绑定手机号: item.phoneMasked ?? "",
     注册时间: item.createdTime ?? "",

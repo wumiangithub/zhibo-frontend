@@ -52,6 +52,15 @@ export function postLogin(body: LoginBody) {
   return post<LoginStateData>("/auth/login", body);
 }
 
+/** 仅本地 / test：输入账号直接登录，跳过密码和扫码。对方官方 Java 没有此接口。 */
+export function postDevAccountLogin(userAccount: string) {
+  return post<LoginQueryData>(
+    "/auth/dev-account-login",
+    { userAccount },
+    { skipAuthRefresh: true },
+  );
+}
+
 export function queryLoginState(state: string) {
   return get<LoginQueryData>("/auth/login/query", { params: { state } });
 }

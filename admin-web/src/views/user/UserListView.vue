@@ -51,7 +51,7 @@ const filters = reactive({
 
 const keywordPlaceholder: Record<ViewerKeywordType, string> = {
   nickname: "请输入用户昵称",
-  id: "请输入用户ID",
+  id: "请输入用户名",
   phone: "请输入手机号",
 };
 
@@ -221,7 +221,7 @@ async function confirmTags() {
   if (!row) return;
   tagSaving.value = true;
   try {
-    const res = await updateViewerTags(row.uid, [...tagDraftIds.value]);
+    const res = await updateViewerTags(row.username, [...tagDraftIds.value]);
     row.tagIds = res.tagIds ?? [];
     row.tagLabels = res.tagLabels ?? [];
     ElMessage.success("标签已更新");
@@ -256,7 +256,7 @@ async function confirmBlacklist() {
   };
   blacklistSaving.value = true;
   try {
-    const res = await updateViewerBlacklist(row.uid, next);
+    const res = await updateViewerBlacklist(row.username, next);
     row.banComment = res.banComment;
     row.banPurchase = res.banPurchase;
     row.banAccess = res.banAccess;
@@ -291,7 +291,7 @@ onMounted(() => {
             value="nickname"
           />
           <ElOption
-            label="用户ID"
+            label="用户名"
             value="id"
           />
           <ElOption
@@ -445,8 +445,8 @@ onMounted(() => {
           </template>
         </ElTableColumn>
         <ElTableColumn
-          prop="uid"
-          label="用户ID"
+          prop="username"
+          label="用户名"
           min-width="100"
         />
         <ElTableColumn
@@ -574,7 +574,7 @@ onMounted(() => {
               <div class="tag-line">
                 <span
                   v-for="(tag, idx) in row.tagLabels"
-                  :key="`${row.uid}-${idx}`"
+                  :key="`${row.username}-${idx}`"
                   class="tag-pill"
                 >{{ tag }}</span>
               </div>
@@ -641,7 +641,7 @@ onMounted(() => {
           <div>
             <div class="ul-dlg-title">贴标签</div>
             <div class="ul-dlg-sub">
-              为用户 <b>{{ tagTarget?.nickname || tagTarget?.uid }}</b> 添加标签
+              为用户 <b>{{ tagTarget?.nickname || tagTarget?.username }}</b> 添加标签
             </div>
           </div>
           <button
@@ -738,7 +738,7 @@ onMounted(() => {
           <div>
             <div class="ul-dlg-title">黑名单设置</div>
             <div class="ul-dlg-sub">
-              为用户 <b>{{ blacklistTarget?.nickname || blacklistTarget?.uid }}</b> 设置限制
+              为用户 <b>{{ blacklistTarget?.nickname || blacklistTarget?.username }}</b> 设置限制
             </div>
           </div>
           <button

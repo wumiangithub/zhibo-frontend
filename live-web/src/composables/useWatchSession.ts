@@ -15,7 +15,7 @@ import { useAnnouncement } from "@/composables/useAnnouncement";
 import { createWatchAdapter } from "@/live/createWatchAdapter";
 import type { WatchAdapter } from "@/live/WatchAdapter";
 import { formatSdkError } from "@/utils/sdk";
-import { getViewerUid } from "@/utils/viewerAuth";
+import { getViewerUsername } from "@/utils/viewerAuth";
 import { isViewerLoginRequiredError } from "@/utils/viewerLogin";
 import { useToast } from "@/composables/useToast";
 
@@ -26,7 +26,7 @@ export interface WatchSessionOptions {
   /** SDK 进出推送（名单本地改在线态；admin 中控台对照用）。不写库，落库只走微吼回调。 */
   onPresenceOnline?: (msg: VhallUserPresenceMessage) => void;
   onPresenceOffline?: (msg: VhallUserPresenceMessage) => void;
-  /** 观看页：无 uid 时点聊天跳登录。 */
+  /** 观看页：无 username 时点聊天跳登录。 */
   onUnauthenticatedChat?: () => void;
   /**
    * summary / sdk-sign 判定需登录（含「请先登录」业务 400）时回调。
@@ -88,7 +88,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
   const chat = useChat({
     getSdk,
     getSender: () => ({
-      id: sign.value?.sdk?.account || (getViewerUid() != null ? String(getViewerUid()) : ""),
+      id: sign.value?.sdk?.account || getViewerUsername(),
       name: opts.getNickname() || sign.value?.nickname || "我",
     }),
     onIncoming: (msg) => {
@@ -96,7 +96,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
       if (text) barrage.spawnDanmaku(text);
     },
     getActivityId: () => resolveId(opts.activityId),
-    getViewerUid: () => getViewerUid(),
+    getViewerUsername: () => getViewerUsername(),
     onUnauthenticatedChat: opts.onUnauthenticatedChat,
     onCouponCustomEvent: opts.onCouponCustomEvent,
   });
@@ -130,31 +130,38 @@ export function useWatchSession(opts: WatchSessionOptions) {
     return state === 3 || state === 4 || state === 5;
   }
 
-  /** 本次 SDK 实例用的观众 id。undefined 表示还没拉过签名 */
-  let sdkViewerUid: number | null | undefined;
+  /** 本次 SDK 实例用的观众 username。undefined 表示还没拉过签名 */
+  let sdkViewerUsername: string | undefined;
   let accountTimer: ReturnType<typeof setInterval> | null = null;
 
   function buildWatchParams(): WatchSdkSignParams {
     const params: WatchSdkSignParams = {};
     const nickname = opts.getNickname().trim();
     // 小程序 URL 已带展示昵称；传给 /watch/sdk-sign 作 sdk.username（勿再拉 user-info）
-    // uid 只靠 Authorization JWT（D96），不进 Query
+    // username 只靠 Authorization JWT（D96/D118），不进 Query
     if (nickname) params.nickname = nickname;
     return params;
   }
 
   /**
-   * 本地切换账号后 uid 变了：旧 VhallSDK 仍是上一个 email，必须拆掉再 new。
+   * 本地切换账号后 username 变了：旧 VhallSDK 仍是上一个 email，必须拆掉再 new。
    * email 在签名里，所以要重新请求 /sdk-sign，不能只改构造参数。
    */
   function reloadIfViewerChanged() {
-    if (sdkViewerUid === undefined || loading.value) return;
-    if (getViewerUid() === sdkViewerUid) return;
+    if (sdkViewerUsername === undefined || loading.value) return;
+    if (getViewerUsername() === sdkViewerUsername) return;
     void load();
   }
 
   function onViewerStorage(ev: StorageEvent) {
-    if (ev.key != null && ev.key !== "viewerUid" && ev.key !== "viewerId") return;
+    if (
+      ev.key != null &&
+      ev.key !== "viewerUsername" &&
+      ev.key !== "viewerUid" &&
+      ev.key !== "viewerId"
+    ) {
+      return;
+    }
     reloadIfViewerChanged();
   }
 
@@ -491,8 +498,8 @@ export function useWatchSession(opts: WatchSessionOptions) {
     roomUiEpoch += 1;
     enterLiveInFlight = false;
     stopShellSummaryPoll();
-    const requestedViewerUid = getViewerUid();
-    sdkViewerUid = requestedViewerUid;
+    const requestedViewerUsername = getViewerUsername();
+    sdkViewerUsername = requestedViewerUsername;
     loading.value = true;
     error.value = "";
     sdkFailed.value = false;
@@ -504,7 +511,7 @@ export function useWatchSession(opts: WatchSessionOptions) {
     destroySdk();
     try {
       const summary = await getWatchSummary(resolveId(opts.activityId));
-      if (getViewerUid() !== requestedViewerUid) {
+      if (getViewerUsername() !== requestedViewerUsername) {
         await load();
         return;
       }
@@ -551,7 +558,15 @@ export function useWatchSession(opts: WatchSessionOptions) {
   async function shareWatch() {
     // 复制当前观看 URL（保留已有 `c`/hint；去掉观众登录注入参数）。不手写 ?c=。
     const u = new URL(window.location.href);
-    for (const key of ["uid", "viewerId", "viewerAccessToken", "accessToken", "token", "nickname"]) {
+    for (const key of [
+      "username",
+      "uid",
+      "viewerId",
+      "viewerAccessToken",
+      "accessToken",
+      "token",
+      "nickname",
+    ]) {
       u.searchParams.delete(key);
     }
     const url = `${u.origin}${u.pathname}${u.search}`;

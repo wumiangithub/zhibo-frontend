@@ -9,7 +9,7 @@ import {
 export function exportLearningSummaryRows(rows: LearningSummaryItem[]) {
   const data = rows.map((item) => ({
     用户: item.nickname,
-    用户ID: item.uid,
+    用户名: item.username,
     标签: (item.tagLabels ?? []).join("、"),
     累计学习时长: formatLearnDurationSec(item.totalLearnDurationSec ?? 0),
     累计学习天数: item.totalLearnDays ?? 0,
@@ -27,7 +27,7 @@ export function exportLearningSummaryRows(rows: LearningSummaryItem[]) {
 export function exportLearningCourseRows(rows: LearningCourseItem[]) {
   const data = rows.map((item) => ({
     用户: item.nickname,
-    用户ID: item.uid,
+    用户名: item.username,
     小节名称: item.lessonName ?? "",
     标签: (item.tagLabels ?? []).join("、"),
     累计学习时长: formatLearnDurationSec(item.totalLearnDurationSec ?? 0),

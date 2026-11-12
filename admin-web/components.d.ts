@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ApiTargetSwitch: typeof import('./src/components/ApiTargetSwitch.vue')['default']
     AppBreadcrumb: typeof import('./src/components/ui/AppBreadcrumb.vue')['default']
     AuditActorTag: typeof import('./src/components/audit/AuditActorTag.vue')['default']
     AuditTimelineDrawer: typeof import('./src/components/audit/AuditTimelineDrawer.vue')['default']

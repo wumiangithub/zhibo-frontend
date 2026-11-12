@@ -25,10 +25,10 @@ export interface ChatOptions {
   onIncoming?: (msg: ChatMessage) => void;
   /** 本站活动 UUID；仅本地 DEV 聊天/提问上报用（D104 / D105） */
   getActivityId?: () => string;
-  /** 可选 viewer.id（已登录观众） */
-  getViewerUid?: () => number | null;
+  /** 可选观众 username（已登录） */
+  getViewerUsername?: () => string;
   /**
-   * 无 uid 且未假验证时想发言：观看页跳小程序登录。
+   * 无 username 且未假验证时想发言：观看页跳小程序登录。
    * 不传则仍弹假验证框（中控台沿用 T11.2）。
    */
   onUnauthenticatedChat?: () => void;
@@ -283,7 +283,7 @@ export function useChat(options: ChatOptions) {
     if (!import.meta.env.DEV) return;
     const activityId = options.getActivityId?.()?.trim() ?? "";
     if (!activityId) return;
-    if (options.getViewerUid?.() == null) return;
+    if (!options.getViewerUsername?.()?.trim()) return;
     const content = text.trim().slice(0, 500);
     if (!content) return;
     const now = Date.now();
@@ -323,7 +323,7 @@ export function useChat(options: ChatOptions) {
     if (!import.meta.env.DEV) return;
     const activityId = options.getActivityId?.()?.trim() ?? "";
     if (!activityId) return;
-    if (options.getViewerUid?.() == null) return;
+    if (!options.getViewerUsername?.()?.trim()) return;
     const content = text.trim().slice(0, 500);
     const qid = questionId.trim().slice(0, 64);
     if (!content || !qid) return;
@@ -346,7 +346,7 @@ export function useChat(options: ChatOptions) {
     if (!import.meta.env.DEV) return;
     const activityId = options.getActivityId?.()?.trim() ?? "";
     if (!activityId) return;
-    if (options.getViewerUid?.() == null) return;
+    if (!options.getViewerUsername?.()?.trim()) return;
     if (!body.questionId?.trim() || !body.msgId?.trim()) return;
     void reportComment(activityId, body).catch((e) => {
       console.warn("提问 msg_id 补写失败", e);
@@ -358,7 +358,7 @@ export function useChat(options: ChatOptions) {
     if (!import.meta.env.DEV) return;
     const activityId = options.getActivityId?.()?.trim() ?? "";
     if (!activityId) return;
-    if (options.getViewerUid?.() == null) return;
+    if (!options.getViewerUsername?.()?.trim()) return;
     if (!body.questionId?.trim() || !body.answerContent?.trim()) return;
     void upsertQuestionAnswer(activityId, body).catch((e) => {
       console.warn("提问回复上报本站失败", e);
@@ -407,7 +407,7 @@ export function useChat(options: ChatOptions) {
 
   function isVerified(): boolean {
     // 小程序 web-view 已带 viewerId：身份已定，跳过 T11.2 假验证弹窗
-    if (options.getViewerUid?.() != null) return true;
+    if (options.getViewerUsername?.()?.trim()) return true;
     // 观看页强制登录：不认假验证 localStorage，避免游客靠旧标记绕过
     if (options.onUnauthenticatedChat) return false;
     return localStorage.getItem(VERIFY_KEY) === "1";
@@ -597,7 +597,7 @@ export function useChat(options: ChatOptions) {
     const hit = chat.chatMessages.find((m) => m.msgId === msgId);
     chat.chatMessages = chat.chatMessages.filter((m) => m.msgId !== msgId);
     const activityId = options.getActivityId?.()?.trim() ?? "";
-    if (!activityId || options.getViewerUid?.() == null) return;
+    if (!activityId || !options.getViewerUsername?.()?.trim()) return;
     if (hit?.commentId != null) {
       softDeleteReported(activityId, hit.commentId);
       return;

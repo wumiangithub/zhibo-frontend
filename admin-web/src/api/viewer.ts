@@ -3,8 +3,8 @@ import { get, put } from "./http";
 export type ViewerKeywordType = "nickname" | "id" | "phone";
 
 export interface ViewerListItem {
-  /** 用户中心 uid（业务用户 id） */
-  uid: number;
+  /** 用户中心 username（业务观众身份，≤16） */
+  username: string;
   nickname: string;
   avatarUrl?: string;
   /** 1 微信 / 2 导入 */
@@ -70,8 +70,8 @@ export function listViewers(params: {
 export type LearnDurationOp = "gt" | "lte";
 
 export interface LearningSummaryItem {
-  /** 用户中心 uid */
-  uid: number;
+  /** 用户中心 username */
+  username: string;
   nickname: string;
   avatarUrl?: string;
   tagIds: number[];
@@ -92,7 +92,7 @@ export interface LearningSummaryResult {
 /** 学习统计·课程数据行（D112：小节维度） */
 export interface LearningCourseItem {
   id: number;
-  uid: number;
+  username: string;
   nickname: string;
   avatarUrl?: string;
   tagIds: number[];
@@ -168,21 +168,23 @@ export function parseHhMmSsToSec(raw: string | undefined | null): number | null 
 }
 
 export function updateViewerBlacklist(
-  uid: number,
+  username: string,
   body: { banComment: 0 | 1; banPurchase: 0 | 1; banAccess: 0 | 1 },
 ) {
+  const id = encodeURIComponent(username.trim());
   return put<{
-    uid: number;
+    username: string;
     banComment: number;
     banPurchase: number;
     banAccess: number;
     status: number;
-  }>(`/viewers/update-blacklist/${uid}`, body);
+  }>(`/viewers/update-blacklist/${id}`, body);
 }
 
-export function updateViewerTags(uid: number, tagIds: number[]) {
-  return put<{ uid: number; tagIds: number[]; tagLabels: string[] }>(
-    `/viewers/update-tags/${uid}`,
+export function updateViewerTags(username: string, tagIds: number[]) {
+  const id = encodeURIComponent(username.trim());
+  return put<{ username: string; tagIds: number[]; tagLabels: string[] }>(
+    `/viewers/update-tags/${id}`,
     { tagIds },
   );
 }

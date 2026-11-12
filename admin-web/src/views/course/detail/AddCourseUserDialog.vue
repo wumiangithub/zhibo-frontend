@@ -44,10 +44,10 @@ const emit = defineEmits<{
 }>();
 
 const addTab = ref<"single" | "bulk" | "tag">("single");
-const addMethod = ref<"phone" | "uid">("phone");
+const addMethod = ref<"phone" | "username">("phone");
 const addPhone = ref("");
 const addPhoneCode = ref("+86");
-const addViewerId = ref("");
+const addViewerUsername = ref("");
 const addSaving = ref(false);
 /** 选填自定义到期（yyyy-MM-dd）；空则后端按课程售卖算 */
 const customExpireDate = ref("");
@@ -121,7 +121,7 @@ function resetForm() {
   addMethod.value = "phone";
   addPhone.value = "";
   addPhoneCode.value = "+86";
-  addViewerId.value = "";
+  addViewerUsername.value = "";
   customExpireDate.value = "";
   tagImportMode.value = "byTag";
   tagImportSelected.value = [];
@@ -131,7 +131,7 @@ function resetForm() {
 
 function onAddMethodChange() {
   addPhone.value = "";
-  addViewerId.value = "";
+  addViewerUsername.value = "";
 }
 
 function openTagPicker() {
@@ -180,7 +180,7 @@ async function submitTagImport() {
 async function submitAdd() {
   if (addTab.value !== "single") return;
 
-  let body: ({ phone: string } | { uid: number }) & { expireTime?: string };
+  let body: ({ phone: string } | { username: string }) & { expireTime?: string };
   if (addMethod.value === "phone") {
     const phone = addPhone.value.trim().replace(/\D/g, "");
     if (!phone) {
@@ -189,16 +189,16 @@ async function submitAdd() {
     }
     body = { phone };
   } else {
-    const raw = addViewerId.value.trim();
+    const raw = addViewerUsername.value.trim();
     if (!raw) {
-      ElMessage.warning("请输入学员用户ID");
+      ElMessage.warning("请输入学员用户名");
       return;
     }
-    if (!/^\d+$/.test(raw) || Number(raw) <= 0) {
-      ElMessage.warning("用户ID须为正整数");
+    if (raw.length > 16) {
+      ElMessage.warning("用户名最多 16 个字符");
       return;
     }
-    body = { uid: Number(raw) };
+    body = { username: raw };
   }
   const expire = customExpireDate.value?.trim();
   if (expire) body.expireTime = expire;
@@ -209,7 +209,7 @@ async function submitAdd() {
     if (result.created) {
       ElMessage.success("添加成功");
       addPhone.value = "";
-      addViewerId.value = "";
+      addViewerUsername.value = "";
     } else {
       ElMessage.warning("该用户已存在");
     }
@@ -313,7 +313,7 @@ async function onDownloadFailures(row: CourseUserImportHistoryItem) {
               @change="onAddMethodChange"
             >
               <ElRadio value="phone">手机号</ElRadio>
-              <ElRadio value="uid">用户ID</ElRadio>
+              <ElRadio value="username">用户名</ElRadio>
             </ElRadioGroup>
           </ElFormItem>
           <ElFormItem
@@ -344,8 +344,8 @@ async function onDownloadFailures(row: CourseUserImportHistoryItem) {
             </ElInput>
             <ElInput
               v-else
-              v-model="addViewerId"
-              placeholder="请输入学员用户ID"
+              v-model="addViewerUsername"
+              placeholder="请输入学员用户名"
               maxlength="20"
             />
           </ElFormItem>

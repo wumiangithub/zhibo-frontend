@@ -2,10 +2,10 @@ import { get, post } from "./http";
 import { getViewerAccessToken } from "@/utils/viewerAuth";
 
 export interface ViewerAuthUser {
-  /** 用户中心 uid（订单中心 third_user_id）；观众对外身份 */
-  uid?: number;
-  /** 同步自用户中心；订单中心 username */
+  /** 用户中心 username（业务观众身份，≤16） */
   username?: string;
+  /** 大智慧 uid；仅备查，勿当身份 */
+  uid?: number;
   hasPhone?: boolean;
   phoneMasked?: string;
   nickname?: string;

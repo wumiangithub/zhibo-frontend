@@ -70,7 +70,7 @@ const filters = reactive({
 
 const keywordPlaceholder: Record<AudienceKeywordType, string> = {
   nickname: "请输入用户昵称",
-  id: "请输入用户ID",
+  id: "请输入用户名",
   phone: "请输入手机号",
 };
 
@@ -225,10 +225,10 @@ function onSortChange(payload: { prop: string | null; order: string | null }) {
 
 const addVisible = ref(false);
 const addTab = ref<"single" | "bulk" | "tag">("single");
-const addMethod = ref<"phone" | "uid">("phone");
+const addMethod = ref<"phone" | "username">("phone");
 const addPhone = ref("");
 const addPhoneCode = ref("+86");
-const addViewerId = ref("");
+const addViewerUsername = ref("");
 const addSaving = ref(false);
 
 const PHONE_CODE_OPTIONS = [{ label: "+86 中国", value: "+86" }] as const;
@@ -312,7 +312,7 @@ function resetAddForm() {
   addMethod.value = "phone";
   addPhone.value = "";
   addPhoneCode.value = "+86";
-  addViewerId.value = "";
+  addViewerUsername.value = "";
   tagImportMode.value = "byTag";
   tagImportSelected.value = [];
   tagPickerVisible.value = false;
@@ -368,13 +368,13 @@ function openAdd() {
 
 function onAddMethodChange() {
   addPhone.value = "";
-  addViewerId.value = "";
+  addViewerUsername.value = "";
 }
 
 async function submitAdd() {
   if (addTab.value !== "single") return;
 
-  let body: { phone: string } | { uid: number };
+  let body: { phone: string } | { username: string };
   if (addMethod.value === "phone") {
     const phone = addPhone.value.trim().replace(/\D/g, "");
     if (!phone) {
@@ -383,16 +383,16 @@ async function submitAdd() {
     }
     body = { phone };
   } else {
-    const raw = addViewerId.value.trim();
+    const raw = addViewerUsername.value.trim();
     if (!raw) {
-      ElMessage.warning("请输入学员用户ID");
+      ElMessage.warning("请输入观众用户名");
       return;
     }
-    if (!/^\d+$/.test(raw) || Number(raw) <= 0) {
-      ElMessage.warning("用户ID须为正整数");
+    if (raw.length > 16) {
+      ElMessage.warning("用户名最多 16 个字符");
       return;
     }
-    body = { uid: Number(raw) };
+    body = { username: raw };
   }
 
   addSaving.value = true;
@@ -402,7 +402,7 @@ async function submitAdd() {
       ElMessage.success("添加成功");
       // 不关弹窗，便于连续添加；清空当前输入
       addPhone.value = "";
-      addViewerId.value = "";
+      addViewerUsername.value = "";
     } else {
       ElMessage.warning("该用户已存在");
     }
@@ -599,7 +599,7 @@ onUnmounted(() => {
             value="nickname"
           />
           <ElOption
-            label="用户ID"
+            label="用户名"
             value="id"
           />
           <ElOption
@@ -957,7 +957,7 @@ onUnmounted(() => {
                 @change="onAddMethodChange"
               >
                 <ElRadio value="phone">手机号</ElRadio>
-                <ElRadio value="uid">用户ID</ElRadio>
+                <ElRadio value="username">用户名</ElRadio>
               </ElRadioGroup>
             </ElFormItem>
             <ElFormItem
@@ -988,8 +988,8 @@ onUnmounted(() => {
               </ElInput>
               <ElInput
                 v-else
-                v-model="addViewerId"
-                placeholder="请输入学员用户ID"
+                v-model="addViewerUsername"
+                placeholder="请输入观众用户名"
                 maxlength="20"
               />
             </ElFormItem>

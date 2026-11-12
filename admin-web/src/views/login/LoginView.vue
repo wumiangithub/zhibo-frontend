@@ -2,8 +2,8 @@
 import { onMounted, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
-import { UserFilled, Unlock, View, Hide } from "@element-plus/icons-vue";
-import { fetchCaptcha, postLogin } from "@/api/auth";
+import { UserFilled, Unlock, View, Hide, CircleClose } from "@element-plus/icons-vue";
+import { fetchCaptcha, postDevAccountLogin, postLogin } from "@/api/auth";
 import { ApiError } from "@/api/http";
 import { useAuthStore } from "@/stores/auth";
 import { encryptLoginPassword } from "@/utils/passwordAes";
@@ -38,6 +38,13 @@ const showPassword = ref(false);
 const accountError = ref("");
 const passwordError = ref("");
 const submitting = ref(false);
+
+const accountOnlyLoginEnabled =
+  import.meta.env.DEV || import.meta.env.MODE === "test";
+const devAccount = ref("");
+const devAccountError = ref("");
+const devSubmitting = ref(false);
+
 
 const wechatOpen = ref(false);
 const wechatState = ref("");
@@ -81,6 +88,50 @@ async function fillPasswordIfRememberedAccount() {
   if (remembered.userAccount === account && !form.password) {
     form.password = remembered.password;
     passwordError.value = "";
+  }
+}
+
+function clearField(field: "userAccount" | "password" | "captchaCode" | "devAccount") {
+  if (field === "devAccount") {
+    devAccount.value = "";
+    devAccountError.value = "";
+    return;
+  }
+  form[field] = "";
+  if (field === "userAccount") accountError.value = "";
+  if (field === "password") passwordError.value = "";
+}
+
+function onDevAccountBlur() {
+  devAccount.value = devAccount.value.trim();
+  if (devAccountError.value) {
+    devAccountError.value = devAccount.value ? "" : "请输入账号";
+  }
+}
+
+async function submitDevAccount() {
+  if (!accountOnlyLoginEnabled) return;
+  const account = devAccount.value.trim();
+  devAccount.value = account;
+  devAccountError.value = account ? "" : "请输入账号";
+  if (!account || devSubmitting.value) return;
+  devSubmitting.value = true;
+  try {
+    const data = await postDevAccountLogin(account);
+    if (!data?.accessToken || !data.user) {
+      ElMessage.error("登录失败");
+      return;
+    }
+    auth.applySession(data.accessToken, data.user, {
+      persist: form.remember,
+      refreshToken: data.refreshToken,
+    });
+    const redirect = typeof route.query.redirect === "string" ? route.query.redirect : "/";
+    void router.replace(redirect || "/");
+  } catch (e) {
+    ElMessage.error(e instanceof ApiError ? e.message : "登录失败");
+  } finally {
+    devSubmitting.value = false;
   }
 }
 
@@ -271,6 +322,16 @@ onMounted(() => {
               placeholder="请输入账号"
               @blur="onAccountBlur"
             >
+            <button
+              v-show="form.userAccount"
+              type="button"
+              class="clear-btn"
+              tabindex="-1"
+              aria-label="清空账号"
+              @click="clearField('userAccount')"
+            >
+              <el-icon><CircleClose /></el-icon>
+            </button>
           </div>
           <p
             v-if="accountError"
@@ -297,6 +358,16 @@ onMounted(() => {
               placeholder="请输入密码"
               @blur="onPasswordBlur"
             >
+            <button
+              v-show="form.password"
+              type="button"
+              class="clear-btn"
+              tabindex="-1"
+              aria-label="清空密码"
+              @click="clearField('password')"
+            >
+              <el-icon><CircleClose /></el-icon>
+            </button>
             <button
               type="button"
               class="eye-btn"
@@ -328,6 +399,16 @@ onMounted(() => {
               autocomplete="off"
               placeholder="请输入图形验证码"
             >
+            <button
+              v-show="form.captchaCode"
+              type="button"
+              class="clear-btn"
+              tabindex="-1"
+              aria-label="清空验证码"
+              @click="clearField('captchaCode')"
+            >
+              <el-icon><CircleClose /></el-icon>
+            </button>
           </div>
           <button
             type="button"
@@ -369,7 +450,60 @@ onMounted(() => {
           <span class="login-help">若登录异常，请联系管理员</span>
         </div>
       </form>
+
+    <form
+      v-if="accountOnlyLoginEnabled"
+      class="dev-account-form"
+      @submit.prevent="submitDevAccount"
+    >
+      <p class="dev-account-title">其他登录方式（仅本地 / 测试环境）</p>
+      <p class="dev-account-hint">只需输入已有账号即可登录，无需密码和扫码。测试机上请先把接口切到 mock 服务。</p>
+      <div class="field-wrap">
+        <div
+          class="field-input-box"
+          :class="{ 'is-error': devAccountError }"
+        >
+          <el-icon class="field-icon">
+            <UserFilled />
+          </el-icon>
+          <input
+            v-model="devAccount"
+            class="field-input"
+            type="text"
+            name="dev-account"
+            autocomplete="username"
+            placeholder="请输入账号"
+            @blur="onDevAccountBlur"
+          >
+          <button
+            v-show="devAccount"
+            type="button"
+            class="clear-btn"
+            tabindex="-1"
+            aria-label="清空账号"
+            @click="clearField('devAccount')"
+          >
+            <el-icon><CircleClose /></el-icon>
+          </button>
+        </div>
+        <p
+          v-if="devAccountError"
+          class="field-error"
+        >
+          {{ devAccountError }}
+        </p>
+      </div>
+      <button
+        type="submit"
+        class="submit-btn dev-account-btn"
+        :disabled="devSubmitting"
+      >
+        {{ devSubmitting ? "登录中…" : "直接登录" }}
+      </button>
+    </form>
     </div>
+
+
 
     <WechatLoginDialog
       v-model="wechatOpen"
@@ -468,6 +602,25 @@ onMounted(() => {
 
 .field-input::placeholder {
   color: #bfbfbf;
+}
+
+.clear-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #bfbfbf;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.clear-btn:hover {
+  color: var(--color-text-secondary);
 }
 
 .eye-btn {
@@ -586,6 +739,34 @@ onMounted(() => {
   height: 14px;
   accent-color: var(--color-primary);
   cursor: pointer;
+}
+
+.dev-account-form {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 16px;
+  padding: 24px 36px 28px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 12px 40px rgba(47, 84, 235, 0.08);
+}
+
+.dev-account-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.dev-account-hint {
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #888;
+}
+
+.dev-account-btn {
+  margin-top: 0;
 }
 
 .login-help {

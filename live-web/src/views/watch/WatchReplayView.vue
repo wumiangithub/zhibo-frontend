@@ -23,7 +23,7 @@ import {
   isViewerLoggedIn,
   readNicknameFromSearch,
   syncViewerAccessTokenFromUrl,
-  syncViewerUidFromUrl,
+  syncViewerUsernameFromUrl,
 } from "@/utils/viewerAuth";
 import { storeNickname } from "@/api/watch";
 import { ensureWxJsSdk, isLikelyMiniProgramWebView } from "@/utils/miniProgram";
@@ -53,7 +53,7 @@ const summary = ref<WatchSummaryData | null>(null);
 const record = ref<WatchRecordItem | null>(null);
 
 const routeQuery = route.query as Record<string, unknown>;
-syncViewerUidFromUrl(routeQuery);
+syncViewerUsernameFromUrl(routeQuery);
 syncViewerAccessTokenFromUrl(routeQuery);
 const urlNickname = readNicknameFromSearch(routeQuery);
 if (urlNickname) storeNickname(urlNickname);

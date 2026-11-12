@@ -47,7 +47,7 @@ function shouldSkipAuthRefresh(config?: InternalAxiosRequestConfig): boolean {
   if (cfg?.skipAuthRefresh) return true;
   if (cfg?.__isRetryRequest) return true;
   const url = `${cfg?.baseURL ?? ""}${cfg?.url ?? ""}`;
-  return /\/auth\/(refresh|login|captcha|wechat\/callback)(\?|$)/.test(url)
+  return /\/auth\/(refresh|login|captcha|wechat\/callback|dev-account-login)(\?|$)/.test(url)
     || /\/auth\/login\/query(\?|$)/.test(url)
     || /\/outside\//.test(url);
 }
@@ -78,6 +78,7 @@ async function tryRefreshAndReplay(config: InternalAxiosRequestConfig) {
 }
 
 instance.interceptors.request.use((config) => {
+  config.baseURL = apiV1();
   const token = getAccessToken();
   if (token) {
     config.headers = config.headers ?? {};

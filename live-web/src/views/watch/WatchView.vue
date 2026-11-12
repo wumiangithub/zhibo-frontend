@@ -32,12 +32,12 @@ import { pingViewerPresence } from "@/api/presence";
 import {
   clearViewerSession,
   getViewerAccessToken,
-  getViewerUid,
+  getViewerUsername,
   isViewerAuthQueryKey,
   isViewerLoggedIn,
   readNicknameFromSearch,
   syncViewerAccessTokenFromUrl,
-  syncViewerUidFromUrl,
+  syncViewerUsernameFromUrl,
 } from "@/utils/viewerAuth";
 import { ensureWxJsSdk, isLikelyMiniProgramWebView } from "@/utils/miniProgram";
 import { goViewerLogin, recoverViewerAuth } from "@/utils/viewerLogin";
@@ -84,8 +84,8 @@ const {
 let refreshCoupons: () => Promise<void> = async () => {};
 
 const routeQuery = route.query as Record<string, unknown>;
-/** 小程序 web-view：uid + JWT + nickname 写入本地，再拉 /watch/sdk-sign */
-syncViewerUidFromUrl(routeQuery);
+/** 小程序 web-view：username + JWT + nickname 写入本地，再拉 /watch/sdk-sign */
+syncViewerUsernameFromUrl(routeQuery);
 syncViewerAccessTokenFromUrl(routeQuery);
 const urlNickname = readNicknameFromSearch(routeQuery);
 if (urlNickname) {
@@ -132,7 +132,7 @@ function tryAttributeInvite() {
 
 /** 已登录且无展示昵称时才填；未登录先走 /login，不挡在昵称表单 */
 const showNicknameForm = ref(
-  !!getViewerAccessToken() && getViewerUid() == null && !getStoredNickname(),
+  !!getViewerAccessToken() && !getViewerUsername() && !getStoredNickname(),
 );
 const nicknameSaving = ref(false);
 
@@ -243,7 +243,7 @@ async function onPasswordSubmit(password: string) {
   if (ok) await load();
 }
 
-const hasViewerUid = computed(() => getViewerUid() != null);
+const hasViewerUsername = computed(() => !!getViewerUsername());
 
 const displayNickname = computed(() => getStoredNickname() || "观众");
 
@@ -502,7 +502,7 @@ onMounted(() => {
               昵称：<span class="text-[var(--lw-text-primary)]">{{ displayNickname }}</span>
             </p>
             <button
-              v-if="!hasViewerUid"
+              v-if="!hasViewerUsername"
               type="button"
               class="bg-transparent text-xs text-[var(--lw-text-muted)] hover:text-[var(--lw-text-secondary)]"
               @click="changeNickname"
