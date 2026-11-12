@@ -9,7 +9,7 @@ import {
   recoverViewerAuth,
 } from "@/utils/viewerLogin";
 
-/** 与小程序 pages/feedback/list 一致 */
+/** 与小程序 pages/feedback/list/list 一致 */
 const PAGE_SIZE = 20;
 
 const router = useRouter();

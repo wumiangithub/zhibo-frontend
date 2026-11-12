@@ -2,13 +2,13 @@
 const VIEWER_LOGIN_URL = "/pages/login/login";
 
 /** 小程序打开远端文档（downloadFile + openDocument）。 */
-const OPEN_DOCUMENT_URL = "/pages/file/open";
+const OPEN_DOCUMENT_URL = "/pages/file/open/open";
 
 /** 小程序原生订单收银台（完整支付 UI）。 */
-const ORDER_CHECKOUT_URL = "/pages/pay/checkout";
+const ORDER_CHECKOUT_URL = "/pages/pay/checkout/checkout";
 
 /** 小程序原生支付唤起页（仅 wx.requestPayment；H5 已 prepay 后的辅助入口）。 */
-const REQUEST_PAYMENT_URL = "/pages/pay/request";
+const REQUEST_PAYMENT_URL = "/pages/pay/request/request";
 
 /** 跳转原生收银台所需参数（封面等可选；过长时会丢 coverImg）。 */
 export type MiniOrderCheckoutPayload = {

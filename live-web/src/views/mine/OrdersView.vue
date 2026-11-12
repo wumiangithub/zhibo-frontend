@@ -14,7 +14,7 @@ import {
   recoverViewerAuth,
 } from "@/utils/viewerLogin";
 
-/** 与小程序 pages/orders/list 一致 */
+/** 与小程序 pages/orders/list/list 一致 */
 const PAGE_SIZE = 20;
 const DEFAULT_COVER = "/audience/cover-course-1.png";
 

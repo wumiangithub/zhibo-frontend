@@ -43,7 +43,7 @@ function formatLessonRow(lesson: LearningCatalogNode, seq: number): LessonRow {
 
 /**
  * 按当前子课（无子课则 parentId=0）拼章节和小节。章节默认展开。
- * 与小程序 pages/course/detail `_buildCatalogBlocks` 一致。
+ * 与小程序 pages/course/detail/detail `_buildCatalogBlocks` 一致。
  */
 export function buildCatalogBlocks(
   nodes: LearningCatalogNode[],

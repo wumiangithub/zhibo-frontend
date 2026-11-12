@@ -14,7 +14,7 @@ import {
   recoverViewerAuth,
 } from "@/utils/viewerLogin";
 
-/** 与小程序 pages/feedback/feedback 一致 */
+/** 与小程序 pages/feedback/feedback/feedback 一致 */
 const CONTENT_MAX = 200;
 const IMAGES_MAX = 4;
 const MAX_BYTES = 2 * 1024 * 1024;

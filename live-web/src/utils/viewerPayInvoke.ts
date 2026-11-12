@@ -136,7 +136,7 @@ export interface InvokeViewerPayOutcome {
 /**
  * 按 prepay 返回的 channel + credential 唤起支付。
  * - WAP（wx_wap / alipay_wap 等）：credential 内跳转 URL → `location.href`（可 defer）
- * - wx_lite（小程序 web-view）：解析 JSAPI 字段 → `navigateTo` `/pages/pay/request`
+ * - wx_lite（小程序 web-view）：解析 JSAPI 字段 → `navigateTo` `/pages/pay/request/request`
  * - wx_pub：chooseWXPay 仍待接入（当前抛明确错误）
  */
 export async function invokeViewerPayCredential(
