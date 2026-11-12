@@ -619,10 +619,6 @@ export function isPaidOrder(status: number): boolean {
   return status === ORDER_STATUS_PAID;
 }
 
-/** 「全部订单」列表：除待支付(1010)外都展示 */
-export function isListVisibleOrder(status: number): boolean {
-  return status !== ORDER_STATUS_UNPAID;
-}
 
 function asText(v: unknown): string {
   if (v == null) return "";
@@ -662,7 +658,7 @@ function asPageNumber(v: unknown, fallback: number): number {
  * 观众端我的订单列表。
  * POST /order-center/api/live/viewer/order/list
  * 头 Authorization-Live-Viewers；page 从 1 起，pageSize 1～100。
- * 接口不按状态筛选；页面除 orderStatus=1010（待支付）外都展示。
+ * 接口不按状态筛选；页面全部状态都展示（含待支付）。
  */
 export async function listMyOrders(opts?: {
   page?: number;

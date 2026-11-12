@@ -146,7 +146,7 @@ async function fetchList() {
     };
     if (filters.keyword.trim()) params.keyword = filters.keyword.trim();
     if (filters.shelfStatus && filters.shelfStatus !== "all") params.shelfStatus = filters.shelfStatus;
-    if (filters.state !== "all" && filters.state !== "" && filters.state !== 0) params.state = filters.state;
+    if (filters.state !== "all" && filters.state !== 0) params.state = filters.state;
     if (filters.startRange?.[0]) params.startFrom = filters.startRange[0];
     if (filters.startRange?.[1]) params.startTo = filters.startRange[1];
     if (query.sort) {

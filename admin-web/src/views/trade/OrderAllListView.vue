@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import {
   ElInput,
   ElMessage,
@@ -50,8 +50,6 @@ const query = reactive({
   page: 1,
   pageSize: 10,
 });
-
-const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageSize)));
 
 const keywordPlaceholder: Record<OrderUserKeywordType, string> = {
   nickname: "请输入用户昵称",

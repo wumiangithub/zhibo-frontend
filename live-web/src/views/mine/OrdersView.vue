@@ -2,8 +2,8 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
-  isListVisibleOrder,
   listMyOrders,
+  ORDER_STATUS_UNPAID,
   orderStatusLabel,
   type ViewerOrderItem,
 } from "@/api/orderCenter";
@@ -16,8 +16,6 @@ import {
 
 /** 与小程序 pages/orders/list 一致 */
 const PAGE_SIZE = 20;
-/** 连续空页（过滤掉待支付后无可见订单）最多再拉几页 */
-const MAX_SKIP_EMPTY = 5;
 const DEFAULT_COVER = "/audience/cover-course-1.png";
 
 interface OrderCard {
@@ -27,6 +25,7 @@ interface OrderCard {
   orderMoney: string;
   coverImg: string;
   statusLabel: string;
+  orderStatus: number;
   validityText: string;
 }
 
@@ -62,6 +61,7 @@ function toCard(item: ViewerOrderItem): OrderCard {
     orderMoney: item.orderMoney || "0.00",
     coverImg: item.coverImg,
     statusLabel: orderStatusLabel(item.orderStatus) || "已支付",
+    orderStatus: item.orderStatus,
     validityText,
   };
 }
@@ -73,12 +73,12 @@ function reload() {
   list.value = [];
   errorText.value = "";
   moreError.value = "";
-  void fetchPage(1, true, 0);
+  void fetchPage(1, true);
 }
 
 function loadMore() {
   if (loading.value || noMore.value || !list.value.length || moreError.value) return;
-  void fetchPage(page.value + 1, false, 0);
+  void fetchPage(page.value + 1, false);
 }
 
 function retryMore() {
@@ -99,39 +99,31 @@ async function fillIfShort() {
   if (root.scrollHeight <= root.clientHeight + 4) loadMore();
 }
 
-async function fetchPage(targetPage: number, replace: boolean, emptySkips: number) {
-  const top = emptySkips === 0;
-  if (top && loading.value) return;
-  const gen = top ? ++loadGen : loadGen;
-  if (top) loading.value = true;
+async function fetchPage(targetPage: number, replace: boolean) {
+  if (replace && loading.value) return;
+  const gen = replace ? ++loadGen : loadGen;
+  if (replace) loading.value = true;
   let ok = false;
   try {
     const data = await listMyOrders({ page: targetPage, pageSize: PAGE_SIZE });
     if (gen !== loadGen) return;
     const rawList = data.list;
-    const rows = rawList.filter((item) => isListVisibleOrder(item.orderStatus)).map(toCard);
-    const remoteNoMore = rawList.length < PAGE_SIZE;
-    if (rows.length === 0 && !remoteNoMore && emptySkips < MAX_SKIP_EMPTY) {
-      page.value = targetPage;
-      await fetchPage(targetPage + 1, replace, emptySkips + 1);
-      ok = true;
-      return;
-    }
+    const rows = rawList.map(toCard);
     list.value = replace ? rows : list.value.concat(rows);
     page.value = targetPage;
-    noMore.value = remoteNoMore || emptySkips >= MAX_SKIP_EMPTY;
+    noMore.value = rawList.length < PAGE_SIZE;
     errorText.value = "";
     moreError.value = "";
     ok = true;
   } catch (e) {
     if (gen !== loadGen) return;
-    if (!top) throw e;
+    if (!replace) throw e;
     if (!authRetried && needsRelogin(e)) {
       authRetried = true;
       loading.value = false;
       const outcome = await recoverViewerAuth("/orders");
       if (outcome === "refreshed") {
-        await fetchPage(targetPage, replace, 0);
+        await fetchPage(targetPage, replace);
       }
       return;
     }
@@ -140,7 +132,7 @@ async function fetchPage(targetPage: number, replace: boolean, emptySkips: numbe
     if (list.value.length === 0) errorText.value = msg;
     else moreError.value = msg;
   } finally {
-    if (top && gen === loadGen) {
+    if (replace && gen === loadGen) {
       loading.value = false;
       if (ok) void fillIfShort();
     }
@@ -150,6 +142,10 @@ async function fetchPage(targetPage: number, replace: boolean, emptySkips: numbe
 function onTap(item: OrderCard) {
   if (!item.orderId) {
     toast("订单无效");
+    return;
+  }
+  if (item.orderStatus === ORDER_STATUS_UNPAID) {
+    toast("待支付订单支付流程待接入");
     return;
   }
   void router.push({ name: "order-detail", params: { orderId: item.orderId } });

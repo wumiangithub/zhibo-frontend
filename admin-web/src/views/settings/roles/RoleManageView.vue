@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from "vue";
-import { ElButton, ElMessage, ElTree } from "element-plus";
+import { ElMessage, ElTree } from "element-plus";
 import {
   fetchRoleDetail,
   fetchRoles,
