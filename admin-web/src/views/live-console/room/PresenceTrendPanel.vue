@@ -289,19 +289,20 @@ defineExpose({ reload, resetAndReload });
   <section class="chart-card">
     <header class="card-head">
       <h4>在线人数</h4>
-      <ElDatePicker
-        v-model="rangeModel"
-        class="range-picker"
-        type="datetimerange"
-        range-separator="至"
-        start-placeholder="开始时间"
-        end-placeholder="结束时间"
-        format="YYYY-MM-DD HH:mm:ss"
-        value-format="YYYY-MM-DD HH:mm:ss"
-        :clearable="false"
-        :disabled="loading"
-        @change="onRangeChange"
-      />
+      <div class="range-picker-wrap">
+        <ElDatePicker
+          v-model="rangeModel"
+          type="datetimerange"
+          range-separator="至"
+          start-placeholder="开始时间"
+          end-placeholder="结束时间"
+          format="YYYY-MM-DD HH:mm:ss"
+          value-format="YYYY-MM-DD HH:mm:ss"
+          :clearable="false"
+          :disabled="loading"
+          @change="onRangeChange"
+        />
+      </div>
     </header>
 
     <div class="legend">
@@ -490,12 +491,14 @@ defineExpose({ reload, resetAndReload });
   font-weight: 600;
 }
 
-.range-picker {
-  margin-left: auto;
-  width: min(420px, 100%);
+.range-picker-wrap {
+  flex: 0 0 auto;
+  width: 400px;
 }
 
-.range-picker :deep(.el-input__wrapper) {
+.range-picker-wrap :deep(.el-date-editor) {
+  width: 400px !important;
+  max-width: 400px;
   font-size: 12px;
 }
 

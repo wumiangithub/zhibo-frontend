@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElTable, ElTableColumn } from "element-plus";
+import type { TableInstance } from "element-plus";
 import { useToast } from "@/composables/useToast";
 import {
   getBusinessMetrics,
@@ -68,7 +69,7 @@ const livesPage = ref(0);
 const livesTotal = ref(0);
 const livesLoading = ref(false);
 const livesLoadingMore = ref(false);
-const tableRef = ref<InstanceType<typeof ElTable> | null>(null);
+const tableRef = ref<TableInstance | null>(null);
 let tableScrollEl: HTMLElement | null = null;
 
 const hasMoreLives = computed(
@@ -414,7 +415,7 @@ onBeforeUnmount(() => {
               </template>
             </ElTableColumn>
             <template #empty>
-              <span class="table-empty">{{ livesLoading ? "加载中…" : "暂无最近直播" }}</span>
+              <span class="table-empty">暂无最近直播</span>
             </template>
             <template
               v-if="livesFooterText"

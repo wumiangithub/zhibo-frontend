@@ -184,7 +184,6 @@ export interface ConsoleCouponHistoryItem {
   senderName: string;
   timestamp: number;
   couponId: number;
-  couponNo?: string;
   couponName: string;
   couponAmount: string;
   couponStartDate?: string;
@@ -195,7 +194,6 @@ export interface ConsoleCouponHistoryItem {
 }
 
 export interface ConsoleCouponHistoryData {
-  total: number;
   list: ConsoleCouponHistoryItem[];
 }
 

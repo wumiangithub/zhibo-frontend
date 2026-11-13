@@ -3,19 +3,7 @@ import { activityAccessHeader } from "@/utils/activityAccess";
 import { getViewerAccessToken } from "@/utils/viewerAuth";
 import { get } from "./http";
 
-const GUEST_ID_KEY = "zhibo.guestId";
 const NICKNAME_KEY = "zhibo.nickname";
-
-export interface WatchData {
-  id: string;
-  title: string;
-  state: number;
-  type: number;
-  nickname: string;
-  guestId: string;
-  embedUrl: string;
-  provider?: LiveProvider;
-}
 
 /** 后端只下发签名/init 鉴权；脚本 CDN 由适配器按 provider 加载（D93） */
 export interface SdkInitPayload {
@@ -69,15 +57,8 @@ export interface WatchSdkSignData {
 /** @deprecated 用 WatchSummaryData / WatchSdkSignData；保留别名避免漏改 */
 export type WatchSdkData = WatchSummaryData & Partial<WatchSdkSignData>;
 
-/** 嵌入兜底 detail 仍可带 guestId；sdk-sign 身份只从 JWT（D92/D96） */
-export interface WatchParams {
-  guestId?: string;
-  nickname?: string;
-  uid?: number;
-}
-
 export interface WatchSdkSignParams {
-  /** 展示昵称；uid 只从 Authorization 观众 JWT 取（D96） */
+  /** 展示昵称；username 只从 Authorization 观众 JWT 取（D96/D118） */
   nickname?: string;
 }
 
@@ -92,14 +73,6 @@ export interface WatchActivityItem {
 export interface WatchActivityListData {
   total: number;
   list: WatchActivityItem[];
-}
-
-export function getStoredGuestId(): string {
-  return localStorage.getItem(GUEST_ID_KEY) ?? "";
-}
-
-export function storeGuestId(guestId: string) {
-  if (guestId) localStorage.setItem(GUEST_ID_KEY, guestId);
 }
 
 export function getStoredNickname(): string {
@@ -117,10 +90,6 @@ function watchAuthHeaders(activityId: string): Record<string, string> {
   const viewer = getViewerAccessToken();
   if (viewer) headers.Authorization = `Bearer ${viewer}`;
   return headers;
-}
-
-export function getWatch(id: string, params: WatchParams = {}) {
-  return get<WatchData>(`/watch/detail/${id}`, { params });
 }
 
 /** 观看页壳摘要（D95） */

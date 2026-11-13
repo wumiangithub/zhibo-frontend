@@ -56,7 +56,11 @@ async function copy(text: string, label: string) {
 
 function openHost() {
   if (!canBroadcast.value) return;
-  void router.push(buildLiveStudioPath(props.activityId, ActivityMemberRole.HOST));
+  window.open(
+    buildLiveStudioPath(props.activityId, ActivityMemberRole.HOST),
+    "_blank",
+    "noopener",
+  );
 }
 
 async function copyHost() {

@@ -231,7 +231,11 @@ function onExport() {
 
 function goLive(item: ActivityListItem) {
   if (!item.canBroadcast) return;
-  void router.push(buildLiveStudioPath(item.id, ActivityMemberRole.HOST));
+  window.open(
+    buildLiveStudioPath(item.id, ActivityMemberRole.HOST),
+    "_blank",
+    "noopener",
+  );
 }
 
 function openShare(item: ActivityListItem) {

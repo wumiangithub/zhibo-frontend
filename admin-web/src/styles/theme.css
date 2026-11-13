@@ -650,3 +650,11 @@ html[data-theme="green"] {
   line-height: 1.3;
   color: var(--text);
 }
+
+/**
+ * v-loading 进行中：藏掉表格空态（默认「暂无数据」/自定义 empty-text / #empty），
+ * 避免蓝圈与空文案叠两层。Element Plus 会给挂 v-loading 的节点加 .el-loading-parent--relative。
+ */
+.el-loading-parent--relative .el-table__empty-block {
+  visibility: hidden;
+}

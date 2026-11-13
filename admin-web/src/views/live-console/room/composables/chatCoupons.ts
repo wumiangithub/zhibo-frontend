@@ -115,7 +115,7 @@ export function toCouponChatMessage(
     kind: "coupon",
     coupon: {
       couponId,
-      couponNo: row.couponNo,
+      couponNo: "couponNo" in row ? row.couponNo : undefined,
       couponName,
       couponAmount,
       couponStartDate: row.couponStartDate,

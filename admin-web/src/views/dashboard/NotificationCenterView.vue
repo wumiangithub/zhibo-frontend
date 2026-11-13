@@ -111,6 +111,7 @@ async function onItemClick(item: NotificationItem) {
   try {
     await readNotification(item.id);
     item.unread = false;
+    window.dispatchEvent(new Event(ADMIN_NOTIFICATIONS_CHANGED));
   } catch (e) {
     const msg = e instanceof ApiError ? e.message : "标记已读失败";
     toast(msg);
@@ -232,6 +233,11 @@ onMounted(() => {
           <p class="notice-text">
             <span class="notice-cat">[{{ item.category }}]</span>{{ item.title }}：{{ item.body }}
           </p>
+          <span
+            v-if="item.unread"
+            class="notice-dot"
+            aria-label="未读"
+          />
           <time class="notice-time">{{ item.createdTime }}</time>
         </li>
         <li
@@ -370,6 +376,15 @@ onMounted(() => {
 .notice-cat {
   color: var(--text);
   font-weight: 500;
+}
+
+.notice-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 50%;
+  background: var(--danger);
 }
 
 .notice-time {

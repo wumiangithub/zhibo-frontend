@@ -28,7 +28,6 @@ export interface WatchCouponHistoryItem {
   senderName: string;
   timestamp: number;
   couponId: number;
-  couponNo?: string;
   couponName: string;
   couponAmount: string;
   couponStartDate?: string;
@@ -39,7 +38,6 @@ export interface WatchCouponHistoryItem {
 }
 
 export interface WatchCouponHistoryData {
-  total: number;
   list: WatchCouponHistoryItem[];
 }
 
@@ -116,7 +114,7 @@ export function toCouponChatMessage(
     kind: "coupon",
     coupon: {
       couponId,
-      couponNo: row.couponNo,
+      couponNo: "couponNo" in row ? row.couponNo : undefined,
       couponName,
       couponAmount,
       couponStartDate: row.couponStartDate,
