@@ -1,174 +1,44 @@
 <script setup lang="ts">
 /**
- * 通知中心二级页：只画 UI，Mock 数据本地筛选/分页，接口后续再接。
+ * 通知中心二级页：接真 list / read。
  */
-import { computed, reactive, ref } from "vue";
-import { ElInput, ElOption, ElPagination, ElSelect } from "element-plus";
+import { onMounted, reactive, ref } from "vue";
+import { ElInput, ElMessageBox, ElOption, ElPagination, ElSelect } from "element-plus";
 import AppBreadcrumb, { type AppBreadcrumbItem } from "@/components/ui/AppBreadcrumb.vue";
+import {
+  listNotifications,
+  readAllNotifications,
+  readNotification,
+  type NotificationItem,
+} from "@/api/notifications";
+import { ApiError } from "@/api/http";
+import { useToast } from "@/composables/useToast";
 
-/** 类型枚举（对齐产品卡：完整通知类型文案） */
-type NoticeType =
-  | "live_status_abnormal"
-  | "live_report_audit"
-  | "live_audit"
-  | "material_audit";
-
-type AuditResult = "passed" | "rejected" | "none";
-
-const NOTICE_TYPE_META: Record<
-  NoticeType,
-  { label: string; cat: string; title: string }
-> = {
-  live_status_abnormal: {
-    label: "【直播】状态异常通知",
-    cat: "直播",
-    title: "状态异常通知",
-  },
-  live_report_audit: {
-    label: "【直播报备】合规风控审核结果通知",
-    cat: "直播报备",
-    title: "合规风控审核结果通知",
-  },
-  live_audit: {
-    label: "【直播】合规风控审核结果通知",
-    cat: "直播",
-    title: "合规风控审核结果通知",
-  },
-  material_audit: {
-    label: "【素材库】合规风控审核结果通知",
-    cat: "素材库",
-    title: "合规风控审核结果通知",
-  },
-};
-
-type NoticeItem = {
-  id: string;
-  type: NoticeType;
-  /** 冒号后的正文 */
-  body: string;
-  auditResult: AuditResult;
-  time: string;
-};
+const { toast } = useToast();
 
 const crumbs: AppBreadcrumbItem[] = [
   { label: "工作台", to: "/" },
   { label: "通知中心" },
 ];
 
-const TYPE_OPTIONS: { label: string; value: "all" | NoticeType }[] = [
-  { label: "全部", value: "all" },
-  { label: NOTICE_TYPE_META.live_status_abnormal.label, value: "live_status_abnormal" },
-  { label: NOTICE_TYPE_META.live_report_audit.label, value: "live_report_audit" },
-  { label: NOTICE_TYPE_META.live_audit.label, value: "live_audit" },
-  { label: NOTICE_TYPE_META.material_audit.label, value: "material_audit" },
+const TYPE_OPTIONS: { label: string; value: number }[] = [
+  { label: "全部", value: 0 },
+  { label: "【直播】状态异常通知", value: 1 },
+  { label: "【直播报备】合规风控审核结果通知", value: 2 },
+  { label: "【直播】合规风控审核结果通知", value: 3 },
+  { label: "【素材库】合规风控审核结果通知", value: 4 },
 ];
 
-/** 审核结果枚举 */
 const AUDIT_OPTIONS = [
-  { label: "全部", value: "all" },
-  { label: "已通过", value: "passed" },
-  { label: "已驳回", value: "rejected" },
+  { label: "全部", value: 0 },
+  { label: "已通过", value: 1 },
+  { label: "已驳回", value: 2 },
 ] as const;
-
-/** Mock：对齐稿面文案结构，后续换接口 */
-const ALL_NOTICES: NoticeItem[] = [
-  {
-    id: "1",
-    type: "live_status_abnormal",
-    body: "直播间IDXXXXXXXX 状态异常，直播间IDXXXXXXXXXXXXXX",
-    auditResult: "none",
-    time: "2026-07-13 18:32:00",
-  },
-  {
-    id: "2",
-    type: "live_report_audit",
-    body: "审核-已通过",
-    auditResult: "passed",
-    time: "2026-07-13 18:32:00",
-  },
-  {
-    id: "3",
-    type: "live_audit",
-    body: "审核-已通过",
-    auditResult: "passed",
-    time: "2026-07-13 18:32:00",
-  },
-  {
-    id: "4",
-    type: "material_audit",
-    body: "审核-已驳回",
-    auditResult: "rejected",
-    time: "2026-07-13 18:32:00",
-  },
-  {
-    id: "5",
-    type: "live_audit",
-    body: "审核-已驳回",
-    auditResult: "rejected",
-    time: "2026-07-13 17:05:00",
-  },
-  {
-    id: "6",
-    type: "live_status_abnormal",
-    body: "直播间ID882910「十月公开课 · 市场解读」推流中断，请及时排查。",
-    auditResult: "none",
-    time: "2026-07-12 21:18:00",
-  },
-  {
-    id: "7",
-    type: "live_audit",
-    body: "直播「产品发布会直播专场」审核通过，可正常开播。",
-    auditResult: "passed",
-    time: "2026-07-12 16:40:00",
-  },
-  {
-    id: "8",
-    type: "material_audit",
-    body: "素材「活动主视觉封面-A」审核通过，已可在直播间使用。",
-    auditResult: "passed",
-    time: "2026-07-12 11:22:00",
-  },
-  {
-    id: "9",
-    type: "live_report_audit",
-    body: "审核-已驳回：简介含未授权第三方 Logo",
-    auditResult: "rejected",
-    time: "2026-07-11 19:08:00",
-  },
-  {
-    id: "10",
-    type: "live_audit",
-    body: "直播「测试直播功能-秦」审核未通过：封面含未授权第三方 Logo。",
-    auditResult: "rejected",
-    time: "2026-07-11 14:55:00",
-  },
-  {
-    id: "11",
-    type: "live_status_abnormal",
-    body: "直播间ID449201 推流中断后已恢复，请确认画面是否正常。",
-    auditResult: "none",
-    time: "2026-07-10 22:01:00",
-  },
-  {
-    id: "12",
-    type: "live_report_audit",
-    body: "审核-已通过",
-    auditResult: "passed",
-    time: "2026-07-10 09:30:00",
-  },
-];
 
 const filters = reactive({
   keyword: "",
-  type: "all" as "all" | NoticeType,
-  auditResult: "all" as "all" | Exclude<AuditResult, "none">,
-});
-
-/** 已生效的筛选（点查询才写入） */
-const applied = reactive({
-  keyword: "",
-  type: "all" as "all" | NoticeType,
-  auditResult: "all" as "all" | Exclude<AuditResult, "none">,
+  type: 0,
+  auditResult: 0,
 });
 
 const query = reactive({
@@ -176,60 +46,105 @@ const query = reactive({
   pageSize: 10,
 });
 
-function noticeLine(item: NoticeItem) {
-  const meta = NOTICE_TYPE_META[item.type];
-  return `[${meta.cat}]${meta.title}：${item.body}`;
+const list = ref<NotificationItem[]>([]);
+const total = ref(0);
+const loading = ref(false);
+const readAllLoading = ref(false);
+const selectedId = ref<string | null>(null);
+
+const ADMIN_NOTIFICATIONS_CHANGED = "admin-notifications-changed";
+
+const pageCount = () => Math.max(1, Math.ceil(total.value / query.pageSize));
+
+async function loadList() {
+  if (loading.value) return;
+  loading.value = true;
+  try {
+    const data = await listNotifications({
+      page: query.page,
+      pageSize: query.pageSize,
+      keyword: filters.keyword.trim() || undefined,
+      type: filters.type || undefined,
+      auditResult: filters.auditResult || undefined,
+    });
+    list.value = data.list ?? [];
+    total.value = Number(data.total) || 0;
+    query.page = data.page ?? query.page;
+    query.pageSize = data.pageSize ?? query.pageSize;
+  } catch (e) {
+    list.value = [];
+    total.value = 0;
+    const msg = e instanceof ApiError ? e.message : "通知加载失败";
+    toast(msg);
+  } finally {
+    loading.value = false;
+  }
 }
 
-const filtered = computed(() => {
-  const kw = applied.keyword.trim().toLowerCase();
-  return ALL_NOTICES.filter((item) => {
-    if (applied.type !== "all" && item.type !== applied.type) return false;
-    if (applied.auditResult !== "all" && item.auditResult !== applied.auditResult) return false;
-    if (!kw) return true;
-    return noticeLine(item).toLowerCase().includes(kw);
-  });
-});
-
-const total = computed(() => filtered.value.length);
-const pageCount = computed(() => Math.max(1, Math.ceil(total.value / query.pageSize)));
-
-const pageList = computed(() => {
-  const start = (query.page - 1) * query.pageSize;
-  return filtered.value.slice(start, start + query.pageSize);
-});
-
 function search() {
-  applied.keyword = filters.keyword;
-  applied.type = filters.type;
-  applied.auditResult = filters.auditResult;
   query.page = 1;
+  void loadList();
 }
 
 function resetFilter() {
   filters.keyword = "";
-  filters.type = "all";
-  filters.auditResult = "all";
-  applied.keyword = "";
-  applied.type = "all";
-  applied.auditResult = "all";
+  filters.type = 0;
+  filters.auditResult = 0;
   query.page = 1;
+  void loadList();
 }
 
 function onPageChange(p: number) {
   query.page = p;
+  void loadList();
 }
 
 function onPageSizeChange(size: number) {
   query.pageSize = size;
   query.page = 1;
+  void loadList();
 }
 
-/** 预留：后续接详情/跳转 */
-const selectedId = ref<string | null>(null);
-function onItemClick(item: NoticeItem) {
+async function onItemClick(item: NotificationItem) {
   selectedId.value = item.id;
+  if (!item.unread) return;
+  try {
+    await readNotification(item.id);
+    item.unread = false;
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : "标记已读失败";
+    toast(msg);
+  }
 }
+
+async function onReadAll() {
+  try {
+    await ElMessageBox.confirm("确定将全部通知标为已读？", "全部已读", {
+      confirmButtonText: "确定",
+      cancelButtonText: "取消",
+      type: "warning",
+    });
+  } catch {
+    return;
+  }
+  if (readAllLoading.value) return;
+  readAllLoading.value = true;
+  try {
+    await readAllNotifications();
+    toast("已全部标为已读");
+    void loadList();
+    window.dispatchEvent(new Event(ADMIN_NOTIFICATIONS_CHANGED));
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : "全部已读失败";
+    toast(msg);
+  } finally {
+    readAllLoading.value = false;
+  }
+}
+
+onMounted(() => {
+  void loadList();
+});
 </script>
 
 <template>
@@ -296,23 +211,31 @@ function onItemClick(item: NoticeItem) {
             重置
           </button>
         </div>
+        <button
+          type="button"
+          class="notice-read-all-link"
+          :disabled="readAllLoading"
+          @click="onReadAll"
+        >
+          全部已读
+        </button>
       </div>
 
       <ul class="notice-list hover-scrollbar">
         <li
-          v-for="item in pageList"
+          v-for="item in list"
           :key="item.id"
           class="notice-row"
-          :class="{ 'is-active': selectedId === item.id }"
+          :class="{ 'is-active': selectedId === item.id, 'is-unread': item.unread }"
           @click="onItemClick(item)"
         >
           <p class="notice-text">
-            <span class="notice-cat">[{{ NOTICE_TYPE_META[item.type].cat }}]</span>{{ NOTICE_TYPE_META[item.type].title }}：{{ item.body }}
+            <span class="notice-cat">[{{ item.category }}]</span>{{ item.title }}：{{ item.body }}
           </p>
-          <time class="notice-time">{{ item.time }}</time>
+          <time class="notice-time">{{ item.createdTime }}</time>
         </li>
         <li
-          v-if="pageList.length === 0"
+          v-if="!loading && list.length === 0"
           class="notice-empty"
         >
           暂无通知
@@ -321,7 +244,7 @@ function onItemClick(item: NoticeItem) {
 
       <div class="admin-pager">
         <span class="admin-pager__total">
-          共 {{ total }} 条记录 第 {{ query.page }}/{{ pageCount }} 页
+          共 {{ total }} 条记录 第 {{ query.page }}/{{ pageCount() }} 页
         </span>
         <ElPagination
           :current-page="query.page"
@@ -372,6 +295,33 @@ function onItemClick(item: NoticeItem) {
   color: var(--text);
 }
 
+.notice-read-all-link {
+  margin-left: auto;
+  flex: none;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--primary);
+  cursor: pointer;
+  outline: none;
+  white-space: nowrap;
+}
+
+.notice-read-all-link:hover:not(:disabled) {
+  color: var(--primary-hover);
+  text-decoration: underline;
+}
+
+.notice-read-all-link:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .notice-list {
   margin: 0;
   padding: 0 8px 8px;
@@ -400,6 +350,11 @@ function onItemClick(item: NoticeItem) {
 .notice-row.is-active {
   background: var(--bg);
   border-radius: 8px;
+}
+
+.notice-row.is-unread .notice-text {
+  color: var(--text);
+  font-weight: 500;
 }
 
 .notice-text {

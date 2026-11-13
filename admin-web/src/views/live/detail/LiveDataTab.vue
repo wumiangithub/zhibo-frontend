@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { ElDatePicker, ElMessage, ElTabPane, ElTabs, ElTooltip } from "element-plus";
+import { ElDatePicker, ElIcon, ElMessage, ElTabPane, ElTabs, ElTooltip } from "element-plus";
+import { InfoFilled } from "@element-plus/icons-vue";
 import {
+  getActivityCommerceData,
   getActivityPresenceTrend,
   getActivityUserData,
+  type ActivityCommerceRow,
   type ActivityId,
   type ActivityUserData,
   type PresenceTrendPoint,
@@ -20,6 +23,10 @@ const innerTab = ref("user");
 const userData = ref<ActivityUserData | null>(null);
 const overviewError = ref("");
 const overviewLoading = ref(false);
+
+const commerceRows = ref<ActivityCommerceRow[]>([]);
+const commerceError = ref("");
+const commerceLoading = ref(false);
 
 const range = ref<[Date, Date] | null>(null);
 const points = ref<PresenceTrendPoint[]>([]);
@@ -121,6 +128,20 @@ async function fetchTrend() {
   }
 }
 
+async function fetchCommerce() {
+  commerceLoading.value = true;
+  commerceError.value = "";
+  try {
+    const data = await getActivityCommerceData(props.activityId);
+    commerceRows.value = data.list ?? [];
+  } catch (e) {
+    commerceRows.value = [];
+    commerceError.value = e instanceof Error ? e.message : "加载带货数据失败";
+  } finally {
+    commerceLoading.value = false;
+  }
+}
+
 async function ensureChart() {
   if (chart || !chartEl.value) return;
   try {
@@ -205,7 +226,7 @@ function onRangeChange(val: [Date, Date] | null) {
 }
 
 async function refreshAll(resetRange: boolean) {
-  await fetchUserData(resetRange);
+  await Promise.all([fetchUserData(resetRange), fetchCommerce()]);
   await fetchTrend();
 }
 
@@ -325,23 +346,28 @@ watch(
                 <ElTooltip
                   content="数据每2分钟更新1次"
                   placement="top"
+                  effect="dark"
                 >
-                  <span
-                    class="info-i"
+                  <ElIcon
+                    class="trend-info"
                     aria-label="数据更新说明"
-                  >i</span>
+                  >
+                    <InfoFilled />
+                  </ElIcon>
                 </ElTooltip>
               </div>
-              <ElDatePicker
-                v-model="range"
-                type="datetimerange"
-                range-separator="至"
-                start-placeholder="开始时间"
-                end-placeholder="结束时间"
-                format="YYYY-MM-DD HH:mm:ss"
-                :clearable="false"
-                @change="onRangeChange"
-              />
+              <div class="trend-range-wrap">
+                <ElDatePicker
+                  v-model="range"
+                  type="datetimerange"
+                  range-separator="至"
+                  start-placeholder="开始时间"
+                  end-placeholder="结束时间"
+                  format="YYYY-MM-DD HH:mm:ss"
+                  :clearable="false"
+                  @change="onRangeChange"
+                />
+              </div>
             </div>
 
             <p
@@ -367,6 +393,57 @@ watch(
               class="chart"
               :class="{ 'is-hidden': points.length === 0 }"
             />
+          </section>
+
+          <section class="block commerce">
+            <div class="block-head">
+              <h3 class="block-title">直播带货</h3>
+            </div>
+            <p
+              v-if="commerceError"
+              class="err"
+            >
+              {{ commerceError }}
+            </p>
+            <p
+              v-else-if="commerceLoading && commerceRows.length === 0"
+              class="empty"
+            >
+              加载中…
+            </p>
+            <template v-else>
+              <table class="watch-table commerce-table">
+                <thead>
+                  <tr>
+                    <th>商品名称</th>
+                    <th>点击次数</th>
+                    <th>点击人数</th>
+                    <th>成交人数</th>
+                    <th>成交金额(元)</th>
+                    <th>成功退款金额(元)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="row in commerceRows"
+                    :key="row.spuId"
+                  >
+                    <td>{{ row.productName || "—" }}</td>
+                    <td>{{ row.clickCount }}</td>
+                    <td>{{ row.clickUserCount }}</td>
+                    <td>{{ row.dealUserCount }}</td>
+                    <td>{{ row.dealAmount }}</td>
+                    <td>{{ row.refundAmount }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p
+                v-if="!commerceLoading && commerceRows.length === 0"
+                class="empty commerce-empty"
+              >
+                暂无关联商品
+              </p>
+            </template>
           </section>
         </template>
       </ElTabPane>
@@ -458,33 +535,48 @@ watch(
   font-weight: 500;
   background: #fafbfc;
 }
+.commerce-table {
+  border: 1px solid var(--color-border-light, #ebeef5);
+}
+.commerce-table th,
+.commerce-table td {
+  border-bottom: 1px solid var(--color-border-light, #ebeef5);
+}
+.commerce-empty {
+  padding: 24px 0;
+  border: 1px solid var(--color-border-light, #ebeef5);
+  border-top: none;
+}
 .trend-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   margin-bottom: 12px;
 }
-.trend-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.trend-range-wrap {
+  flex: 0 0 auto;
+  width: 400px;
 }
-.info-i {
+.trend-range-wrap :deep(.el-date-editor) {
+  width: 400px !important;
+  max-width: 400px;
+}
+.trend-title-wrap {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 1px solid #c0c4cc;
-  color: #909399;
-  font-size: 11px;
-  font-style: normal;
-  line-height: 1;
-  cursor: default;
-  user-select: none;
+  gap: 4px;
+}
+.trend-info {
+  margin-left: 0;
+  font-size: 14px;
+  color: #c0c4cc;
+  cursor: pointer;
+  outline: none;
+}
+.trend-info:hover {
+  color: var(--color-primary);
 }
 .chart {
   width: 100%;

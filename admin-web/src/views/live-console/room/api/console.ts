@@ -62,7 +62,8 @@ export interface ConsoleSdkSignParams {
 export type AttendeeTab = "all" | "online" | "offline";
 
 export interface AttendeeItem {
-  userId: string;
+  /** 邮箱本地部分：观众 username / e{员工id} / z{员工id} */
+  username: string;
   nickname?: string;
   avatarUrl?: string;
   enterTime: string;

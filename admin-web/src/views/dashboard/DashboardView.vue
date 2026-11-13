@@ -10,6 +10,12 @@ import {
   type BusinessMetrics,
   type RecentLiveRow,
 } from "@/api/dashboard";
+import {
+  listNotifications,
+  NOTIFICATION_PREVIEW_PAGE_SIZE,
+  readNotification,
+  type NotificationItem,
+} from "@/api/notifications";
 import { LIVE_STATE_LABEL } from "@/api/activity";
 import { formatDurationSec } from "@/api/audience";
 import { ApiError } from "@/api/http";
@@ -173,58 +179,48 @@ function unbindTableScroll() {
   tableScrollEl = null;
 }
 
+const notices = ref<NotificationItem[]>([]);
+const noticesLoading = ref(false);
+
+async function loadNotices() {
+  if (noticesLoading.value) return;
+  noticesLoading.value = true;
+  try {
+    const data = await listNotifications({
+      page: 1,
+      pageSize: NOTIFICATION_PREVIEW_PAGE_SIZE,
+    });
+    notices.value = data.list ?? [];
+  } catch (e) {
+    notices.value = [];
+    const msg = e instanceof ApiError ? e.message : "通知加载失败";
+    toast(msg);
+  } finally {
+    noticesLoading.value = false;
+  }
+}
+
+async function onNoticeClick(item: NotificationItem) {
+  if (item.unread) {
+    try {
+      await readNotification(item.id);
+      item.unread = false;
+    } catch {
+      /* 已读失败不挡跳转 */
+    }
+  }
+  void router.push({ name: "notification-center" });
+}
+
 onMounted(() => {
   loadBusinessMetrics();
   void loadRecentLivesFirst();
+  void loadNotices();
 });
 
 onBeforeUnmount(() => {
   unbindTableScroll();
 });
-
-/** 通知中心 Mock */
-const notices = [
-  {
-    id: "n1",
-    category: "直播",
-    title: "状态异常通知",
-    unread: true,
-    body: "直播间 ID 882910「十月公开课 · 市场解读」推流中断，请及时排查。",
-  },
-  {
-    id: "n2",
-    category: "直播",
-    title: "合规风控审核结果通知",
-    unread: true,
-    body: "直播「产品发布会直播专场」审核通过，可正常开播。",
-  },
-  {
-    id: "n3",
-    category: "直播",
-    title: "合规风控审核结果通知",
-    unread: false,
-    body: "直播「测试直播功能-秦」审核未通过：封面含未授权第三方 Logo。",
-  },
-  {
-    id: "n4",
-    category: "素材库",
-    title: "合规风控审核结果通知",
-    unread: true,
-    body: "素材「活动主视觉封面-A」审核通过，已可在直播间使用。",
-  },
-  {
-    id: "n5",
-    category: "直播",
-    title: "合规风控审核结果通知",
-    unread: false,
-    body: "直播「周末答疑专场」审核未通过：简介含未授权第三方 Logo。",
-  },
-];
-
-
-function onMockAction(label: string) {
-  toast(`「${label}」暂未开放`);
-}
 </script>
 
 <template>
@@ -420,13 +416,15 @@ function onMockAction(label: string) {
             <template #empty>
               <span class="table-empty">{{ livesLoading ? "加载中…" : "暂无最近直播" }}</span>
             </template>
+            <template
+              v-if="livesFooterText"
+              #append
+            >
+              <div class="lives-footer">
+                {{ livesFooterText }}
+              </div>
+            </template>
           </ElTable>
-        </div>
-        <div
-          v-if="livesFooterText"
-          class="lives-footer"
-        >
-          {{ livesFooterText }}
         </div>
       </section>
     </div>
@@ -460,7 +458,7 @@ function onMockAction(label: string) {
           v-for="item in notices"
           :key="item.id"
           class="notice-item"
-          @click="onMockAction(item.title)"
+          @click="onNoticeClick(item)"
         >
           <div class="notice-title-row">
             <p class="notice-title">
@@ -474,6 +472,12 @@ function onMockAction(label: string) {
             />
           </div>
           <p class="notice-body">{{ item.body }}</p>
+        </li>
+        <li
+          v-if="!noticesLoading && notices.length === 0"
+          class="notice-item notice-empty"
+        >
+          <p class="notice-body">暂无通知</p>
         </li>
       </ul>
     </aside>
@@ -589,8 +593,7 @@ function onMockAction(label: string) {
 }
 
 .lives-footer {
-  flex: none;
-  padding: 6px 12px 4px;
+  padding: 8px 0 4px;
   text-align: center;
   font-size: 12px;
   color: var(--text-4);

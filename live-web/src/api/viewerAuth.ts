@@ -10,7 +10,6 @@ export interface ViewerAuthUser {
   phoneMasked?: string;
   nickname?: string;
   avatarUrl?: string;
-  avatarObjectKey?: string;
 }
 
 export interface ViewerAuthSession {

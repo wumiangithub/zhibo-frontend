@@ -399,6 +399,28 @@ export function getActivityUserData(id: ActivityId) {
   return get<ActivityUserData>(`/activities/user-data/${encodeURIComponent(id)}`);
 }
 
+/** 直播设置 · 直播带货数据（绑品全量 + 点击/成交） */
+export interface ActivityCommerceRow {
+  spuId: string;
+  productName: string;
+  clickCount: number;
+  clickUserCount: number;
+  dealUserCount: number;
+  /** 两位小数字符串 */
+  dealAmount: string;
+  /** 本轮恒 "0.00" */
+  refundAmount: string;
+}
+
+export interface ActivityCommerceData {
+  id: ActivityId;
+  list: ActivityCommerceRow[];
+}
+
+export function getActivityCommerceData(id: ActivityId) {
+  return get<ActivityCommerceData>(`/activities/commerce-data/${encodeURIComponent(id)}`);
+}
+
 /** 本站进出三线走势（管理端；用户数据页只用 online） */
 export interface PresenceTrendPoint {
   time: string;

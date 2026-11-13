@@ -1,6 +1,6 @@
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
-import { listWatchProducts } from "@/api/watchProducts";
+import { listWatchProducts, reportWatchProductClick } from "@/api/watchProducts";
 import {
   getViewerProductDetail,
   getViewerRiskStatus,
@@ -201,6 +201,11 @@ export function useWatchCart(
       toast("商品无效");
       return;
     }
+
+    const activityId = getActivityId();
+    void reportWatchProductClick(activityId, spuId).catch((e) => {
+      console.warn("[watch] product click report failed", e);
+    });
 
     cartOpen.value = false;
     const seq = ++checkoutSeq;

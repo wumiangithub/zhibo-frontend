@@ -814,7 +814,7 @@ onMounted(init);
   font-size: 13px;
 }
 .field > label i {
-  color: var(--danger));
+  color: var(--el-color-danger);
   font-style: normal;
 }
 .times,

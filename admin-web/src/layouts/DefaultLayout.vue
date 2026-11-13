@@ -1,18 +1,56 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { ElMessageBox } from "element-plus";
 import SideIcon from "@/components/SideIcon.vue";
 import { useToast } from "@/composables/useToast";
 import { useAuthStore } from "@/stores/auth";
+import { getNotificationUnreadCount } from "@/api/notifications";
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
 const { message, visible, toast } = useToast();
 
-/** 顶栏通知未读数 Mock（UI 示意，接口未接） */
-const mockUnreadNotificationCount = 5;
+/** 顶栏通知未读数 */
+const unreadNotificationCount = ref(0);
+
+async function refreshUnreadCount() {
+  if (!auth.isLoggedIn) {
+    unreadNotificationCount.value = 0;
+    return;
+  }
+  try {
+    const data = await getNotificationUnreadCount();
+    unreadNotificationCount.value = Number(data.count) || 0;
+  } catch {
+    /* 角标失败不打扰 */
+  }
+}
+
+const ADMIN_NOTIFICATIONS_CHANGED = "admin-notifications-changed";
+
+function onNotificationsChanged() {
+  void refreshUnreadCount();
+}
+
+onMounted(() => {
+  void refreshUnreadCount();
+  window.addEventListener(ADMIN_NOTIFICATIONS_CHANGED, onNotificationsChanged);
+});
+
+onUnmounted(() => {
+  window.removeEventListener(ADMIN_NOTIFICATIONS_CHANGED, onNotificationsChanged);
+});
+
+watch(
+  () => route.name,
+  (name) => {
+    if (name === "notification-center" || name === "dashboard") {
+      void refreshUnreadCount();
+    }
+  },
+);
 
 /** 用户模块侧栏「用户管理」分组是否展开 */
 const userGroupOpen = ref(true);
@@ -365,9 +403,9 @@ async function onAccountClick() {
               />
             </svg>
             <span
-              v-if="mockUnreadNotificationCount > 0"
+              v-if="unreadNotificationCount > 0"
               class="header-notify-badge"
-            >{{ mockUnreadNotificationCount }}</span>
+            >{{ unreadNotificationCount > 99 ? "99+" : unreadNotificationCount }}</span>
           </span>
         </button>
         <button

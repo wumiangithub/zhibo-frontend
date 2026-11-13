@@ -13,9 +13,9 @@ function requestTab(uiTab: AttendeeTab, forceEnded: boolean): AttendeeTab {
   return uiTab;
 }
 
-function mergeByUserId(primary: AttendeeItem[], fallback: AttendeeItem[]): AttendeeItem[] {
-  const seen = new Set(primary.map((r) => r.userId));
-  const extra = fallback.filter((r) => r.userId && !seen.has(r.userId));
+function mergeByUsername(primary: AttendeeItem[], fallback: AttendeeItem[]): AttendeeItem[] {
+  const seen = new Set(primary.map((r) => r.username));
+  const extra = fallback.filter((r) => r.username && !seen.has(r.username));
   return primary.concat(extra);
 }
 
@@ -48,12 +48,12 @@ export function useAttendeeList(
   }
 
   function avatarSrc(item: AttendeeItem): string {
-    if (!item.avatarUrl || brokenAvatars.value[item.userId]) return "";
+    if (!item.avatarUrl || brokenAvatars.value[item.username]) return "";
     return item.avatarUrl;
   }
 
-  function markAvatarBroken(userId: string) {
-    brokenAvatars.value = { ...brokenAvatars.value, [userId]: true };
+  function markAvatarBroken(username: string) {
+    brokenAvatars.value = { ...brokenAvatars.value, [username]: true };
   }
 
   function snapshotForEndedFallback() {
@@ -77,15 +77,15 @@ export function useAttendeeList(
    * 持久化：助理辅通道会对他人 Join 调 enter；生产靠微吼回调。
    */
   function patchOnline(
-    userId: string,
+    username: string,
     online: boolean,
     meta?: { leaveTime?: string; enterTime?: string; nickname?: string; avatarUrl?: string },
   ) {
-    const uid = userId.trim();
-    if (!uid) return;
+    const key = username.trim();
+    if (!key) return;
     // 结束态契约：全员 online=false，忽略迟到 Join，避免「在线」残留
     if (ended.value && online) return;
-    const row = list.value.find((item) => item.userId === uid);
+    const row = list.value.find((item) => item.username === key);
     if (row) {
       row.online = online;
       if (!online && meta?.leaveTime) row.leaveTime = meta.leaveTime;
@@ -102,7 +102,7 @@ export function useAttendeeList(
     if (tab.value === "offline") return;
     list.value = [
       {
-        userId: uid,
+        username: key,
         nickname: meta?.nickname?.trim() || undefined,
         avatarUrl: meta?.avatarUrl?.trim() || undefined,
         enterTime: meta?.enterTime || "",
@@ -187,7 +187,7 @@ export function useAttendeeList(
         nextList = localFallback.map((row) => ({ ...row, online: false }));
         nextTotalValue = Math.max(nextTotalValue, nextList.length);
       } else if (nextList.length < localFallback.length) {
-        nextList = mergeByUserId(
+        nextList = mergeByUsername(
           nextList,
           localFallback.map((row) => ({ ...row, online: false })),
         );

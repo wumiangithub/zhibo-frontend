@@ -1,5 +1,4 @@
 import { post, put } from "./http";
-import type { ViewerAuthUser } from "./viewerAuth";
 import { getViewerAccessToken } from "@/utils/viewerAuth";
 
 export interface ViewerUploadResult {
@@ -8,18 +7,24 @@ export interface ViewerUploadResult {
   location?: string;
 }
 
+/** 资料更新成功 data：只回昵称与头像。 */
+export interface ViewerProfileUpdateResult {
+  nickname?: string;
+  avatarUrl?: string;
+}
+
 function authHeaders(): Record<string, string> {
   const token = getViewerAccessToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-/** 保存昵称；换头像时 avatarUrl 与 avatarObjectKey 必须一起带上。成功 data 即 user。 */
+/** 保存昵称；换头像时 avatarUrl 与 avatarObjectKey 必须一起带上（objectKey 仅服务端校验，不落库）。成功 data 只含 nickname / avatarUrl。 */
 export function updateViewerProfile(body: {
   nickname: string;
   avatarUrl?: string;
   avatarObjectKey?: string;
 }) {
-  return put<ViewerAuthUser>("/viewer/profile/update", body, {
+  return put<ViewerProfileUpdateResult>("/viewer/profile/update", body, {
     headers: authHeaders(),
   });
 }

@@ -98,7 +98,7 @@ function shell(label: string) {
       <template v-else>
         <article
           v-for="item in list"
-          :key="item.userId"
+          :key="item.username"
           class="row"
         >
           <span class="avatar">
@@ -106,7 +106,7 @@ function shell(label: string) {
               v-if="avatarSrc(item)"
               :src="avatarSrc(item)"
               alt=""
-              @error="markAvatarBroken(item.userId)"
+              @error="markAvatarBroken(item.username)"
             >
             <template v-else>{{ nicknameInitial(displayName(item)) }}</template>
           </span>

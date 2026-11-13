@@ -2,7 +2,11 @@
 import { onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { getViewerUserInfo, type ViewerAuthUser } from "@/api/viewerAuth";
-import { updateViewerProfile, uploadViewerFile } from "@/api/viewerProfile";
+import {
+  updateViewerProfile,
+  uploadViewerFile,
+  type ViewerProfileUpdateResult,
+} from "@/api/viewerProfile";
 import AudienceFrame from "@/components/audience/AudienceFrame.vue";
 import { useToast } from "@/composables/useToast";
 import {
@@ -130,7 +134,7 @@ function errText(e: unknown): string {
   return (msg || "保存失败").slice(0, 40);
 }
 
-async function persist(name: string): Promise<ViewerAuthUser> {
+async function persist(name: string): Promise<ViewerProfileUpdateResult> {
   const file = pendingFile.value;
   if (!file) return updateViewerProfile({ nickname: name });
   if (file.size > MAX_BYTES) throw new Error("图片不能超过2MB");
@@ -151,11 +155,10 @@ async function persist(name: string): Promise<ViewerAuthUser> {
   });
 }
 
-function afterOk(user: ViewerAuthUser, name: string) {
-  saveViewerSession({ user });
+function afterOk(data: ViewerProfileUpdateResult, name: string) {
   saveViewerProfile({
-    nickname: typeof user.nickname === "string" ? user.nickname : name,
-    avatarUrl: user.avatarUrl,
+    nickname: typeof data.nickname === "string" ? data.nickname : name,
+    avatarUrl: data.avatarUrl,
   });
   pendingFile.value = null;
   toast("已保存");

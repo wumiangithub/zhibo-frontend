@@ -46,7 +46,7 @@ export interface RecentLivesData {
   list: RecentLiveRow[];
 }
 
-export const RECENT_LIVES_PAGE_SIZE = 20;
+export const RECENT_LIVES_PAGE_SIZE = 10;
 
 export function getRecentLives(page = 1, pageSize = RECENT_LIVES_PAGE_SIZE) {
   return get<RecentLivesData>("/dashboard/recent-lives", {
