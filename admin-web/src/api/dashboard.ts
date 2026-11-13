@@ -18,3 +18,38 @@ export interface BusinessMetrics {
 export function getBusinessMetrics() {
   return get<BusinessMetrics>("/dashboard/business-metrics");
 }
+
+/** 工作台「最近直播数据」一行（数字由页面格式化）。 */
+export interface RecentLiveRow {
+  id: string;
+  title: string;
+  coverUrl: string;
+  /** 实际首开 yyyy-MM-dd HH:mm:ss */
+  startTime: string;
+  /** 实际末结；直播中未闭合可为 "" */
+  endTime: string;
+  /** 1 直播 / 2 预告 / 3 结束 / 4 点播 / 5 回放 */
+  state: number;
+  roomViewCount: number;
+  roomVisitorCount: number;
+  watchViewCount: number;
+  watchViewerCount: number;
+  avgWatchDurationSec: number;
+  maxOnlinePeak: number;
+  newUserCount: number;
+}
+
+export interface RecentLivesData {
+  page: number;
+  pageSize: number;
+  total: number;
+  list: RecentLiveRow[];
+}
+
+export const RECENT_LIVES_PAGE_SIZE = 20;
+
+export function getRecentLives(page = 1, pageSize = RECENT_LIVES_PAGE_SIZE) {
+  return get<RecentLivesData>("/dashboard/recent-lives", {
+    params: { page, pageSize },
+  });
+}

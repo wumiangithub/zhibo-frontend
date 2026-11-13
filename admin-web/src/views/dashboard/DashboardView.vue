@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElTable, ElTableColumn } from "element-plus";
 import { useToast } from "@/composables/useToast";
-import { getBusinessMetrics, type BusinessMetrics } from "@/api/dashboard";
+import {
+  getBusinessMetrics,
+  getRecentLives,
+  RECENT_LIVES_PAGE_SIZE,
+  type BusinessMetrics,
+  type RecentLiveRow,
+} from "@/api/dashboard";
+import { LIVE_STATE_LABEL } from "@/api/activity";
+import { formatDurationSec } from "@/api/audience";
 import { ApiError } from "@/api/http";
 
 const router = useRouter();
@@ -22,6 +30,20 @@ function formatYuan(raw: string | null | undefined): string {
   })}`;
 }
 
+function stateTone(state: number) {
+  if (state === 1) return "success";
+  if (state === 2) return "preview";
+  if (state === 5) return "replay";
+  if (state === 3) return "ended";
+  if (state === 4) return "replay";
+  return "muted";
+}
+
+function displayTime(raw?: string) {
+  if (!raw) return "--";
+  return raw.length >= 19 ? raw.slice(0, 19) : raw;
+}
+
 const metrics = ref<BusinessMetrics>({
   todayVisitorCount: 0,
   todayNewUserCount: 0,
@@ -34,6 +56,26 @@ const metrics = ref<BusinessMetrics>({
 });
 const refreshedAt = ref("");
 const loading = ref(false);
+
+const recentLiveRows = ref<RecentLiveRow[]>([]);
+const livesPage = ref(0);
+const livesTotal = ref(0);
+const livesLoading = ref(false);
+const livesLoadingMore = ref(false);
+const tableRef = ref<InstanceType<typeof ElTable> | null>(null);
+let tableScrollEl: HTMLElement | null = null;
+
+const hasMoreLives = computed(
+  () => recentLiveRows.value.length < livesTotal.value,
+);
+
+const livesFooterText = computed(() => {
+  if (livesLoading.value) return "";
+  if (!recentLiveRows.value.length) return "";
+  if (livesLoadingMore.value) return "加载中…";
+  if (!hasMoreLives.value) return "没有更多了";
+  return "";
+});
 
 const bizMetrics = computed(() => [
   { key: "visit", label: "今日访客数", value: formatCount(metrics.value.todayVisitorCount) },
@@ -60,61 +102,85 @@ async function loadBusinessMetrics() {
   }
 }
 
+async function loadRecentLivesFirst() {
+  if (livesLoading.value) return;
+  livesLoading.value = true;
+  livesPage.value = 0;
+  livesTotal.value = 0;
+  try {
+    const data = await getRecentLives(1, RECENT_LIVES_PAGE_SIZE);
+    recentLiveRows.value = data.list ?? [];
+    livesPage.value = data.page ?? 1;
+    livesTotal.value = Number(data.total) || 0;
+    await nextTick();
+    bindTableScroll();
+  } catch (e) {
+    recentLiveRows.value = [];
+    livesPage.value = 0;
+    livesTotal.value = 0;
+    const msg = e instanceof ApiError ? e.message : "最近直播数据加载失败";
+    toast(msg);
+  } finally {
+    livesLoading.value = false;
+  }
+}
+
+async function loadMoreRecentLives() {
+  if (livesLoading.value || livesLoadingMore.value || !hasMoreLives.value) return;
+  const next = livesPage.value + 1;
+  livesLoadingMore.value = true;
+  try {
+    const data = await getRecentLives(next, RECENT_LIVES_PAGE_SIZE);
+    const chunk = data.list ?? [];
+    if (chunk.length) {
+      const seen = new Set(recentLiveRows.value.map((r) => r.id));
+      recentLiveRows.value = [
+        ...recentLiveRows.value,
+        ...chunk.filter((r) => !seen.has(r.id)),
+      ];
+    }
+    livesPage.value = data.page ?? next;
+    livesTotal.value = Number(data.total) || livesTotal.value;
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : "加载更多失败";
+    toast(msg);
+  } finally {
+    livesLoadingMore.value = false;
+  }
+}
+
+function onTableScroll() {
+  if (!tableScrollEl) return;
+  if (livesLoading.value || livesLoadingMore.value || !hasMoreLives.value) return;
+  const { scrollTop, scrollHeight, clientHeight } = tableScrollEl;
+  if (scrollHeight - scrollTop - clientHeight <= 64) {
+    void loadMoreRecentLives();
+  }
+}
+
+function bindTableScroll() {
+  unbindTableScroll();
+  const root = tableRef.value?.$el as HTMLElement | undefined;
+  if (!root) return;
+  tableScrollEl =
+    (root.querySelector(".el-scrollbar__wrap") as HTMLElement | null) ||
+    (root.querySelector(".el-table__body-wrapper") as HTMLElement | null);
+  tableScrollEl?.addEventListener("scroll", onTableScroll, { passive: true });
+}
+
+function unbindTableScroll() {
+  tableScrollEl?.removeEventListener("scroll", onTableScroll);
+  tableScrollEl = null;
+}
+
 onMounted(() => {
   loadBusinessMetrics();
+  void loadRecentLivesFirst();
 });
 
-/** 最近直播数据 Mock */
-const recentLiveRows = [
-  {
-    id: "1",
-    title: "测试直播功能-秦",
-    coverUrl: "",
-    startTime: "2025-10-11 09:00:00",
-    endTime: "2025-10-11 11:00:00",
-    stateLabel: "已结束",
-    stateTone: "ended" as const,
-    roomPv: "12,480",
-    roomUv: "3,210",
-    watchPv: "18,902",
-    watchUv: "4,105",
-    avgDuration: "00:12:36",
-    peakOnline: "862",
-    newUsers: "47",
-  },
-  {
-    id: "2",
-    title: "十月公开课 · 市场解读",
-    coverUrl: "",
-    startTime: "2025-10-09 19:30:00",
-    endTime: "2025-10-09 21:05:00",
-    stateLabel: "已结束",
-    stateTone: "ended" as const,
-    roomPv: "8,136",
-    roomUv: "2,044",
-    watchPv: "11,220",
-    watchUv: "2,580",
-    avgDuration: "00:18:02",
-    peakOnline: "510",
-    newUsers: "29",
-  },
-  {
-    id: "3",
-    title: "产品发布会直播专场",
-    coverUrl: "",
-    startTime: "2025-10-08 14:00:00",
-    endTime: "2025-10-08 16:20:00",
-    stateLabel: "已结束",
-    stateTone: "ended" as const,
-    roomPv: "21,055",
-    roomUv: "6,780",
-    watchPv: "29,410",
-    watchUv: "7,932",
-    avgDuration: "00:25:41",
-    peakOnline: "1,240",
-    newUsers: "112",
-  },
-];
+onBeforeUnmount(() => {
+  unbindTableScroll();
+});
 
 /** 通知中心 Mock */
 const notices = [
@@ -210,8 +276,12 @@ function onMockAction(label: string) {
           <h2 class="card-title">最近直播数据</h2>
         </div>
 
-        <div class="table-scroll">
+        <div
+          v-loading="livesLoading"
+          class="table-scroll"
+        >
           <ElTable
+            ref="tableRef"
             :data="recentLiveRows"
             row-key="id"
             height="100%"
@@ -255,10 +325,13 @@ function onMockAction(label: string) {
               </template>
             </ElTableColumn>
             <ElTableColumn
-              prop="startTime"
               label="直播开始时间"
               min-width="168"
-            />
+            >
+              <template #default="{ row }">
+                {{ displayTime(row.startTime) }}
+              </template>
+            </ElTableColumn>
             <ElTableColumn
               label="直播状态"
               min-width="100"
@@ -266,61 +339,94 @@ function onMockAction(label: string) {
               <template #default="{ row }">
                 <span
                   class="status-dot"
-                  :class="`is-${row.stateTone}`"
+                  :class="`is-${stateTone(row.state)}`"
                 >
                   <i class="dot" />
-                  {{ row.stateLabel }}
+                  {{ LIVE_STATE_LABEL[row.state] ?? row.state }}
                 </span>
               </template>
             </ElTableColumn>
             <ElTableColumn
-              prop="endTime"
               label="直播结束时间"
               min-width="168"
-            />
+            >
+              <template #default="{ row }">
+                {{ displayTime(row.endTime) }}
+              </template>
+            </ElTableColumn>
             <ElTableColumn
-              prop="roomPv"
               label="直播间浏览量"
               min-width="120"
               align="right"
-            />
+            >
+              <template #default="{ row }">
+                {{ formatCount(row.roomViewCount) }}
+              </template>
+            </ElTableColumn>
             <ElTableColumn
-              prop="roomUv"
               label="直播间访问人数"
               min-width="130"
               align="right"
-            />
+            >
+              <template #default="{ row }">
+                {{ formatCount(row.roomVisitorCount) }}
+              </template>
+            </ElTableColumn>
             <ElTableColumn
-              prop="watchPv"
               label="累计观看人次"
               min-width="120"
               align="right"
-            />
+            >
+              <template #default="{ row }">
+                {{ formatCount(row.watchViewCount) }}
+              </template>
+            </ElTableColumn>
             <ElTableColumn
-              prop="watchUv"
               label="累计观看人数"
               min-width="120"
               align="right"
-            />
+            >
+              <template #default="{ row }">
+                {{ formatCount(row.watchViewerCount) }}
+              </template>
+            </ElTableColumn>
             <ElTableColumn
-              prop="avgDuration"
               label="人均观看时长"
               min-width="120"
               align="right"
-            />
+            >
+              <template #default="{ row }">
+                {{ formatDurationSec(row.avgWatchDurationSec) }}
+              </template>
+            </ElTableColumn>
             <ElTableColumn
-              prop="peakOnline"
               label="最高在线人数"
               min-width="120"
               align="right"
-            />
+            >
+              <template #default="{ row }">
+                {{ formatCount(row.maxOnlinePeak) }}
+              </template>
+            </ElTableColumn>
             <ElTableColumn
-              prop="newUsers"
               label="当日新增用户数"
               min-width="130"
               align="right"
-            />
+            >
+              <template #default="{ row }">
+                {{ formatCount(row.newUserCount) }}
+              </template>
+            </ElTableColumn>
+            <template #empty>
+              <span class="table-empty">{{ livesLoading ? "加载中…" : "暂无最近直播" }}</span>
+            </template>
           </ElTable>
+        </div>
+        <div
+          v-if="livesFooterText"
+          class="lives-footer"
+        >
+          {{ livesFooterText }}
         </div>
       </section>
     </div>
@@ -473,13 +579,21 @@ function onMockAction(label: string) {
   min-height: 0;
   flex: 1;
   margin-top: 12px;
-  padding: 0 12px 4px;
+  padding: 0 12px 0;
   overflow: hidden;
 }
 
 .live-table {
   width: 100%;
   height: 100%;
+}
+
+.lives-footer {
+  flex: none;
+  padding: 6px 12px 4px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-4);
 }
 
 .live-name {
@@ -519,6 +633,11 @@ function onMockAction(label: string) {
   white-space: nowrap;
   font-weight: 700;
   color: var(--text);
+}
+
+.table-empty {
+  font-size: 13px;
+  color: var(--text-4);
 }
 
 .notice-panel {
