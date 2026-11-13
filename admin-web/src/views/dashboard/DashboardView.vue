@@ -1,22 +1,68 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElTable, ElTableColumn } from "element-plus";
 import { useToast } from "@/composables/useToast";
+import { getBusinessMetrics, type BusinessMetrics } from "@/api/dashboard";
+import { ApiError } from "@/api/http";
 
 const router = useRouter();
 const { toast } = useToast();
 
-/** 经营数据 Mock：只画 UI，后续再接接口 */
-const bizMetrics = [
-  { key: "visit", label: "今日访客数", value: "2,870" },
-  { key: "newUser", label: "今日新增用户数", value: "90" },
-  { key: "payAmount", label: "今日支付金额", value: "¥26,800.00" },
-  { key: "order", label: "今日订单数", value: "1" },
-  { key: "payUsers", label: "累计支付人数", value: "15,870" },
-  { key: "users", label: "累计用户", value: "218,870" },
-  { key: "totalPay", label: "累计支付金额", value: "¥111,126,800.00" },
-] as const;
+function formatCount(n: number): string {
+  return Number(n || 0).toLocaleString("en-US");
+}
+
+function formatYuan(raw: string | null | undefined): string {
+  const n = Number(raw);
+  const v = Number.isFinite(n) ? n : 0;
+  return `¥${v.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+const metrics = ref<BusinessMetrics>({
+  todayVisitorCount: 0,
+  todayNewUserCount: 0,
+  todayPayAmount: "0.00",
+  todayOrderCount: 0,
+  totalPayUserCount: 0,
+  totalUserCount: 0,
+  totalPayAmount: "0.00",
+  statsTime: "",
+});
+const refreshedAt = ref("");
+const loading = ref(false);
+
+const bizMetrics = computed(() => [
+  { key: "visit", label: "今日访客数", value: formatCount(metrics.value.todayVisitorCount) },
+  { key: "newUser", label: "今日新增用户数", value: formatCount(metrics.value.todayNewUserCount) },
+  { key: "payAmount", label: "今日支付金额", value: formatYuan(metrics.value.todayPayAmount) },
+  { key: "order", label: "今日订单数", value: formatCount(metrics.value.todayOrderCount) },
+  { key: "payUsers", label: "累计支付人数", value: formatCount(metrics.value.totalPayUserCount) },
+  { key: "users", label: "累计用户", value: formatCount(metrics.value.totalUserCount) },
+  { key: "totalPay", label: "累计支付金额", value: formatYuan(metrics.value.totalPayAmount) },
+]);
+
+async function loadBusinessMetrics() {
+  if (loading.value) return;
+  loading.value = true;
+  try {
+    const data = await getBusinessMetrics();
+    metrics.value = data;
+    refreshedAt.value = data.statsTime || "";
+  } catch (e) {
+    const msg = e instanceof ApiError ? e.message : "经营数据加载失败";
+    toast(msg);
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(() => {
+  loadBusinessMetrics();
+});
 
 /** 最近直播数据 Mock */
 const recentLiveRows = [
@@ -109,11 +155,6 @@ const notices = [
   },
 ];
 
-const refreshedAt = computed(() => {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-});
 
 function onMockAction(label: string) {
   toast(`「${label}」暂未开放`);
@@ -130,8 +171,9 @@ function onMockAction(label: string) {
           <button
             type="button"
             class="refresh-btn"
+            :disabled="loading"
             title="刷新"
-            @click="onMockAction('刷新经营数据')"
+            @click="loadBusinessMetrics"
           >
             <svg
               class="h-3.5 w-3.5"
