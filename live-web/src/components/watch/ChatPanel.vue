@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
 import ChatComposerBar from "@/components/watch/ChatComposerBar.vue";
+import EmojiPanel from "@/components/EmojiPanel.vue";
 import { insertEmojiAtCursor } from "@/composables/useEmojiInsert";
 import { splitEmojiText } from "@/constants/emoji";
 import type { ChatController } from "@/composables/useChat";
@@ -107,6 +108,16 @@ const messageShowTimes = computed(() => {
     formatChatShowTime(i > 0 ? list[i - 1]?.timestamp : null, m.timestamp),
   );
 });
+
+/** PC 消息行内时钟；解析失败则空 */
+function formatMessageClock(ts: unknown): string {
+  if (ts == null || ts === "") return "";
+  const d = typeof ts === "number" ? new Date(ts) : new Date(String(ts));
+  if (Number.isNaN(d.getTime())) return "";
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  return `${h}:${m}`;
+}
 /** 空输入点「问」后，下一次发送走提问 */
 const askMode = ref(false);
 /** 小屏输入框是否聚焦（失焦时短暂延迟，避免点发送/表情先塌布局） */
@@ -197,10 +208,10 @@ function onChatInputUpdate(value: string) {
 
 <template>
   <div class="relative flex min-h-0 flex-1 flex-col">
-    <!-- 表情面板打开时的全屏遮罩：点面板外任意处关闭 -->
+    <!-- PC：全屏点外侧关闭表情浮层；小屏遮罩只盖消息列表，见下方 -->
     <div
       v-if="showEmoji"
-      class="fixed inset-0 z-40"
+      class="fixed inset-0 z-40 hidden md:block"
       @click="showEmoji = false"
     ></div>
 
@@ -222,6 +233,7 @@ function onChatInputUpdate(value: string) {
 
     <!-- 小黄车：悬浮右下角（底栏之上） -->
     <button
+      v-show="!showEmoji"
       type="button"
       class="absolute right-2 z-30 flex h-14 w-14 items-center justify-center active:scale-95 md:hidden"
       style="bottom: calc(3.25rem + env(safe-area-inset-bottom, 0px))"
@@ -249,11 +261,12 @@ function onChatInputUpdate(value: string) {
     </div>
 
     <!-- 消息列表 -->
-    <div
-      :ref="chat.attachListEl"
-      class="min-h-0 flex-1 overflow-y-auto p-3"
-      @scroll="emit('listScroll', $event)"
-    >
+    <div class="relative flex min-h-0 flex-1 flex-col">
+      <div
+        :ref="chat.attachListEl"
+        class="min-h-0 flex-1 overflow-y-auto p-3 md:px-4 md:pb-2 md:pt-4"
+        @scroll="emit('listScroll', $event)"
+      >
       <div
         v-if="chat.chatMessages.length === 0"
         class="flex h-full items-center justify-center text-xs text-[var(--lw-text-muted)]"
@@ -266,13 +279,13 @@ function onChatInputUpdate(value: string) {
       >
         <div
           v-if="messageShowTimes[idx]"
-          class="py-3 text-center text-[14px] leading-5 text-[var(--lw-text-muted)]"
+          class="py-3 text-center text-[14px] leading-5 text-[var(--lw-text-muted)] md:hidden"
         >
           {{ messageShowTimes[idx] }}
         </div>
-        <div class="mb-3.5 flex gap-2.5">
+        <div class="mb-3.5 flex gap-2.5 md:mb-4">
           <div
-            class="chat-avatar flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-semibold"
+            class="chat-avatar flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-semibold md:h-7 md:w-7"
           >
             <img
               v-if="avatarSrc(msg)"
@@ -285,7 +298,7 @@ function onChatInputUpdate(value: string) {
           </div>
           <div class="min-w-0 flex-1">
             <!-- 昵称在前，角色角标紧跟其后 -->
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-baseline gap-1.5 md:mb-1.5 md:gap-2">
               <span
                 class="min-w-0 truncate text-xs leading-4"
                 :class="nameClass(msg)"
@@ -294,16 +307,22 @@ function onChatInputUpdate(value: string) {
               </span>
               <span
                 v-if="roleBadge(msg)"
-                class="flex-none text-[10px] leading-4"
+                class="flex-none self-center text-[10px] leading-4"
                 :class="badgeClass(msg)"
               >
                 {{ roleBadge(msg) }}
               </span>
               <span
                 v-if="msg.kind === 'question'"
-                class="ask-chip"
+                class="ask-chip self-center"
               >
                 问
+              </span>
+              <span
+                v-if="formatMessageClock(msg.timestamp)"
+                class="hidden flex-none text-[11px] leading-4 text-[var(--lw-text-muted)] md:inline"
+              >
+                {{ formatMessageClock(msg.timestamp) }}
               </span>
             </div>
             <button
@@ -338,7 +357,7 @@ function onChatInputUpdate(value: string) {
             <!-- 气泡：普通聊天；提问则气泡内「提问」角标 + 正文加粗加深 -->
             <div
               v-if="msg.reply || msg.msg?.trim() || msg.answer"
-              class="chat-bubble mt-1.5 inline-block max-w-full rounded-[10px] bg-[var(--lw-bg-bubble)] px-3 py-2.5"
+              class="chat-bubble mt-1.5 inline-block max-w-full rounded-[10px] bg-[var(--lw-bg-bubble)] px-3 py-2.5 md:mt-0 md:rounded-[4px_12px_12px_12px] md:border md:border-[var(--lw-bubble-border)] md:px-3 md:py-2 md:shadow-[var(--lw-bubble-shadow)]"
             >
               <div
                 v-if="msg.reply"
@@ -352,7 +371,7 @@ function onChatInputUpdate(value: string) {
               </div>
               <div
                 v-if="msg.msg?.trim()"
-                class="chat-msg-body break-words text-[14px] leading-5"
+                class="chat-msg-body break-words text-[14px] leading-5 md:leading-[22px]"
                 :class="msg.kind === 'question' ? 'chat-msg-ask' : 'chat-msg-normal'"
               >
                 <span
@@ -402,6 +421,12 @@ function onChatInputUpdate(value: string) {
           </div>
         </div>
       </template>
+      </div>
+      <div
+        v-if="showEmoji"
+        class="absolute inset-0 z-40 md:hidden"
+        @click="showEmoji = false"
+      ></div>
     </div>
 
     <!-- PC 输入栏（回放展示禁用态） -->
@@ -424,29 +449,36 @@ function onChatInputUpdate(value: string) {
       />
     </div>
 
-    <!-- 小屏底栏（小黄车已改为悬浮；回放同外观但禁用） -->
-    <div class="flex flex-none items-center gap-2 border-t border-[var(--lw-border)] bg-[var(--lw-bg-chrome)] px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] md:hidden">
-      <ChatComposerBar
-        ref="mobileComposerRef"
-        variant="mobile"
-        input-id="chat-input-mobile"
-        :model-value="chat.chatInput"
-        :ask-mode="askMode"
-        :muted="chat.isChatMuted"
-        :disabled="isReadonly"
-        :active="mobileComposerActive"
-        :show-emoji="showEmoji"
-        :show-like="showLike"
-        :like-count="likeCount"
-        @update:model-value="onChatInputUpdate"
-        @update:show-emoji="onMobileShowEmojiUpdate"
-        @ask-toggle="onAskToggle"
-        @focus="onMobileFocus"
-        @blur="onMobileBlur"
-        @send="sendCurrent"
-        @like="emit('like')"
-        @insert-emoji="insertEmoji"
+    <!-- 小屏底栏（表情 sheet 走文档流，在输入行上方把列表往上挤；安全区沿用父级） -->
+    <div class="relative z-50 flex flex-none flex-col border-t border-[var(--lw-border)] bg-[var(--lw-bg-chrome)] md:hidden">
+      <EmojiPanel
+        v-if="showEmoji && !isReadonly"
+        variant="sheet"
+        @insert="insertEmoji"
       />
+      <div class="flex items-center gap-2 px-3 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))]">
+        <ChatComposerBar
+          ref="mobileComposerRef"
+          variant="mobile"
+          input-id="chat-input-mobile"
+          :model-value="chat.chatInput"
+          :ask-mode="askMode"
+          :muted="chat.isChatMuted"
+          :disabled="isReadonly"
+          :active="mobileComposerActive"
+          :show-emoji="showEmoji"
+          :show-like="showLike"
+          :like-count="likeCount"
+          @update:model-value="onChatInputUpdate"
+          @update:show-emoji="onMobileShowEmojiUpdate"
+          @ask-toggle="onAskToggle"
+          @focus="onMobileFocus"
+          @blur="onMobileBlur"
+          @send="sendCurrent"
+          @like="emit('like')"
+          @insert-emoji="insertEmoji"
+        />
+      </div>
     </div>
 
     <!-- 假验证弹窗 -->

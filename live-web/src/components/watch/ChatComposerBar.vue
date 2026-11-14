@@ -64,6 +64,8 @@ const placeholder = computed(() => {
 
 const controlsDisabled = computed(() => props.disabled || props.muted);
 
+const sendReady = computed(() => props.modelValue.trim().length > 0);
+
 function onInput(e: Event) {
   if (props.disabled) return;
   emit("update:modelValue", (e.target as HTMLInputElement).value);
@@ -109,32 +111,27 @@ function onEnter() {
   <!-- PC 横排 -->
   <div
     v-if="variant === 'pc'"
-    class="flex items-center gap-2"
-    :class="disabled ? 'pointer-events-none' : ''"
+    class="relative flex items-center gap-2"
+    :class="[disabled ? 'pointer-events-none' : '', controlsDisabled ? 'opacity-[0.45]' : '']"
   >
-    <div
+    <button
       v-if="!disabled"
-      class="relative z-50 flex-none"
+      type="button"
+      class="relative z-50 flex h-10 w-10 flex-none items-center justify-center rounded-xl"
+      :class="showEmoji
+        ? 'bg-[var(--lw-color-primary-muted)] text-[var(--lw-color-primary)]'
+        : 'bg-transparent text-[var(--lw-text-secondary)]'"
+      title="表情"
+      :disabled="controlsDisabled"
+      @mousedown.prevent
+      @click="onEmojiToggle"
     >
-      <button
-        type="button"
-        class="rounded-md bg-[var(--lw-bg-elevated)] p-2 text-[var(--lw-text-secondary)] hover:bg-[var(--lw-border)] hover:text-[var(--lw-text-primary)] disabled:opacity-50"
-        title="表情"
-        :disabled="controlsDisabled"
-        @click="onEmojiToggle"
-      >
-        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      </button>
-      <EmojiPanel
-        v-if="showEmoji"
-        @insert="emit('insert-emoji', $event)"
-      />
-    </div>
+      <svg class="h-[22px] w-[22px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </button>
     <div
-      class="flex min-w-0 flex-1 items-center gap-1.5 rounded-md bg-[var(--lw-bg-elevated)] px-3 py-2"
-      :class="controlsDisabled ? 'opacity-50' : ''"
+      class="composer-capsule relative z-50 flex h-10 min-w-0 flex-1 items-center gap-[5px] rounded-xl bg-[var(--lw-bg-elevated)] pl-[14px] pr-3"
     >
       <input
         :id="inputId"
@@ -148,7 +145,7 @@ function onEnter() {
         autocorrect="off"
         autocapitalize="off"
         spellcheck="false"
-        class="min-w-0 flex-1 bg-transparent text-sm text-[var(--lw-text-primary)] placeholder-[var(--lw-text-muted)] focus:outline-none disabled:cursor-not-allowed"
+        class="min-w-0 flex-1 bg-transparent text-sm leading-5 text-[var(--lw-text-primary)] placeholder-[var(--lw-text-muted)] focus:outline-none disabled:cursor-not-allowed"
         :disabled="controlsDisabled"
         :readonly="disabled"
         :tabindex="disabled ? -1 : undefined"
@@ -157,72 +154,83 @@ function onEnter() {
         @keyup.enter="onEnter"
       >
       <button
+        v-if="!disabled"
         type="button"
         role="checkbox"
-        class="inline-flex flex-none select-none items-center gap-1.5 text-sm text-[var(--lw-text-primary)] disabled:cursor-not-allowed"
-        :class="disabled ? '' : 'cursor-pointer'"
+        class="inline-flex flex-none select-none items-center gap-[5px] text-sm leading-[18px] text-[var(--lw-text-secondary)] disabled:cursor-not-allowed"
+        :class="controlsDisabled ? '' : 'cursor-pointer'"
         title="提问"
         :aria-checked="askMode"
         :aria-label="askMode ? '取消提问模式' : '开启提问模式'"
         :disabled="controlsDisabled"
+        @mousedown.prevent
         @click="onAskClick"
       >
-        <span
-          class="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[3px] border-2"
-          :class="askMode && !disabled ? 'border-[var(--lw-color-ask)] bg-[var(--lw-color-ask)] text-[var(--lw-text-on-brand)]' : 'border-[var(--lw-border-strong)] bg-[var(--lw-bg-chrome)]'"
+        <svg
+          v-if="askMode"
+          class="h-[18px] w-[18px] flex-none text-[var(--lw-color-ask)]"
+          viewBox="0 0 18 18"
           aria-hidden="true"
         >
-          <svg
-            v-if="askMode && !disabled"
-            class="h-3 w-3"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-          </svg>
-        </span>
+          <circle cx="9" cy="9" r="9" fill="currentColor" />
+          <circle cx="9" cy="9" r="6.4" fill="none" stroke="var(--lw-text-on-brand)" stroke-width="2" />
+        </svg>
+        <svg
+          v-else
+          class="h-[18px] w-[18px] flex-none text-[var(--lw-border-strong)]"
+          viewBox="0 0 18 18"
+          aria-hidden="true"
+        >
+          <circle cx="9" cy="9" r="7.25" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </svg>
         <span>问</span>
       </button>
     </div>
     <button
       v-if="!disabled"
       type="button"
-      class="flex-none rounded-md bg-[var(--lw-color-primary)] px-4 py-2 text-sm font-medium text-[var(--lw-text-on-brand)] hover:bg-[var(--lw-color-primary-hover)] disabled:opacity-50"
-      :disabled="controlsDisabled || !modelValue.trim()"
+      class="flex h-10 min-w-[72px] flex-none items-center justify-center rounded-xl px-4 text-sm font-medium transition-colors duration-150 disabled:opacity-100"
+      :class="sendReady
+        ? 'bg-[var(--lw-color-primary)] text-[var(--lw-text-on-brand)] hover:bg-[var(--lw-color-primary-hover)]'
+        : 'bg-[var(--lw-bg-elevated)] text-[var(--lw-text-muted)]'"
+      :disabled="controlsDisabled || !sendReady"
+      @mousedown.prevent
       @click="onSend"
     >
       发送
     </button>
+    <EmojiPanel
+      v-if="showEmoji && !disabled"
+      variant="dock"
+      @insert="emit('insert-emoji', $event)"
+    />
   </div>
 
-  <!-- 小屏底栏内容（外层 border / padding 由父级负责） -->
-  <template v-else>
-    <div
+  <!-- 小屏底栏内容（外层 border / padding 由父级负责；表情 sheet 由 ChatPanel 挂在输入行上方） -->
+  <div
+    v-else
+    class="flex min-w-0 flex-1 items-center gap-2"
+    :class="controlsDisabled ? 'opacity-[0.45]' : ''"
+  >
+    <button
       v-if="active && !disabled"
-      class="relative z-50 flex-none"
+      type="button"
+      class="flex h-10 w-10 flex-none items-center justify-center rounded-full"
+      :class="showEmoji
+        ? 'bg-[var(--lw-color-primary-muted)] text-[var(--lw-color-primary)]'
+        : 'text-[var(--lw-text-secondary)]'"
+      aria-label="表情"
+      :disabled="controlsDisabled"
+      @mousedown.prevent
+      @click="onEmojiToggle"
     >
-      <button
-        type="button"
-        class="flex h-9 w-9 items-center justify-center rounded-full text-[var(--lw-text-secondary)] active:bg-[var(--lw-bg-elevated)] disabled:opacity-50"
-        aria-label="表情"
-        :disabled="controlsDisabled"
-        @mousedown.prevent
-        @click="onEmojiToggle"
-      >
-        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      </button>
-      <EmojiPanel
-        v-if="showEmoji"
-        @insert="emit('insert-emoji', $event)"
-      />
-    </div>
+      <svg class="h-[22px] w-[22px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    </button>
 
     <div
-      class="relative z-50 flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-[var(--lw-bg-elevated)] px-3 py-2"
-      :class="controlsDisabled ? 'opacity-50' : ''"
+      class="composer-capsule composer-capsule--mobile relative z-50 flex h-10 min-w-0 flex-1 items-center gap-[5px] rounded-full bg-[var(--lw-bg-elevated)] pl-[14px] pr-3"
     >
       <input
         :id="inputId"
@@ -236,7 +244,7 @@ function onEnter() {
         autocorrect="off"
         autocapitalize="off"
         spellcheck="false"
-        class="min-w-0 flex-1 bg-transparent text-sm text-[var(--lw-text-primary)] placeholder-[var(--lw-text-muted)] focus:outline-none disabled:cursor-not-allowed"
+        class="min-w-0 flex-1 bg-transparent text-sm leading-5 text-[var(--lw-text-primary)] placeholder-[var(--lw-text-muted)] focus:outline-none disabled:cursor-not-allowed"
         :disabled="controlsDisabled"
         :readonly="disabled"
         :tabindex="disabled ? -1 : undefined"
@@ -246,32 +254,36 @@ function onEnter() {
         @keyup.enter="onEnter"
       >
       <button
+        v-if="!disabled"
         type="button"
         role="checkbox"
-        class="inline-flex flex-none select-none items-center gap-1 text-sm text-[var(--lw-text-primary)] disabled:cursor-not-allowed"
-        :class="disabled ? '' : 'cursor-pointer'"
+        class="inline-flex flex-none select-none items-center gap-[5px] text-sm leading-5 text-[var(--lw-text-secondary)] disabled:cursor-not-allowed"
+        :class="controlsDisabled ? '' : 'cursor-pointer'"
         title="提问"
-        :aria-checked="disabled ? false : askMode"
+        :aria-checked="askMode"
         :aria-label="askMode ? '取消提问模式' : '开启提问模式'"
         :disabled="controlsDisabled"
         @mousedown.prevent
         @click="onAskClick"
       >
-        <span
-          class="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-[3px] border-2"
-          :class="askMode && !disabled ? 'border-[var(--lw-color-ask)] bg-[var(--lw-color-ask)] text-[var(--lw-text-on-brand)]' : 'border-[var(--lw-border-strong)] bg-[var(--lw-bg-chrome)]'"
+        <!-- 开：实心 --lw-color-ask 圆 + 2px 白环；关：--lw-border-strong 细圈。字始终 secondary -->
+        <svg
+          v-if="askMode"
+          class="h-[18px] w-[18px] flex-none text-[var(--lw-color-ask)]"
+          viewBox="0 0 18 18"
           aria-hidden="true"
         >
-          <svg
-            v-if="askMode && !disabled"
-            class="h-3 w-3"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-          </svg>
-        </span>
+          <circle cx="9" cy="9" r="9" fill="currentColor" />
+          <circle cx="9" cy="9" r="6.4" fill="none" stroke="var(--lw-text-on-brand)" stroke-width="2" />
+        </svg>
+        <svg
+          v-else
+          class="h-[18px] w-[18px] flex-none text-[var(--lw-border-strong)]"
+          viewBox="0 0 18 18"
+          aria-hidden="true"
+        >
+          <circle cx="9" cy="9" r="7.25" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </svg>
         <span>问</span>
       </button>
     </div>
@@ -279,13 +291,16 @@ function onEnter() {
     <button
       v-if="active && !disabled"
       type="button"
-      class="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[var(--lw-bg-elevated)] text-[var(--lw-text-primary)] active:bg-[var(--lw-border)] disabled:opacity-50"
+      class="flex h-10 w-10 flex-none items-center justify-center rounded-full transition-colors duration-150"
+      :class="sendReady
+        ? 'bg-[var(--lw-color-primary)] text-[var(--lw-text-on-brand)] active:bg-[var(--lw-color-primary-hover)]'
+        : 'bg-[var(--lw-bg-elevated)] text-[var(--lw-text-muted)]'"
       aria-label="发送"
-      :disabled="controlsDisabled || !modelValue.trim()"
+      :disabled="controlsDisabled || !sendReady"
       @mousedown.prevent
       @click="onSend"
     >
-      <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="h-[22px] w-[22px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
       </svg>
     </button>
@@ -293,7 +308,7 @@ function onEnter() {
     <button
       v-else-if="showLike && !disabled"
       type="button"
-      class="relative flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[var(--lw-bg-elevated)] text-[var(--lw-color-like)] active:bg-[var(--lw-border)]"
+      class="like-btn relative flex h-10 w-10 flex-none items-center justify-center rounded-full bg-[var(--lw-color-like-muted)] text-[var(--lw-color-like)]"
       aria-label="点赞"
       @click="onLike"
     >
@@ -302,10 +317,27 @@ function onEnter() {
       </svg>
       <span
         v-if="likeCount && likeCount > 0"
-        class="absolute -right-0.5 -top-0.5 min-w-[14px] rounded-full bg-[var(--lw-color-like-badge)] px-1 text-center text-[10px] leading-[14px] text-[var(--lw-text-on-brand)]"
+        class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--lw-color-like-badge)] px-1 text-center text-[10px] font-medium leading-4 text-[var(--lw-text-on-brand)] shadow-[0_0_0_1.5px_var(--lw-bg-chrome)]"
       >
         {{ likeCount > 99999 ? "99999+" : likeCount }}
       </span>
     </button>
-  </template>
+  </div>
 </template>
+
+<style scoped>
+.composer-capsule:focus-within {
+  box-shadow: 0 0 0 2px var(--lw-color-primary-muted), 0 0 0 1px var(--lw-color-primary);
+}
+.composer-capsule--ask:not(:focus-within) {
+  background: color-mix(in srgb, var(--lw-color-ask-muted) 80%, var(--lw-bg-elevated));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--lw-color-ask) 28%, transparent);
+}
+/* 小屏不要聚焦蓝环，提问开也不染色 */
+.composer-capsule--mobile:focus-within {
+  box-shadow: none;
+}
+.like-btn:active {
+  filter: brightness(0.96);
+}
+</style>

@@ -524,6 +524,8 @@ export function useChat(options: ChatOptions) {
       chat.chatInput = "";
       scrollChatToBottom();
       reportSentMessage(msg);
+      // 乐观进弹幕（回声会再走 handleChatMessage，spawnDanmaku 有窗口去重）
+      onIncoming?.(chat.chatMessages[chat.chatMessages.length - 1]);
     } catch (e) {
       console.error("发送聊天失败", e);
     }

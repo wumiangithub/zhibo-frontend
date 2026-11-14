@@ -5,6 +5,7 @@ import type { BarrageController } from "@/composables/useBarrage";
 import type { RoomStatsController } from "@/composables/useRoomStats";
 import UiBottomSheet from "@/components/UiBottomSheet.vue";
 import SheetOptionList from "@/components/SheetOptionList.vue";
+import BarrageSettingsPanel from "@/components/watch/BarrageSettingsPanel.vue";
 import { useWatchTheme } from "@/composables/useWatchTheme";
 
 const { isLight, toggleTheme } = useWatchTheme();
@@ -15,6 +16,8 @@ const props = defineProps<{
   stats: RoomStatsController;
   /** 观看页小屏：点赞改走聊天底栏 */
   hideMobileBarActions?: boolean;
+  /** PC：鼠标在播放舞台内（含底栏），由 PlayerStage 传入 */
+  stageHovered?: boolean;
 }>();
 
 /** 明显圆角 ▶（与 NativeReplayPlayer 同源；24 视口、20px 下钝角，非尖三角） */
@@ -30,14 +33,18 @@ const qualityHover = ref(false);
 const qualityPinned = ref(false);
 const qualitySheetOpen = ref(false);
 const volumeHover = ref(false);
+const barrageHover = ref(false);
+const barragePinned = ref(false);
 
 /** 短暂离开不立刻关，避免斜移/缝隙闪关（仅 PC） */
 const HOVER_HIDE_MS = 120;
 let qualityLeaveTimer: ReturnType<typeof setTimeout> | null = null;
 let volumeLeaveTimer: ReturnType<typeof setTimeout> | null = null;
+let barrageLeaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * 对齐 NativeReplayPlayer：默认收起；仅「播放→暂停」揭开；5s 无操作收起；
+ * 默认收起。小屏仍对齐回放：仅「播放→暂停」揭开，5s 无操作收起。
+ * PC：hover 舞台揭开；移开后再停 5s 收起（播放中也可以）。
  * sheet/飞出打开时强制显示且不计时。
  */
 const controlsRevealed = ref(false);
@@ -55,31 +62,41 @@ function anyOverlayOpen() {
   return (
     qualitySheetOpen.value ||
     (!isNarrow.value && (qualityHover.value || qualityPinned.value)) ||
-    (!isNarrow.value && volumeHover.value)
+    (!isNarrow.value && volumeHover.value) ||
+    (!isNarrow.value && (barrageHover.value || barragePinned.value))
   );
 }
 
-/** 暂停态显示底栏并（重新）计 5s；sheet/飞出打开时只显示不计时 */
+function isPcStageHovered() {
+  return !isNarrow.value && !!props.stageHovered;
+}
+
+/** 揭开底栏；（重新）计 5s。hover 中或飞出打开时只显示不计时。 */
 function revealControls(restartTimer = true) {
   controlsRevealed.value = true;
   clearControlsHideTimer();
   if (!restartTimer) return;
-  if (!props.player.isPaused || anyOverlayOpen()) return;
+  if (anyOverlayOpen() || isPcStageHovered()) return;
+  if (isNarrow.value && !props.player.isPaused) return;
   controlsHideTimer = setTimeout(() => {
     controlsHideTimer = null;
     controlsRevealed.value = false;
   }, CONTROLS_HIDE_MS);
 }
 
-/** 播放中隐藏；暂停且已揭开显示；清晰度 sheet/飞出、音量飞出强制显示 */
+/** PC hover 或已揭开、或飞出打开时显示 */
 const controlsVisible = computed(
   () =>
-    (props.player.isPaused && controlsRevealed.value) || anyOverlayOpen(),
+    isPcStageHovered() || controlsRevealed.value || anyOverlayOpen(),
 );
 
-/** 暂停态点操作栏：重置 5s */
+/** 点操作栏：PC 重置 5s；小屏仅暂停态重置 */
 function onControlsInteract() {
-  if (props.player.isPaused) revealControls(true);
+  if (isNarrow.value) {
+    if (props.player.isPaused) revealControls(true);
+    return;
+  }
+  revealControls(true);
 }
 
 const currentQualityLabel = computed(() => {
@@ -101,6 +118,10 @@ const qualityPanelOpen = computed(
   () => !isNarrow.value && (qualityHover.value || qualityPinned.value),
 );
 
+const barragePanelOpen = computed(
+  () => !isNarrow.value && (barrageHover.value || barragePinned.value),
+);
+
 const volumePct = computed(() =>
   props.player.muted || props.player.volume === 0 ? 0 : props.player.volume,
 );
@@ -114,8 +135,11 @@ function syncNarrow() {
     volumeHover.value = false;
     qualityHover.value = false;
     qualityPinned.value = false;
+    barrageHover.value = false;
+    barragePinned.value = false;
     clearVolumeLeaveTimer();
     clearQualityLeaveTimer();
+    clearBarrageLeaveTimer();
   } else {
     qualitySheetOpen.value = false;
   }
@@ -135,10 +159,22 @@ function clearVolumeLeaveTimer() {
   }
 }
 
+function clearBarrageLeaveTimer() {
+  if (barrageLeaveTimer) {
+    clearTimeout(barrageLeaveTimer);
+    barrageLeaveTimer = null;
+  }
+}
+
 function onQualityEnter() {
   if (isNarrow.value) return;
   clearQualityLeaveTimer();
   qualityHover.value = true;
+  volumeHover.value = false;
+  clearVolumeLeaveTimer();
+  barrageHover.value = false;
+  barragePinned.value = false;
+  clearBarrageLeaveTimer();
 }
 
 function onQualityLeave() {
@@ -154,6 +190,12 @@ function onVolumeEnter() {
   if (isNarrow.value) return;
   clearVolumeLeaveTimer();
   volumeHover.value = true;
+  qualityHover.value = false;
+  qualityPinned.value = false;
+  clearQualityLeaveTimer();
+  barrageHover.value = false;
+  barragePinned.value = false;
+  clearBarrageLeaveTimer();
 }
 
 function onVolumeLeave() {
@@ -165,12 +207,50 @@ function onVolumeLeave() {
   }, HOVER_HIDE_MS);
 }
 
+function onBarrageEnter() {
+  if (isNarrow.value) return;
+  clearBarrageLeaveTimer();
+  barrageHover.value = true;
+  volumeHover.value = false;
+  clearVolumeLeaveTimer();
+  qualityHover.value = false;
+  qualityPinned.value = false;
+  clearQualityLeaveTimer();
+}
+
+function onBarrageLeave() {
+  if (isNarrow.value) return;
+  clearBarrageLeaveTimer();
+  barrageLeaveTimer = setTimeout(() => {
+    barrageHover.value = false;
+    barrageLeaveTimer = null;
+  }, HOVER_HIDE_MS);
+}
+
+/** 小屏：点击开关；PC：点击 pin 设置面板，同清晰度 */
+function onBarrageBtnClick() {
+  onControlsInteract();
+  if (isNarrow.value) {
+    props.barrage.toggleBarrage();
+    return;
+  }
+  qualityPinned.value = false;
+  qualityHover.value = false;
+  clearQualityLeaveTimer();
+  volumeHover.value = false;
+  clearVolumeLeaveTimer();
+  barragePinned.value = !barragePinned.value;
+}
+
 function pickQuality(code: string) {
   props.player.setQuality(code);
   qualityPinned.value = false;
   qualityHover.value = false;
   qualitySheetOpen.value = false;
   clearQualityLeaveTimer();
+  barragePinned.value = false;
+  barrageHover.value = false;
+  clearBarrageLeaveTimer();
   if (props.player.isPaused) revealControls(true);
 }
 
@@ -179,6 +259,9 @@ function onQualityLabelClick() {
   onControlsInteract();
   volumeHover.value = false;
   clearVolumeLeaveTimer();
+  barragePinned.value = false;
+  barrageHover.value = false;
+  clearBarrageLeaveTimer();
   if (isNarrow.value) {
     qualitySheetOpen.value = true;
     return;
@@ -236,6 +319,7 @@ function onDocPointerDown(e: PointerEvent) {
   const t = e.target as Element | null;
   if (!t) return;
   if (!t.closest(".quality-menu")) qualityPinned.value = false;
+  if (!t.closest(".barrage-menu")) barragePinned.value = false;
 }
 
 function onVolumeTrackPointerDownGuarded(e: PointerEvent) {
@@ -243,11 +327,16 @@ function onVolumeTrackPointerDownGuarded(e: PointerEvent) {
   onVolumeTrackPointerDown(e);
 }
 
-/** 仅 wasPlaying→暂停才揭开；起播立即收起（进房默认暂停不揭） */
+/** 仅 wasPlaying→暂停才揭开；起播时若未 hover 立即收起（进房默认暂停不揭） */
 watch(
   () => props.player.isPaused,
   (paused, wasPaused) => {
     if (!paused) {
+      if (isPcStageHovered()) {
+        clearControlsHideTimer();
+        controlsRevealed.value = true;
+        return;
+      }
       clearControlsHideTimer();
       controlsRevealed.value = false;
       return;
@@ -256,20 +345,34 @@ watch(
   },
 );
 
-/** sheet / PC 飞出打开时强制显示且不计时；从打开→关闭后若仍暂停再计 5s（勿在 isNarrow 初同步时误揭） */
+/** sheet / PC 飞出打开时强制显示且不计时；关闭后 PC 或小屏暂停再计 5s */
 watch(anyOverlayOpen, (open, wasOpen) => {
   if (open) {
     clearControlsHideTimer();
     controlsRevealed.value = true;
     return;
   }
-  if (wasOpen && props.player.isPaused) revealControls(true);
+  if (wasOpen && (!isNarrow.value || props.player.isPaused)) revealControls(true);
 });
+
+/** PC：移入舞台揭开且不计时；移开后停留 5s 再收 */
+watch(
+  () => props.stageHovered,
+  (hovered, wasHovered) => {
+    if (isNarrow.value) return;
+    if (hovered) {
+      revealControls(false);
+      return;
+    }
+    if (wasHovered) revealControls(true);
+  },
+);
 
 /** 切主题时收起清晰度 sheet，避免 mask 残留 */
 watch(isLight, () => {
   qualitySheetOpen.value = false;
   qualityPinned.value = false;
+  barragePinned.value = false;
 });
 
 onMounted(() => {
@@ -288,6 +391,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("pointercancel", onVolumePointerUp);
   clearQualityLeaveTimer();
   clearVolumeLeaveTimer();
+  clearBarrageLeaveTimer();
   props.player.endVolumeDrag();
 });
 </script>
@@ -418,50 +522,63 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- 弹幕：白「弹」；关态仅加斜线（不加红/品牌色） -->
-      <button
-        type="button"
-        class="bar-btn barrage-btn"
-        :title="barrage.barrageOn ? '关弹幕' : '开弹幕'"
-        :aria-pressed="barrage.barrageOn"
-        @click="barrage.toggleBarrage"
+      <!-- 弹幕：小屏点击开关（关态斜线）；PC hover/点击出设置，交互同清晰度 -->
+      <div
+        class="toolbar-menu barrage-menu"
+        @mouseenter="onBarrageEnter"
+        @mouseleave="onBarrageLeave"
       >
-        <svg
-          class="bar-icon"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
+        <button
+          type="button"
+          class="bar-btn barrage-btn"
+          :title="isNarrow ? (barrage.barrageOn ? '关弹幕' : '开弹幕') : '弹幕设置'"
+          :aria-pressed="isNarrow ? barrage.barrageOn : barragePanelOpen"
+          @click="onBarrageBtnClick"
         >
-          <rect
-            x="3.25"
-            y="4.5"
-            width="17.5"
-            height="15"
-            rx="2.4"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.75"
-          />
-          <text
-            x="12"
-            y="15"
-            text-anchor="middle"
-            fill="currentColor"
-            font-size="9"
-            font-weight="700"
-            font-family="system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif"
-          >弹</text>
-          <line
-            v-if="!barrage.barrageOn"
-            x1="5.5"
-            y1="18"
-            x2="18.5"
-            y2="6"
-            stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linecap="round"
-          />
-        </svg>
-      </button>
+          <svg
+            class="bar-icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <rect
+              x="3.25"
+              y="4.5"
+              width="17.5"
+              height="15"
+              rx="2.4"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.75"
+            />
+            <text
+              x="12"
+              y="15"
+              text-anchor="middle"
+              fill="currentColor"
+              font-size="9"
+              font-weight="700"
+              font-family="system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+            >弹</text>
+            <line
+              v-if="!barrage.barrageOn"
+              x1="5.5"
+              y1="18"
+              x2="18.5"
+              y2="6"
+              stroke="currentColor"
+              stroke-width="1.75"
+              stroke-linecap="round"
+            />
+          </svg>
+        </button>
+        <div
+          v-show="barragePanelOpen"
+          class="menu-flyout barrage-flyout max-md:hidden"
+          @click.stop
+        >
+          <BarrageSettingsPanel :barrage="barrage" />
+        </div>
+      </div>
 
       <!-- 观看页小屏：点赞走聊天底栏；v-if+isNarrow，避免 scoped .bar-btn 压过 max-md:hidden -->
       <button
@@ -639,34 +756,68 @@ onBeforeUnmount(() => {
   overflow: visible;
 }
 
-/* 扩大悬停根，斜移不易离开 */
+/*
+ * 只向上下扩热区，左右不再用负 margin，避免「高清」热区盖住音量。
+ * 斜移靠飞出层底部的窄桥接条，而不是整块透明衬垫。
+ */
 .quality-menu,
-.volume-menu {
-  padding: 8px 10px;
-  margin: -8px -10px;
+.volume-menu,
+.barrage-menu {
+  padding: 8px 0;
+  margin: -8px 0;
 }
 
 /*
- * 飞出层：下沉重叠触发器（bottom 不是贴边 100%），透明 padding 可点；
- * 宽于图标，避免斜移漏出热区。须为悬停根的 DOM 子节点。
+ * 飞出层贴在按钮上方。外层不接点击（避免宽面板的透明区盖住邻钮）；
+ * 可见面板和底部窄桥接条才接指针，斜移仍能进面板。
  */
 .menu-flyout {
   position: absolute;
-  bottom: calc(100% - 18px);
+  bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
-  padding: 0 16px 18px;
+  padding: 0 0 8px;
   box-sizing: border-box;
   z-index: 2;
+  pointer-events: none;
+}
+
+.menu-flyout > * {
+  pointer-events: auto;
+}
+
+.menu-flyout::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 36px;
+  height: 8px;
+  transform: translateX(-50%);
   pointer-events: auto;
 }
 
 .quality-flyout {
-  min-width: 88px;
+  min-width: 72px;
 }
 
 .volume-flyout {
-  min-width: 48px;
+  min-width: 36px;
+}
+
+.barrage-flyout {
+  left: auto;
+  right: 0;
+  transform: none;
+  min-width: 260px;
+  padding: 0 0 8px;
+}
+
+.barrage-flyout::after {
+  left: auto;
+  right: 0;
+  transform: none;
+  width: 36px;
 }
 
 .quality-list {
@@ -763,4 +914,5 @@ onBeforeUnmount(() => {
   background: #fff;
   pointer-events: none;
 }
+
 </style>

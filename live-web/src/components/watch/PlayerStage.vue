@@ -38,9 +38,29 @@ const showFailRetry = computed(
 );
 
 const stageRef = ref<HTMLElement | null>(null);
+/** PC：鼠标在舞台（含底栏/飞出层）内时给 PlayerToolbar 揭开操作栏 */
+const stageHovered = ref(false);
+const isNarrowStage = ref(false);
+let narrowMql: MediaQueryList | null = null;
 
 function syncStageEl(el: HTMLElement | null) {
   props.player.bindStageEl(el);
+}
+
+function syncNarrowStage() {
+  isNarrowStage.value = !!narrowMql?.matches;
+  if (isNarrowStage.value) stageHovered.value = false;
+}
+
+function onStagePointerEnter(e: PointerEvent) {
+  if (isNarrowStage.value) return;
+  if (e.pointerType && e.pointerType !== "mouse") return;
+  stageHovered.value = true;
+}
+
+function onStagePointerLeave(e: PointerEvent) {
+  if (e.pointerType && e.pointerType !== "mouse") return;
+  stageHovered.value = false;
 }
 
 /** 播放中点舞台空白暂停（底栏播放中隐藏，对齐回放 stage click）；暂停态由居中钮 .stop 起播 */
@@ -50,9 +70,18 @@ function onStageClick() {
   props.player.pausePlayback();
 }
 
-onMounted(() => syncStageEl(stageRef.value));
+onMounted(() => {
+  syncStageEl(stageRef.value);
+  narrowMql = window.matchMedia("(max-width: 767px)");
+  syncNarrowStage();
+  narrowMql.addEventListener("change", syncNarrowStage);
+});
 watch(stageRef, (el) => syncStageEl(el));
-onBeforeUnmount(() => syncStageEl(null));
+onBeforeUnmount(() => {
+  narrowMql?.removeEventListener("change", syncNarrowStage);
+  narrowMql = null;
+  syncStageEl(null);
+});
 </script>
 
 <template>
@@ -66,6 +95,8 @@ onBeforeUnmount(() => syncStageEl(null));
       { 'player-stage-fullscreen': player.pseudoFullscreen },
     ]"
     @click="onStageClick"
+    @pointerenter="onStagePointerEnter"
+    @pointerleave="onStagePointerLeave"
   >
     <button
       v-if="!player.waitingForMedia && !player.mediaFailed && (player.needsTapToPlay || player.isPaused)"
@@ -145,13 +176,14 @@ onBeforeUnmount(() => syncStageEl(null));
 
     <BarrageLayer :barrage="barrage" />
 
-    <!-- 媒体就绪即挂载；显隐由 PlayerToolbar controlsRevealed（默认藏，播放→暂停揭 5s） -->
+    <!-- 媒体就绪即挂载；显隐由 PlayerToolbar 负责（PC hover 揭开，移开后再停 5s） -->
     <PlayerToolbar
       v-if="!player.mediaFailed && !player.waitingForMedia"
       :player="player"
       :barrage="barrage"
       :stats="stats"
       :hide-mobile-bar-actions="hideMobileBarActions"
+      :stage-hovered="stageHovered"
     />
   </div>
 </template>

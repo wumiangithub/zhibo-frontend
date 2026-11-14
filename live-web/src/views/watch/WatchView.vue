@@ -393,9 +393,69 @@ onMounted(() => {
   >
     <UiPageHeader
       v-if="!inMiniProgram"
+      class="md:hidden"
       :title="data?.title || '直播'"
       @back="goBackFromWatch"
     />
+
+    <header
+      v-if="!inMiniProgram"
+      class="pc-watch-topbar hidden flex-none items-center border-b border-[var(--lw-border)] bg-[var(--lw-bg-chrome)] md:flex"
+    >
+      <button
+        type="button"
+        class="pc-watch-back"
+        @click="goBackFromWatch"
+      >
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 19l-7-7 7-7" />
+        </svg>
+        返回
+      </button>
+      <div class="min-w-0 truncate text-[15px] font-semibold tracking-tight text-[var(--lw-text-primary)]">
+        {{ data?.title || '直播' }}
+      </div>
+      <span
+        v-if="data && isLive"
+        class="inline-flex h-[22px] flex-none items-center gap-[5px] rounded-full bg-[var(--lw-color-live)] py-0 pl-[7px] pr-2 text-[11px] font-semibold text-white"
+      >
+        <i class="h-[5px] w-[5px] rounded-full bg-white shadow-[0_0_0_2px_rgba(255,255,255,.35)]" />
+        直播中
+      </span>
+      <div class="flex-1" />
+      <button
+        type="button"
+        class="flex h-9 w-9 flex-none items-center justify-center rounded-lg bg-transparent text-[var(--lw-text-secondary)] hover:text-[var(--lw-text-primary)]"
+        title="分享"
+        @click="shareWatch"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="18" cy="5" r="2.4" stroke-width="1.8" />
+          <circle cx="6" cy="12" r="2.4" stroke-width="1.8" />
+          <circle cx="18" cy="19" r="2.4" stroke-width="1.8" />
+          <path stroke-linecap="round" stroke-width="1.8" d="M8.2 13.2l5.7 3.3M13.9 7.5l-5.7 3.3" />
+        </svg>
+      </button>
+      <div class="flex h-9 flex-none items-center gap-1.5 pl-2.5 pr-1.5 text-[13px] text-[var(--lw-text-secondary)]">
+        <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+        </svg>
+        在线 <b class="font-semibold text-[var(--lw-text-primary)]">{{ stats.onlineCount }}</b>
+      </div>
+      <button
+        type="button"
+        class="flex h-9 flex-none items-center gap-2 rounded-full py-0 pl-1 pr-2.5 text-[13px] text-[var(--lw-text-primary)]"
+        :title="hasViewerUsername ? undefined : '修改昵称'"
+        @click="!hasViewerUsername && changeNickname()"
+      >
+        <span class="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[var(--lw-bg-elevated)] text-[var(--lw-text-secondary)]">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" />
+          </svg>
+        </span>
+        {{ displayNickname }}
+      </button>
+    </header>
 
     <div class="flex min-h-0 flex-1 flex-col">
       <NicknameForm
@@ -420,54 +480,6 @@ onMounted(() => {
         </div>
 
         <template v-else>
-        <!-- PC 顶栏 -->
-        <div class="hidden flex-none items-center justify-between gap-4 border-b border-[var(--lw-border)] px-4 py-2 md:flex">
-          <div class="flex min-w-0 items-center gap-2">
-            <h1 class="truncate text-sm font-semibold text-[var(--lw-text-primary)]">
-              {{ data?.title || '直播' }}
-            </h1>
-            <span
-              v-if="data && isLive"
-              class="inline-flex flex-none items-center gap-1 rounded bg-[var(--lw-color-live)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--lw-text-on-brand)]"
-            >
-              <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-white"></span>
-              直播中
-            </span>
-          </div>
-          <div class="flex flex-none items-center gap-3">
-            <button
-              type="button"
-              class="flex h-7 w-7 flex-none items-center justify-center rounded bg-transparent text-[var(--lw-text-primary)] hover:text-[var(--lw-color-brand)]"
-              title="分享"
-              @click="shareWatch"
-            >
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-                />
-              </svg>
-            </button>
-            <span class="flex items-center gap-1 text-xs text-[var(--lw-text-secondary)]">
-              <span class="h-2 w-2 rounded-full bg-[var(--lw-color-success)]"></span>
-              {{ stats.onlineCount }}
-            </span>
-            <p class="text-xs text-[var(--lw-text-secondary)]">
-              昵称：<span class="text-[var(--lw-text-primary)]">{{ displayNickname }}</span>
-            </p>
-            <button
-              v-if="!hasViewerUsername"
-              type="button"
-              class="bg-transparent text-xs text-[var(--lw-text-muted)] hover:text-[var(--lw-text-secondary)]"
-              @click="changeNickname"
-            >
-              修改
-            </button>
-          </div>
-        </div>
-
         <div
           v-if="loading"
           class="flex flex-1 items-center justify-center text-sm text-[var(--lw-text-secondary)]"
@@ -549,7 +561,6 @@ onMounted(() => {
                 v-show="isLive"
                 mode="live"
                 :chat="chat"
-                :barrage="barrage"
                 :intro-title="data.title"
                 :intro-start-time="data.startTime"
                 :intro-end-time="data.endTime"
@@ -621,3 +632,29 @@ onMounted(() => {
     />
   </div>
 </template>
+
+<style scoped>
+.pc-watch-topbar {
+  height: 56px;
+  padding: 0 16px 0 8px;
+  gap: 8px;
+}
+.pc-watch-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 36px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lw-text-primary);
+  font: 500 14px/20px inherit;
+  cursor: pointer;
+}
+.pc-watch-back svg {
+  width: 18px;
+  height: 18px;
+}
+</style>

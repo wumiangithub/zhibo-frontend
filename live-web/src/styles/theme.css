@@ -53,6 +53,7 @@
   --lw-color-ask: var(--lw-color-primary);
   --lw-color-ask-muted: var(--lw-color-primary-muted);
   --lw-color-like: #fcd34d;
+  --lw-color-like-muted: rgba(252, 211, 77, 0.16);
   --lw-color-like-badge: #f59e0b;
 
   /* —— 功能色（与品牌色分离） —— */
@@ -107,6 +108,7 @@
   --lw-color-ask: var(--lw-color-primary);
   --lw-color-ask-muted: var(--lw-color-primary-muted);
   --lw-color-like: #fa8c16;
+  --lw-color-like-muted: rgba(250, 140, 22, 0.12);
   --lw-color-like-badge: #ff6a3d;
 
   --lw-color-live: #ef4444;

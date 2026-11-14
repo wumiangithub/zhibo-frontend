@@ -1,10 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import ChatPanel from "@/components/watch/ChatPanel.vue";
-import BarragePanel from "@/components/watch/BarragePanel.vue";
 import IntroPanel from "@/components/watch/IntroPanel.vue";
 import type { ChatController } from "@/composables/useChat";
-import type { BarrageController } from "@/composables/useBarrage";
 
 type ClaimChatCouponPayload = NonNullable<ChatMessage["coupon"]> & {
   employeeName?: string;
@@ -13,18 +11,15 @@ type ClaimChatCouponPayload = NonNullable<ChatMessage["coupon"]> & {
 const props = withDefaults(
   defineProps<{
     chat: ChatController;
-    /** 直播传；回放不传则无弹幕 Tab */
-    barrage?: BarrageController | null;
     introTitle: string;
     introStartTime?: string | null;
     introEndTime?: string | null;
     likeCount?: number;
-    /** 回放：只读聊天、无弹幕、禁点赞 */
+    /** 回放：只读聊天、禁点赞 */
     mode?: "live" | "replay";
     showCouponIcon?: boolean;
   }>(),
   {
-    barrage: null,
     likeCount: 0,
     mode: "live",
     showCouponIcon: false,
@@ -41,34 +36,7 @@ const emit = defineEmits<{
 }>();
 
 const isReplay = computed(() => props.mode === "replay");
-const activeTab = ref<"chat" | "intro" | "barrage">("chat");
-
-function syncTabForViewport() {
-  if (typeof window === "undefined") return;
-  if (
-    window.matchMedia("(max-width: 767px)").matches &&
-    activeTab.value === "barrage"
-  ) {
-    activeTab.value = "chat";
-  }
-}
-
-watch(
-  () => props.mode,
-  () => {
-    if (isReplay.value && activeTab.value === "barrage") {
-      activeTab.value = "chat";
-    }
-  },
-);
-
-onMounted(() => {
-  syncTabForViewport();
-  window.addEventListener("resize", syncTabForViewport);
-});
-onBeforeUnmount(() => {
-  window.removeEventListener("resize", syncTabForViewport);
-});
+const activeTab = ref<"chat" | "intro">("chat");
 
 function onChatListScroll(e: Event) {
   if (!isReplay.value) return;
@@ -79,7 +47,7 @@ function onChatListScroll(e: Event) {
 </script>
 
 <template>
-  <div class="flex min-h-0 w-full flex-1 flex-col border-t border-[var(--lw-border)] bg-[var(--lw-bg-panel)] md:w-[360px] md:flex-none md:border-l md:border-t-0">
+  <div class="flex min-h-0 w-full flex-1 flex-col border-t border-[var(--lw-border)] bg-[var(--lw-bg-panel)] md:w-[380px] md:flex-none md:border-l md:border-t-0">
     <div class="side-tabs flex flex-none border-b border-[var(--lw-border)] bg-[var(--lw-bg-chrome)]">
       <button
         type="button"
@@ -90,20 +58,6 @@ function onChatListScroll(e: Event) {
         聊天
         <span
           v-if="activeTab === 'chat'"
-          class="side-tab-line"
-          aria-hidden="true"
-        />
-      </button>
-      <button
-        v-if="!isReplay && barrage"
-        type="button"
-        class="side-tab side-tab--pc-only"
-        :class="{ 'is-active': activeTab === 'barrage' }"
-        @click="activeTab = 'barrage'"
-      >
-        弹幕
-        <span
-          v-if="activeTab === 'barrage'"
           class="side-tab-line"
           aria-hidden="true"
         />
@@ -136,10 +90,6 @@ function onChatListScroll(e: Event) {
       @like="emit('like')"
       @list-scroll="onChatListScroll"
     />
-    <BarragePanel
-      v-else-if="activeTab === 'barrage' && barrage"
-      :barrage="barrage"
-    />
     <IntroPanel
       v-else
       :title="introTitle"
@@ -159,7 +109,7 @@ function onChatListScroll(e: Event) {
 
 <style scoped>
 .side-tabs {
-  height: 44px;
+  height: 48px;
   padding: 0 8px;
 }
 .side-tab {
@@ -168,34 +118,25 @@ function onChatListScroll(e: Event) {
   flex: 1;
   align-items: center;
   justify-content: center;
-  height: 44px;
+  height: 48px;
   padding: 0 12px;
   border: 0;
   background: transparent;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--lw-text-secondary);
   cursor: pointer;
 }
 .side-tab.is-active {
-  color: var(--lw-text-primary);
+  color: var(--lw-color-primary);
   font-weight: 600;
-}
-.side-tab--pc-only {
-  display: none;
-}
-@media (min-width: 768px) {
-  .side-tab--pc-only {
-    display: flex;
-  }
 }
 .side-tab-line {
   position: absolute;
-  left: 50%;
+  left: 28%;
+  right: 28%;
   bottom: 0;
-  width: 20px;
   height: 2px;
-  border-radius: 2px;
+  border-radius: 1px 1px 0 0;
   background: var(--lw-color-primary);
-  transform: translateX(-50%);
 }
 </style>

@@ -29,7 +29,7 @@ defineSlots<{
   flex-direction: column;
   flex: none;
   width: 100%;
-  background: #000;
+  background: var(--lw-bg-player, #000);
 }
 
 @media (min-width: 768px) {
