@@ -39,8 +39,12 @@ const accountError = ref("");
 const passwordError = ref("");
 const submitting = ref(false);
 
+/** 只认 VITE_ACCOUNT_ONLY_LOGIN=true；生产/预发即使误配也不展示。 */
 const accountOnlyLoginEnabled =
-  import.meta.env.DEV || import.meta.env.MODE === "test";
+  (import.meta.env.DEV || import.meta.env.MODE === "test") &&
+  String(import.meta.env.VITE_ACCOUNT_ONLY_LOGIN ?? "")
+    .trim()
+    .toLowerCase() === "true";
 const devAccount = ref("");
 const devAccountError = ref("");
 const devSubmitting = ref(false);

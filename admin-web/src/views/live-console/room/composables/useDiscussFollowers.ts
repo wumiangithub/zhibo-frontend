@@ -9,7 +9,7 @@ export interface DiscussFollower {
   name: string;
 }
 
-/** 邀请人优先于导入人 */
+/** 仅员工邀请人；无则空（D123，不用导入人兜底） */
 function resolveFollower(row: AudienceListItem): { id: number; name: string } | null {
   if (row.employeeInviterId != null && row.employeeInviterId > 0) {
     return {
@@ -17,17 +17,11 @@ function resolveFollower(row: AudienceListItem): { id: number; name: string } | 
       name: (row.inviterDisplayName || "").trim() || `员工${row.employeeInviterId}`,
     };
   }
-  if (row.importerId != null && row.importerId > 0) {
-    return {
-      id: row.importerId,
-      name: (row.importerName || "").trim() || `员工${row.importerId}`,
-    };
-  }
   return null;
 }
 
 /**
- * 拉本场观众名单，建 viewerId → 跟进人（邀请优先）映射，并汇总跟进人下拉。
+ * 拉本场观众名单，建 viewerId → 跟进人（仅邀请人）映射，并汇总跟进人下拉。
  * 另建唯一昵称 → viewerId（微吼聊天包常无 email，讨论区靠昵称兜底）。
  */
 export function useDiscussFollowers(activityId: Ref<string> | (() => string)) {

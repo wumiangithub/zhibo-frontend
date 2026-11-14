@@ -14,6 +14,7 @@ import { useAuthStore } from "@/stores/auth";
 import { buildAudienceWatchUrl } from "@/utils/liveLinks";
 import ShareDialog from "@/components/share/ShareDialog.vue";
 import AttendeePanel from "./AttendeePanel.vue";
+import AudienceDetailsPanel from "./AudienceDetailsPanel.vue";
 import ChatFilterPanel from "./ChatFilterPanel.vue";
 import CouponPanel from "./CouponPanel.vue";
 import DiscussPanel from "./DiscussPanel.vue";
@@ -408,6 +409,10 @@ onMounted(() => {
       :shell-ready="!!data"
     />
 
+    <div class="bottom-bar">
+      <AudienceDetailsPanel :activity-id="id" />
+    </div>
+
     <ChatFilterPanel
       v-if="chatFilterKept"
       :open="chatFilterOpen"
@@ -444,6 +449,7 @@ onMounted(() => {
 .console {
   display: grid;
   grid-template-columns: 300px minmax(300px, 1fr) 300px;
+  grid-template-rows: minmax(0, 1fr) minmax(260px, 36vh);
   gap: 12px;
   box-sizing: border-box;
   height: 100dvh;
@@ -451,6 +457,19 @@ onMounted(() => {
   padding: 12px;
   background: #f5f6f8;
   color: #333;
+}
+
+.bottom-bar {
+  display: flex;
+  grid-column: 1 / -1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.bottom-bar :deep(.audience-details) {
+  flex: 1;
+  min-height: 0;
 }
 
 .col {

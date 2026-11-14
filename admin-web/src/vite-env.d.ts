@@ -29,6 +29,8 @@ interface ImportMetaEnv {
    * 观看链接、课程链接、中控台都拼在它后面。未设时本地默认 http://localhost:5174。
    */
   readonly VITE_LIVE_WEB_ORIGIN?: string;
+  /** 为 true 时显示「只需账号」登录（仅 dev / test 构建生效）。默认隐藏。 */
+  readonly VITE_ACCOUNT_ONLY_LOGIN?: string;
 }
 
 interface ImportMeta {

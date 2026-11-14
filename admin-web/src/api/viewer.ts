@@ -1,4 +1,4 @@
-import { get, put } from "./http";
+import { get, post, put } from "./http";
 
 export type ViewerKeywordType = "nickname" | "id" | "phone";
 
@@ -187,6 +187,17 @@ export function updateViewerTags(username: string, tagIds: number[]) {
     `/viewers/update-tags/${id}`,
     { tagIds },
   );
+}
+
+/** 点锁看明文手机（D123）；路径 id = username */
+export function getViewerPhonePlain(username: string) {
+  const id = encodeURIComponent(username.trim());
+  return get<{ username: string; phone: string }>(`/viewers/phone/${id}`);
+}
+
+/** 批量追加手动标签（D123） */
+export function appendViewerTags(usernames: string[], tagIds: number[]) {
+  return post<{ updated: number }>("/viewers/append-tags", { usernames, tagIds });
 }
 
 export function registerChannelLabel(channel: number): string {

@@ -3,7 +3,10 @@
  * 对照 live-web 观看：`/watch/summary` + `/watch/sdk-sign`；名单/走势/审核页原 watch 路径已删。
  */
 import type { LiveProvider } from "../live/types";
+import { apiV1 } from "@/api/apiBase";
 import { get, post } from "@/api/http";
+import { getAccessToken } from "@/utils/authSession";
+import axios from "axios";
 
 /** 后端只下发签名/init 鉴权；脚本 CDN 由适配器按 provider 加载 */
 export interface SdkInitPayload {
@@ -208,4 +211,99 @@ export function listConsoleCouponHistory(activityId: string) {
   return get<ConsoleCouponHistoryData>(
     `/activities/console/coupon-history/${encodeURIComponent(activityId)}`,
   );
+}
+
+/** 中控台底部观众明细（D123） */
+export type AudienceDetailKeywordType = "nickname" | "username" | "phone";
+export type AudienceDetailOnlineStatus = "all" | "online" | "offline";
+
+export interface ConsoleAudienceDetailItem {
+  username: string;
+  nickname: string;
+  avatarUrl?: string;
+  phoneMasked?: string;
+  followerName?: string;
+  followerEmployeeId?: number;
+  firstEnterTime: string;
+  latestEnterTime: string;
+  liveWatchDurationSec: number;
+  replayWatchDurationSec: number;
+  totalWatchDurationSec: number;
+  leaveTime?: string;
+  enterCount: number;
+  online: boolean;
+  productClickCount: number;
+  pendingPayCount: number;
+  purchaseCount: number;
+  totalPurchaseCount: number;
+  totalPurchaseAmount: string;
+  commentCount: number;
+  couponReceiveCount: number;
+}
+
+export interface ConsoleAudienceDetailListData {
+  page: number;
+  pageSize: number;
+  total: number;
+  list: ConsoleAudienceDetailItem[];
+}
+
+export type ConsoleAudienceDetailQuery = {
+  page?: number;
+  pageSize?: number;
+  keywordType?: AudienceDetailKeywordType;
+  keyword?: string;
+  onlineStatus?: AudienceDetailOnlineStatus;
+  followerKeyword?: string;
+  sort?: string;
+  order?: "asc" | "desc";
+};
+
+export function listConsoleAudienceDetails(activityId: string, query: ConsoleAudienceDetailQuery = {}) {
+  return get<ConsoleAudienceDetailListData>(
+    `/activities/console/audience-details/${encodeURIComponent(activityId)}`,
+    { params: query },
+  );
+}
+
+async function blobErrorMessage(blob: Blob): Promise<string> {
+  const text = await blob.text();
+  try {
+    const body = JSON.parse(text) as { msg?: string };
+    if (body?.msg) return body.msg;
+  } catch {
+    // not json
+  }
+  return "导出失败";
+}
+
+export async function exportConsoleAudienceDetails(
+  activityId: string,
+  query: Omit<ConsoleAudienceDetailQuery, "page" | "pageSize"> = {},
+) {
+  const token = getAccessToken();
+  const url = apiV1(`/activities/console/audience-details/export/${encodeURIComponent(activityId)}`);
+  try {
+    const resp = await axios.get(url, {
+      responseType: "blob",
+      params: query,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      timeout: 60000,
+    });
+    const blob = resp.data as Blob;
+    if (blob.type && blob.type.includes("application/json")) {
+      throw new Error(await blobErrorMessage(blob));
+    }
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = "audience-details.csv";
+    a.click();
+    URL.revokeObjectURL(objectUrl);
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.data instanceof Blob) {
+      throw new Error(await blobErrorMessage(e.response.data));
+    }
+    throw e;
+  }
 }
