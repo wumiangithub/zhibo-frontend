@@ -46,7 +46,12 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
   const sdkFailed = ref(false);
 
   let adapter: WatchAdapter | null = null;
+  /** adapter 非 ref，须用此标记驱动 sdkReady 等依赖 SDK 挂载的计算属性 */
+  const sdkAttached = ref(false);
   const getSdk = () => adapter?.getSdk() ?? null;
+  function syncSdkAttached() {
+    sdkAttached.value = !!adapter?.getSdk();
+  }
   const AUTO_RETRY_RETRYABLE_SDK = false;
   let sdkRetryCount = 0;
   const SDK_MAX_RETRIES = 2;
@@ -105,7 +110,9 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
   const isAudioLive = computed(() => data.value?.type === 1);
   const canPlayReplay = computed(() => false);
   /** 与 live-web 同：仅直播中标「已进房」；结束壳 SDK 仍在，历史靠 moduleReady */
-  const sdkReady = computed(() => !!adapter?.getSdk() && !sdkFailed.value && isLive.value);
+  const sdkReady = computed(
+    () => sdkAttached.value && !sdkFailed.value && isLive.value,
+  );
 
   function shouldInitSdk(res: ConsoleSummaryData): boolean {
     return res.state === 1 || res.state === 2 || res.state === 3 || res.state === 4 || res.state === 5;
@@ -213,6 +220,7 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
     }
     adapter?.destroy();
     adapter = null;
+    syncSdkAttached();
     sign.value = null;
   }
 
@@ -352,11 +360,15 @@ export function useConsoleSession(opts: ConsoleSessionOptions) {
       if (epoch !== initEpoch) {
         adapter?.destroy();
         adapter = null;
+        syncSdkAttached();
+        return;
       }
+      syncSdkAttached();
     } catch (e) {
       if (epoch !== initEpoch) return;
       adapter?.destroy();
       adapter = null;
+      syncSdkAttached();
       throw e;
     }
   }

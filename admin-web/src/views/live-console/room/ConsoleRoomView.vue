@@ -19,6 +19,8 @@ import ChatFilterPanel from "./ChatFilterPanel.vue";
 import CouponPanel from "./CouponPanel.vue";
 import DiscussPanel from "./DiscussPanel.vue";
 import ProductPanel from "./ProductPanel.vue";
+import QuickSendPanel from "./QuickSendPanel.vue";
+import SystemMessagePanel from "./SystemMessagePanel.vue";
 import WatchDataPanel from "./WatchDataPanel.vue";
 import type { ConsoleSendCouponResult } from "./api/console";
 
@@ -36,7 +38,7 @@ const panelRef = ref<InstanceType<typeof AttendeePanel> | null>(null);
 const watchDataRef = ref<{
   refreshAndResetRange: () => Promise<void>;
 } | null>(null);
-const actions = ["数据", "评论审核", "商品", "优惠券"];
+const actions = ["系统消息", "数据", "快捷发送", "商品", "评论审核", "优惠券"];
 
 const chatFilterOpen = ref(false);
 /** 首次打开后保持挂载，关闭只隐藏以复用 iframe */
@@ -75,6 +77,16 @@ const couponKept = ref(false);
 /** 商品面板（中间操作条；与数据同区） */
 const productOpen = ref(false);
 const productKept = ref(false);
+
+/** 快捷发送（中间操作条；话术库列表 + SDK 发聊） */
+const quickSendOpen = ref(false);
+const quickSendKept = ref(false);
+
+/** 系统消息（中间操作条；落库 + sendCustomEvent type=system） */
+const systemMsgOpen = ref(false);
+const systemMsgKept = ref(false);
+const systemMsgSending = ref(false);
+const systemMsgPanelRef = ref<{ clearAfterSuccess: () => void } | null>(null);
 
 function presenceTime(raw: string | undefined): string | undefined {
   const text = raw?.trim() ?? "";
@@ -177,6 +189,63 @@ function openProduct() {
   productOpen.value = true;
 }
 
+function hideQuickSend() {
+  quickSendOpen.value = false;
+}
+
+function resetQuickSend() {
+  quickSendOpen.value = false;
+  quickSendKept.value = false;
+}
+
+function openQuickSend() {
+  quickSendKept.value = true;
+  quickSendOpen.value = true;
+}
+
+function hideSystemMsg() {
+  systemMsgOpen.value = false;
+}
+
+function resetSystemMsg() {
+  systemMsgOpen.value = false;
+  systemMsgKept.value = false;
+  systemMsgSending.value = false;
+}
+
+function openSystemMsg() {
+  systemMsgKept.value = true;
+  systemMsgOpen.value = true;
+}
+
+/** 中间区互斥：数据 / 商品 / 快捷发送 / 系统消息 同时只开一块 */
+function hideStagePanelsExcept(
+  keep: "watch" | "product" | "quick" | "system" | null,
+) {
+  if (keep !== "watch") watchDataOpen.value = false;
+  if (keep !== "product") hideProduct();
+  if (keep !== "quick") hideQuickSend();
+  if (keep !== "system") hideSystemMsg();
+}
+
+async function onSystemMessageSend(payload: { text: string; pin: boolean }) {
+  if (!data.value || !isLive.value || !sdkReady.value) {
+    toast("请先进入直播后再发送");
+    return;
+  }
+  if (systemMsgSending.value) return;
+  systemMsgSending.value = true;
+  try {
+    await chat.sendSystemMessage(payload.text, payload.pin);
+    systemMsgPanelRef.value?.clearAfterSuccess();
+    toast("发送成功");
+  } catch (e) {
+    toast(e instanceof Error ? e.message : "发送失败");
+  } finally {
+    systemMsgSending.value = false;
+  }
+}
+
 async function onCouponSent(res: ConsoleSendCouponResult) {
   try {
     await chat.broadcastCoupon(res);
@@ -187,7 +256,7 @@ async function onCouponSent(res: ConsoleSendCouponResult) {
 }
 
 function openWatchData() {
-  hideProduct();
+  hideStagePanelsExcept("watch");
   watchDataKept.value = true;
   watchDataOpen.value = true;
 }
@@ -231,13 +300,30 @@ async function openChatFilter() {
 }
 
 function onAction(label: string) {
+  if (label === "系统消息") {
+    if (systemMsgOpen.value) {
+      hideSystemMsg();
+      return;
+    }
+    hideStagePanelsExcept("system");
+    openSystemMsg();
+    return;
+  }
+  if (label === "快捷发送") {
+    if (quickSendOpen.value) {
+      hideQuickSend();
+      return;
+    }
+    hideStagePanelsExcept("quick");
+    openQuickSend();
+    return;
+  }
   if (label === "数据") {
     if (watchDataOpen.value) {
       /** 已打开再点：刷新 + 走势时间范围重置为默认 */
       void watchDataRef.value?.refreshAndResetRange?.();
       return;
     }
-    hideProduct();
     openWatchData();
     return;
   }
@@ -254,7 +340,7 @@ function onAction(label: string) {
       hideProduct();
       return;
     }
-    watchDataOpen.value = false;
+    hideStagePanelsExcept("product");
     openProduct();
     return;
   }
@@ -274,6 +360,8 @@ async function boot() {
   resetWatchData();
   resetCoupon();
   resetProduct();
+  resetQuickSend();
+  resetSystemMsg();
   await load();
 }
 
@@ -334,20 +422,7 @@ onMounted(() => {
       <header class="stage-head">
         <h1>{{ displayTitle }}</h1>
         <span
-          v-if="sdkReady"
-          class="sdk-tag is-on"
-        >已进房</span>
-        <span
-          v-else-if="error || sdkFailed"
-          class="sdk-tag is-err"
-          :title="error"
-        >进房异常</span>
-        <span
-          v-else-if="loading"
-          class="sdk-tag"
-        >进房中…</span>
-        <span
-          v-else-if="isEnded || isReplay"
+          v-if="isEnded || isReplay"
           class="sdk-tag"
         >已结束</span>
         <button
@@ -473,6 +548,8 @@ onMounted(() => {
           class="action"
           :class="{
             'is-active':
+              (label === '系统消息' && systemMsgOpen) ||
+              (label === '快捷发送' && quickSendOpen) ||
               (label === '评论审核' && chatFilterOpen) ||
               (label === '数据' && watchDataOpen) ||
               (label === '商品' && productOpen) ||
@@ -483,6 +560,27 @@ onMounted(() => {
           {{ label }}
         </button>
       </div>
+
+      <SystemMessagePanel
+        ref="systemMsgPanelRef"
+        v-show="systemMsgOpen"
+        v-if="systemMsgKept"
+        :active="systemMsgOpen"
+        :can-send="!!data && isLive && sdkReady"
+        :sending="systemMsgSending"
+        @send="onSystemMessageSend"
+        @toast="(msg) => toast(msg)"
+      />
+
+      <QuickSendPanel
+        v-show="quickSendOpen"
+        v-if="quickSendKept"
+        :activity-id="id"
+        :active="quickSendOpen"
+        :can-send="!!data && isLive && sdkReady"
+        :chat="chat"
+        @toast="(msg) => toast(msg)"
+      />
 
       <WatchDataPanel
         ref="watchDataRef"

@@ -47,7 +47,7 @@ function onChatListScroll(e: Event) {
 </script>
 
 <template>
-  <div class="flex min-h-0 w-full flex-1 flex-col border-t border-[var(--lw-border)] bg-[var(--lw-bg-panel)] md:w-[380px] md:flex-none md:border-l md:border-t-0">
+  <div class="watch-side-panel flex min-h-0 w-full flex-1 flex-col border-t border-[var(--lw-border)] bg-[var(--lw-bg-panel)] md:w-[380px] md:flex-none md:border-l md:border-t-0">
     <div class="side-tabs flex flex-none border-b border-[var(--lw-border)] bg-[var(--lw-bg-chrome)]">
       <button
         type="button"
@@ -108,6 +108,12 @@ function onChatListScroll(e: Event) {
 </template>
 
 <style scoped>
+/* 小屏：聊天信息区跟输入胶囊走 --lw-bg-elevated；顶栏/Tab 仍用 chrome。PC 不动。 */
+@media (max-width: 767px) {
+  .watch-side-panel {
+    --lw-bg-panel: var(--lw-bg-elevated);
+  }
+}
 .side-tabs {
   height: 48px;
   padding: 0 8px;

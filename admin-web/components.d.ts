@@ -25,6 +25,7 @@ declare module 'vue' {
     ElTable: typeof import('element-plus/es')['ElTable']
     ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
+    ElTreeSelect: typeof import('element-plus/es')['ElTreeSelect']
     ImagePreview: typeof import('./src/components/ImagePreview.vue')['default']
     InviteHostDialog: typeof import('./src/components/live/InviteHostDialog.vue')['default']
     LessonShareDialog: typeof import('./src/components/share/LessonShareDialog.vue')['default']
@@ -37,6 +38,7 @@ declare module 'vue' {
     UiButton: typeof import('./src/components/ui/UiButton.vue')['default']
     UiCheckButton: typeof import('./src/components/ui/UiCheckButton.vue')['default']
     UiInput: typeof import('./src/components/ui/UiInput.vue')['default']
+    UserKeywordCombo: typeof import('./src/components/UserKeywordCombo.vue')['default']
   }
   export interface GlobalDirectives {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

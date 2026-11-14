@@ -697,6 +697,19 @@ onBeforeUnmount(() => {
     transform 0.2s ease;
 }
 
+@media (min-width: 768px) {
+  .player-toolbar {
+    /* 半透明底 + 内侧 2px 黑边，整条栏 bottom:-2px 下移，50px 控件区仍对齐原底边 */
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    box-sizing: border-box;
+    height: 52px;
+    border-bottom: 2px solid #000;
+    bottom: -2px;
+  }
+}
+
 .player-toolbar.is-hidden {
   opacity: 0;
   transform: translateY(6px);

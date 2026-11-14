@@ -28,6 +28,7 @@
   --lw-bg-elevated: #222836;
   --lw-bg-bubble: #2a3140;
   --lw-bg-player: #000000;
+  --lw-bg-composer: var(--lw-bg-chrome);
   --lw-bg-overlay: rgba(0, 0, 0, 0.7);
   --lw-bubble-shadow: none;
   --lw-bubble-border: rgba(255, 255, 255, 0.04);
@@ -52,6 +53,8 @@
   /* 提问勾选 / 「问」角标：对齐功能主色（勿用天蓝） */
   --lw-color-ask: var(--lw-color-primary);
   --lw-color-ask-muted: var(--lw-color-primary-muted);
+  --lw-color-system: #a0a3ab;
+  --lw-color-system-muted: rgba(160, 163, 171, 0.22);
   --lw-color-like: #fcd34d;
   --lw-color-like-muted: rgba(252, 211, 77, 0.16);
   --lw-color-like-badge: #f59e0b;
@@ -87,6 +90,7 @@
   --lw-bg-elevated: #eef1f6;
   --lw-bg-bubble: #ffffff;
   --lw-bg-player: #000000;
+  --lw-bg-composer: var(--lw-bg-chrome);
   --lw-bg-overlay: rgba(15, 23, 42, 0.4);
   --lw-bubble-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   --lw-bubble-border: #eef0f4;
@@ -107,6 +111,8 @@
   --lw-color-guest-muted: rgba(114, 46, 209, 0.1);
   --lw-color-ask: var(--lw-color-primary);
   --lw-color-ask-muted: var(--lw-color-primary-muted);
+  --lw-color-system: #667085;
+  --lw-color-system-muted: rgba(102, 112, 133, 0.14);
   --lw-color-like: #fa8c16;
   --lw-color-like-muted: rgba(250, 140, 22, 0.12);
   --lw-color-like-badge: #ff6a3d;
@@ -134,4 +140,59 @@
 .lw-theme.ui-sheet-root,
 .ui-sheet-root {
   pointer-events: auto;
+}
+
+/*
+ * 观看页（小屏 + PC）两套底色：界面一色 + 播放器黑。
+ * 浅色界面 #FFFFFF，暗色界面 #18191C；播放器仍走 --lw-bg-player（#000）。
+ * 输入胶囊 / 气泡可略提一层，不当第三种页面底色。
+ */
+.lw-theme.pc-watch-page[data-lw-theme="light"] {
+  --lw-bg-canvas: #ffffff;
+  --lw-bg-panel: #ffffff;
+  --lw-bg-chrome: #ffffff;
+  --lw-bg-composer: #ffffff;
+  --lw-bg-elevated: #f5f7fa;
+  --lw-border: #e6eaef;
+}
+
+.lw-theme.pc-watch-page[data-lw-theme="dark"] {
+  --lw-bg-canvas: #18191c;
+  --lw-bg-chrome: #18191c;
+  --lw-bg-panel: #18191c;
+  --lw-bg-composer: #18191c;
+  --lw-bg-elevated: #222327;
+  --lw-bg-bubble: #232428;
+  --lw-border: #2a2b30;
+  --lw-border-strong: #3a3b40;
+  --lw-bubble-border: rgba(255, 255, 255, 0.05);
+  --lw-bubble-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* 小屏暗色：信息区/胶囊提到 #2A2B30，与顶栏 #18191C 拉开层次。浅色和 PC 不动。 */
+@media (max-width: 767px) {
+  .lw-theme.pc-watch-page[data-lw-theme="dark"] {
+    --lw-bg-elevated: #2a2b30;
+    --lw-bg-bubble: #323338;
+  }
+}
+
+@media (min-width: 768px) {
+  .lw-theme.pc-watch-page[data-lw-theme="light"] {
+    --lw-block-outline:
+      0 -1px 0 0 rgba(15, 23, 42, 0.08),
+      -1px 0 0 0 rgba(15, 23, 42, 0.08),
+      1px 0 0 0 rgba(15, 23, 42, 0.08),
+      -10px 0 28px rgba(15, 23, 42, 0.08),
+      10px 0 28px rgba(15, 23, 42, 0.08);
+  }
+
+  .lw-theme.pc-watch-page[data-lw-theme="dark"] {
+    --lw-block-outline:
+      0 -1px 0 0 rgba(255, 255, 255, 0.10),
+      -1px 0 0 0 rgba(255, 255, 255, 0.10),
+      1px 0 0 0 rgba(255, 255, 255, 0.10),
+      -10px 0 28px rgba(0, 0, 0, 0.35),
+      10px 0 28px rgba(0, 0, 0, 0.35);
+  }
 }

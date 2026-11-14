@@ -44,8 +44,8 @@ interface ChatMessage {
    * msgId：被回复消息 id，昵称缺失时可在列表内回填。
    */
   reply?: { nickname: string; content: string; msgId?: string };
-  /** 提问 / 优惠券。普通聊天不设。 */
-  kind?: "question" | "coupon";
+  /** 提问 / 优惠券 / 系统消息。普通聊天不设。 */
+  kind?: "question" | "coupon" | "system";
   /** 主持人对该提问的回复 */
   answer?: { nickname: string; content: string; roleLabel?: string };
   /** 优惠券卡片（kind=coupon；D113） */

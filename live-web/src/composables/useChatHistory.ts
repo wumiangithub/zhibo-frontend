@@ -1,4 +1,4 @@
-import { nextTick, reactive } from "vue";
+import { nextTick, reactive, ref } from "vue";
 import {
   fetchWatchChatHistory,
   toChatMessage,
@@ -11,10 +11,19 @@ import {
   listWatchCouponHistory,
   toCouponChatMessage,
 } from "@/api/watchCoupons";
+import {
+  listWatchSystemMessageHistory,
+  toSystemChatMessage,
+} from "@/api/watchSystemMessages";
 import type { ChatController } from "@/composables/useChat";
+import type { PinnedSystemMessage } from "@/composables/chatSystemMessages";
+import {
+  isSystemPinDismissed,
+  rememberSystemPinDismissed,
+} from "@/utils/systemPinDismiss";
 
 /**
- * 回放页只读聊天：拉 `/watch/chat-history`（微吼）+ `/watch/question-history`（本站 room_comment），
+ * 回放页只读聊天：拉 `/watch/chat-history`（微吼）+ question/coupon/system-message-history（本站），
  * 形状对齐 ChatPanel 所需的 ChatController 子集。
  */
 export function useChatHistory(getActivityId: () => string) {
@@ -36,6 +45,9 @@ export function useChatHistory(getActivityId: () => string) {
   let questionItems: ChatMessage[] = [];
   /** 本站优惠券历史缓存；并入逻辑同提问 */
   let couponItems: ChatMessage[] = [];
+  /** 本站系统消息历史缓存；并入逻辑同提问 */
+  let systemItems: ChatMessage[] = [];
+  const systemPinned = ref<PinnedSystemMessage | null>(null);
 
   function attachListEl(el: unknown) {
     listEl = (el as HTMLElement | null) || null;
@@ -57,7 +69,7 @@ export function useChatHistory(getActivityId: () => string) {
   }
 
   function mergeAuxiliaryIntoList(base: ChatMessage[]): ChatMessage[] {
-    const buckets: ChatMessage[][] = [questionItems, couponItems];
+    const buckets: ChatMessage[][] = [questionItems, couponItems, systemItems];
     let next = base.slice();
     for (const bucket of buckets) {
       if (!bucket.length) continue;
@@ -108,16 +120,52 @@ export function useChatHistory(getActivityId: () => string) {
     }
   }
 
+  async function loadSystemMessages(activityId: string) {
+    try {
+      const res = await listWatchSystemMessageHistory(activityId);
+      systemItems = (res.list ?? [])
+        .map((row) => toSystemChatMessage(row))
+        .filter((m): m is ChatMessage => m != null);
+      const pinId = res.pinnedCommentId;
+      if (pinId != null && pinId > 0) {
+        if (isSystemPinDismissed(activityId, pinId)) {
+          systemPinned.value = null;
+        } else {
+          const hit = systemItems.find((m) => m.commentId === pinId);
+          systemPinned.value = hit?.commentId
+            ? {
+                commentId: hit.commentId,
+                text: hit.msg.trim(),
+                nickname: hit.sender_name || "系统消息",
+              }
+            : null;
+        }
+      } else {
+        systemPinned.value = null;
+      }
+    } catch (e) {
+      console.warn("加载系统消息历史失败", e);
+      systemItems = [];
+      systemPinned.value = null;
+    }
+  }
+
   async function loadFirstPage() {
     page = 0;
     total = 0;
     exhausted = false;
     questionItems = [];
     couponItems = [];
+    systemItems = [];
+    systemPinned.value = null;
     chat.chatMessages = [];
     const activityId = getActivityId()?.trim();
     if (activityId) {
-      await Promise.all([loadQuestions(activityId), loadCoupons(activityId)]);
+      await Promise.all([
+        loadQuestions(activityId),
+        loadCoupons(activityId),
+        loadSystemMessages(activityId),
+      ]);
     }
     await loadMore({ replace: true });
   }
@@ -143,14 +191,14 @@ export function useChatHistory(getActivityId: () => string) {
         const prevTop = listEl?.scrollTop ?? 0;
         // 先剥掉已并入的提问/券，再 prepend 聊天，最后重新 merge，避免重复
         const chatOnly = chat.chatMessages.filter(
-          (m) => m.kind !== "question" && m.kind !== "coupon",
+          (m) => m.kind !== "question" && m.kind !== "coupon" && m.kind !== "system",
         );
         chat.chatMessages = mergeAuxiliaryIntoList([...items, ...chatOnly]);
         preserveScrollAfterPrepend(prevHeight, prevTop);
       }
 
       const chatCount = chat.chatMessages.filter(
-        (m) => m.kind !== "question" && m.kind !== "coupon",
+        (m) => m.kind !== "question" && m.kind !== "coupon" && m.kind !== "system",
       ).length;
       if (items.length === 0 || chatCount >= total) {
         exhausted = true;
@@ -179,6 +227,15 @@ export function useChatHistory(getActivityId: () => string) {
 
   function noop() {}
 
+  function dismissSystemPin() {
+    const activityId = getActivityId()?.trim() ?? "";
+    const commentId = systemPinned.value?.commentId;
+    if (activityId && commentId != null && commentId > 0) {
+      rememberSystemPinDismissed(activityId, commentId);
+    }
+    systemPinned.value = null;
+  }
+
   const controller = Object.assign(chat, {
     attachListEl,
     scrollChatToBottom,
@@ -190,6 +247,8 @@ export function useChatHistory(getActivityId: () => string) {
     handleQuestion: noop,
     handleQuestionBackout: noop,
     handleCustomEvent: noop,
+    systemPinned,
+    dismissSystemPin,
     handleChatMessage: noop,
     handleChatDelete: noop,
     loadChatHistory: loadFirstPage,

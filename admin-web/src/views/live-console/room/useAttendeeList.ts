@@ -50,11 +50,6 @@ export function useAttendeeList(
   const behavior = ref<AttendeeBehavior>("all");
   const list = ref<AttendeeItem[]>([]);
 
-  const keywordPlaceholder = computed(() => {
-    if (keywordType.value === "username") return "请输入用户ID";
-    if (keywordType.value === "phone") return "请输入手机号";
-    return "请输入用户昵称";
-  });
   const total = ref(0);
   const studentTotal = ref(0);
   const assistantTotal = ref(0);
@@ -377,7 +372,6 @@ export function useAttendeeList(
     tab,
     keywordType,
     keyword,
-    keywordPlaceholder,
     followerFilter,
     behavior,
     list,

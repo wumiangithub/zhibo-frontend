@@ -258,6 +258,54 @@ export function listConsoleCouponHistory(activityId: string) {
   );
 }
 
+/** D127 系统消息落库响应（成功后再 sendCustomEvent type=system） */
+export interface ConsoleSendSystemMessageBody {
+  text: string;
+  pin?: boolean;
+}
+
+export interface ConsoleSendSystemMessageResult {
+  commentId: number;
+  text: string;
+  pin: boolean;
+  nickname: string;
+  commentTime: string;
+}
+
+export interface ConsoleSystemMessageHistoryItem {
+  commentId: number;
+  text: string;
+  pin: boolean;
+  nickname?: string;
+  commentTime?: string;
+  timestamp?: number;
+}
+
+export interface ConsoleSystemMessageHistoryData {
+  list: ConsoleSystemMessageHistoryItem[];
+  pinnedCommentId?: number | null;
+}
+
+export function sendConsoleSystemMessage(activityId: string, body: ConsoleSendSystemMessageBody) {
+  return post<ConsoleSendSystemMessageResult>(
+    `/activities/console/system-messages/send/${encodeURIComponent(activityId)}`,
+    body,
+  );
+}
+
+export function unpinConsoleSystemMessage(activityId: string, commentId: number) {
+  return post<ConsoleSendSystemMessageResult>(
+    `/activities/console/system-messages/unpin/${encodeURIComponent(activityId)}`,
+    { commentId },
+  );
+}
+
+export function listConsoleSystemMessageHistory(activityId: string) {
+  return get<ConsoleSystemMessageHistoryData>(
+    `/activities/console/system-message-history/${encodeURIComponent(activityId)}`,
+  );
+}
+
 /** 中控台底部观众明细（D123） */
 export type AudienceDetailKeywordType = "nickname" | "username" | "phone";
 export type AudienceDetailOnlineStatus = "all" | "online" | "offline";
@@ -299,6 +347,7 @@ export type ConsoleAudienceDetailQuery = {
   keywordType?: AudienceDetailKeywordType;
   keyword?: string;
   onlineStatus?: AudienceDetailOnlineStatus;
+  followerEmployeeId?: number;
   followerKeyword?: string;
   sort?: string;
   order?: "asc" | "desc";
@@ -307,6 +356,107 @@ export type ConsoleAudienceDetailQuery = {
 export function listConsoleAudienceDetails(activityId: string, query: ConsoleAudienceDetailQuery = {}) {
   return get<ConsoleAudienceDetailListData>(
     `/activities/console/audience-details/${encodeURIComponent(activityId)}`,
+    { params: query },
+  );
+}
+
+/** 本场员工邀请人（底栏跟进人下拉，D124） */
+export interface ConsoleSessionInviterItem {
+  employeeId: number;
+  name: string;
+}
+
+export function listConsoleSessionInviters(activityId: string) {
+  return get<{ id: string; list: ConsoleSessionInviterItem[] }>(
+    `/activities/console/session-inviters/${encodeURIComponent(activityId)}`,
+  );
+}
+
+/** 中控台底部带货明细（D124） */
+export type CommercePayStatus = "unpaid" | "paid" | "refunded";
+export type CommercePayStatusFilter = "all" | CommercePayStatus;
+
+export interface ConsoleCommerceDetailItem {
+  username: string;
+  nickname: string;
+  avatarUrl?: string;
+  unionid?: string;
+  spuId: string;
+  productName: string;
+  clickCount: number;
+  lastClickTime?: string;
+  orderCount: number;
+  unpaidCount: number;
+  paidSuccessCount: number;
+  payStatus: CommercePayStatus;
+  liveDealAmount: string;
+  totalPaidOrderCount: number;
+  totalPaidAmount: string;
+  phoneMasked?: string;
+  followerName?: string;
+  followerEmployeeId?: number;
+}
+
+export interface ConsoleCommerceDetailListData {
+  page: number;
+  pageSize: number;
+  total: number;
+  list: ConsoleCommerceDetailItem[];
+}
+
+export type ConsoleCommerceDetailQuery = {
+  page?: number;
+  pageSize?: number;
+  productName?: string;
+  payStatus?: CommercePayStatusFilter;
+  followerEmployeeId?: number;
+  followerKeyword?: string;
+  keywordType?: AudienceDetailKeywordType;
+  keyword?: string;
+  sort?: string;
+  order?: "asc" | "desc";
+};
+
+export function listConsoleCommerceDetails(activityId: string, query: ConsoleCommerceDetailQuery = {}) {
+  return get<ConsoleCommerceDetailListData>(
+    `/activities/console/commerce-details/${encodeURIComponent(activityId)}`,
+    { params: query },
+  );
+}
+
+/** 中控台底部员工数据（D125） */
+export interface ConsoleStaffDetailItem {
+  employeeId: number;
+  employeeName: string;
+  deptId?: number;
+  deptName?: string;
+  inviteCount: number;
+  liveWatchCount: number;
+  avgLiveWatchDurationSec: number;
+  onlineCount: number;
+  commentCount: number;
+}
+
+export interface ConsoleStaffDetailListData {
+  page: number;
+  pageSize: number;
+  total: number;
+  list: ConsoleStaffDetailItem[];
+}
+
+export type ConsoleStaffDetailQuery = {
+  page?: number;
+  pageSize?: number;
+  employeeId?: number;
+  employeeKeyword?: string;
+  deptId?: number;
+  sort?: string;
+  order?: "asc" | "desc";
+};
+
+export function listConsoleStaffDetails(activityId: string, query: ConsoleStaffDetailQuery = {}) {
+  return get<ConsoleStaffDetailListData>(
+    `/activities/console/staff-details/${encodeURIComponent(activityId)}`,
     { params: query },
   );
 }
@@ -374,7 +524,6 @@ export interface ConsoleProductItem {
   spuId: string;
   productName: string;
   visible: boolean;
-  sortOrder: number;
   soldCount: number;
 }
 
@@ -439,6 +588,37 @@ export async function exportConsoleAudienceDetails(
     const a = document.createElement("a");
     a.href = objectUrl;
     a.download = "audience-details.csv";
+    a.click();
+    URL.revokeObjectURL(objectUrl);
+  } catch (e) {
+    if (axios.isAxiosError(e) && e.response?.data instanceof Blob) {
+      throw new Error(await blobErrorMessage(e.response.data));
+    }
+    throw e;
+  }
+}
+
+export async function exportConsoleCommerceDetails(
+  activityId: string,
+  query: Omit<ConsoleCommerceDetailQuery, "page" | "pageSize"> = {},
+) {
+  const token = getAccessToken();
+  const url = apiV1(`/activities/console/commerce-details/export/${encodeURIComponent(activityId)}`);
+  try {
+    const resp = await axios.get(url, {
+      responseType: "blob",
+      params: query,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      timeout: 60000,
+    });
+    const blob = resp.data as Blob;
+    if (blob.type && blob.type.includes("application/json")) {
+      throw new Error(await blobErrorMessage(blob));
+    }
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = "commerce-details.csv";
     a.click();
     URL.revokeObjectURL(objectUrl);
   } catch (e) {

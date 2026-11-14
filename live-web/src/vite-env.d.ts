@@ -58,7 +58,7 @@ interface ChatMessage {
    */
   reply?: { nickname: string; content: string; msgId?: string };
   /** 提问 / 优惠券。普通聊天不设。 */
-  kind?: "question" | "coupon";
+  kind?: "question" | "coupon" | "system";
   /** 主持人对该提问的回复 */
   answer?: { nickname: string; content: string; roleLabel?: string };
   /** 优惠券卡片（kind=coupon；D113） */

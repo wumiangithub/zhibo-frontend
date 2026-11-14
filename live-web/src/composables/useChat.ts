@@ -9,6 +9,7 @@ import {
 } from "@/api/comments";
 import { createChatQuestions } from "@/composables/chatQuestions";
 import { createChatCoupons } from "@/composables/chatCoupons";
+import { createChatSystemMessages } from "@/composables/chatSystemMessages";
 import { normalizeEmojiText } from "@/constants/emoji";
 import { collectVhallChatImageUrls } from "@/utils/vhallChatImage";
 import { parseVhallChatRole } from "@/utils/vhallChatRole";
@@ -488,7 +489,16 @@ export function useChat(options: ChatOptions) {
     getActivityId: options.getActivityId,
   });
 
+  const systemMessages = createChatSystemMessages({
+    chat,
+    getSender,
+    trimList,
+    scrollChatToBottom,
+    getActivityId: options.getActivityId,
+  });
+
   function handleCustomEvent(raw: unknown) {
+    if (systemMessages.handleCustomEvent(raw)) return;
     const before = chat.chatMessages.length;
     coupons.handleCustomEvent(raw);
     if (chat.chatMessages.length > before) {
@@ -655,6 +665,7 @@ export function useChat(options: ChatOptions) {
       if (!historyDisposed) {
         await questions.loadHistory();
         await coupons.loadHistory();
+        await systemMessages.loadHistory();
       }
     }
   }
@@ -721,6 +732,8 @@ export function useChat(options: ChatOptions) {
     handleQuestion: questions.handleQuestion,
     handleQuestionBackout: questions.handleQuestionBackout,
     handleCustomEvent,
+    systemPinned: systemMessages.pinned,
+    dismissSystemPin: systemMessages.dismissPinnedLocally,
     handleChatDelete,
     loadChatHistory,
     scheduleLoadHistory,

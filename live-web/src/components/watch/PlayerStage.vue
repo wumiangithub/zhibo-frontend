@@ -204,6 +204,7 @@ onBeforeUnmount(() => {
   }
 }
 
+
 /* 伪全屏作用在舞台根，自建底栏一起铺满 */
 .player-stage.player-stage-fullscreen {
   position: fixed !important;

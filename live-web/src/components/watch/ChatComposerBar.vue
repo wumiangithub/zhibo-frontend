@@ -317,7 +317,7 @@ function onEnter() {
       </svg>
       <span
         v-if="likeCount && likeCount > 0"
-        class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--lw-color-like-badge)] px-1 text-center text-[10px] font-medium leading-4 text-[var(--lw-text-on-brand)] shadow-[0_0_0_1.5px_var(--lw-bg-chrome)]"
+        class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--lw-color-like-badge)] px-1 text-center text-[10px] font-medium leading-4 text-[var(--lw-text-on-brand)] shadow-[0_0_0_1.5px_var(--lw-bg-composer)]"
       >
         {{ likeCount > 99999 ? "99999+" : likeCount }}
       </span>

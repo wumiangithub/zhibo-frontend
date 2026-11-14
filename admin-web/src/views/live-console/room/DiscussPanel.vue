@@ -255,6 +255,16 @@ function send() {
   props.chat.sendChat();
 }
 
+async function onUnpinSystem() {
+  const pinned = props.chat.systemPinned;
+  if (!pinned?.commentId) return;
+  try {
+    await props.chat.unpinSystemMessage(pinned.commentId);
+  } catch (e) {
+    toast(e instanceof Error ? e.message : "取消置顶失败");
+  }
+}
+
 let resizeObs: ResizeObserver | undefined;
 
 onMounted(() => {
@@ -412,8 +422,25 @@ onBeforeUnmount(() => {
     </div>
 
     <div
+      v-if="chat.systemPinned"
+      class="pin-bar"
+      role="status"
+    >
+      <span class="pin-tag">置顶</span>
+      <p class="pin-text">{{ chat.systemPinned.text }}</p>
+      <button
+        type="button"
+        class="pin-close"
+        aria-label="取消置顶"
+        @click="onUnpinSystem"
+      >
+        ×
+      </button>
+    </div>
+
+    <div
       :ref="chat.attachListEl"
-      class="list"
+      class="list hover-scrollbar"
     >
       <template v-if="showRealList">
         <p
@@ -460,6 +487,10 @@ onBeforeUnmount(() => {
                   v-if="msg.kind === 'question'"
                   class="badge is-question"
                 >问</span>
+                <span
+                  v-if="msg.kind === 'system'"
+                  class="badge is-system"
+                >系统</span>
               </div>
               <div
                 v-if="msg.kind === 'coupon' && msg.coupon"
@@ -926,6 +957,57 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
+.pin-bar {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  border: 1px solid #ffe58f;
+  border-radius: 6px;
+  background: #fffbe6;
+}
+
+.pin-tag {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #faad14;
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.pin-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: #595959;
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.pin-close {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #8c8c8c;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pin-close:hover {
+  color: #262626;
+  background: rgba(0, 0, 0, 0.04);
+}
+
 .list {
   min-height: 0;
   flex: 1;
@@ -1053,6 +1135,11 @@ onBeforeUnmount(() => {
 .badge.is-question {
   background: var(--color-primary-bg);
   color: var(--color-primary);
+}
+
+.badge.is-system {
+  background: #f0f5ff;
+  color: #2f54eb;
 }
 
 .msg-coupon {

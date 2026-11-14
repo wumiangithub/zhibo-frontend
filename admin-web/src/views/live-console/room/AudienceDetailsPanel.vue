@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
-import { Refresh, Lock, Unlock } from "@element-plus/icons-vue";
+import { Refresh, Lock, Unlock, InfoFilled } from "@element-plus/icons-vue";
 import {
   exportConsoleAudienceDetails,
   listConsoleAudienceDetails,
+  listConsoleSessionInviters,
   type AudienceDetailKeywordType,
   type AudienceDetailOnlineStatus,
   type ConsoleAudienceDetailItem,
+  type ConsoleSessionInviterItem,
 } from "./api/console";
 import { appendViewerTags, getViewerPhonePlain } from "@/api/viewer";
 import { formatDurationSec } from "@/api/audience";
 import { listViewerTags, ViewerTagType, type ViewerTagItem } from "@/api/viewerTag";
 import { nicknameInitial } from "./utils/nicknameInitial";
+import CommerceDetailsPanel from "./CommerceDetailsPanel.vue";
+import StaffDetailsPanel from "./StaffDetailsPanel.vue";
+import UserKeywordCombo from "@/components/UserKeywordCombo.vue";
 
 const props = defineProps<{
   activityId: string;
@@ -33,6 +38,10 @@ const shellTab = ref<ShellTab>("audience");
 const loading = ref(false);
 /** 展开过才拉列表，避免收起态空打接口 */
 const listLoadedOnce = ref(false);
+const commerceLoadedOnce = ref(false);
+const commerceRefreshToken = ref(0);
+const staffLoadedOnce = ref(false);
+const staffRefreshToken = ref(0);
 const exporting = ref(false);
 const error = ref("");
 const list = ref<ConsoleAudienceDetailItem[]>([]);
@@ -44,20 +53,15 @@ const order = ref<"asc" | "desc">("desc");
 const selected = ref<ConsoleAudienceDetailItem[]>([]);
 const revealedPhones = reactive<Record<string, string>>({});
 const revealing = reactive<Record<string, boolean>>({});
+const inviters = ref<ConsoleSessionInviterItem[]>([]);
 
 const draft = reactive({
   keywordType: "nickname" as AudienceDetailKeywordType,
   keyword: "",
   onlineStatus: "all" as AudienceDetailOnlineStatus,
-  followerKeyword: "",
+  followerEmployeeId: "" as string | number,
 });
 const applied = reactive({ ...draft });
-
-const keywordPlaceholder = computed(() => {
-  if (draft.keywordType === "username") return "请输入用户ID";
-  if (draft.keywordType === "phone") return "请输入手机号";
-  return "请输入用户昵称";
-});
 
 const tagDialogVisible = ref(false);
 const tagSaving = ref(false);
@@ -82,6 +86,20 @@ const SORT_PROP_TO_KEY: Record<string, string> = {
   couponReceiveCount: "couponReceiveCount",
 };
 
+async function loadInviters() {
+  const id = props.activityId.trim();
+  if (!id) {
+    inviters.value = [];
+    return;
+  }
+  try {
+    const res = await listConsoleSessionInviters(id);
+    inviters.value = res.list ?? [];
+  } catch {
+    inviters.value = [];
+  }
+}
+
 async function fetchList() {
   const id = props.activityId.trim();
   if (!id) {
@@ -92,13 +110,17 @@ async function fetchList() {
   loading.value = true;
   error.value = "";
   try {
+    const followerId =
+      applied.followerEmployeeId === "" || applied.followerEmployeeId == null
+        ? undefined
+        : Number(applied.followerEmployeeId);
     const res = await listConsoleAudienceDetails(id, {
       page: page.value,
       pageSize: pageSize.value,
       keywordType: applied.keywordType,
       keyword: applied.keyword.trim() || undefined,
       onlineStatus: applied.onlineStatus,
-      followerKeyword: applied.followerKeyword.trim() || undefined,
+      followerEmployeeId: followerId && followerId > 0 ? followerId : undefined,
       sort: sort.value,
       order: order.value,
     });
@@ -125,7 +147,7 @@ function onReset() {
   draft.keywordType = "nickname";
   draft.keyword = "";
   draft.onlineStatus = "all";
-  draft.followerKeyword = "";
+  draft.followerEmployeeId = "";
   Object.assign(applied, { ...draft });
   page.value = 1;
   sort.value = "latestEnterTime";
@@ -138,16 +160,41 @@ function onRefresh() {
     setCollapsed(false);
     return;
   }
-  void fetchList();
+  void loadInviters();
+  if (shellTab.value === "commerce") {
+    commerceRefreshToken.value += 1;
+    return;
+  }
+  if (shellTab.value === "staff") {
+    staffRefreshToken.value += 1;
+    return;
+  }
+  if (shellTab.value === "audience") {
+    void fetchList();
+  }
 }
 
 function setCollapsed(next: boolean) {
   if (collapsed.value === next) return;
   collapsed.value = next;
   emit("update:collapsed", next);
-  if (!next && !listLoadedOnce.value && shellTab.value === "audience") {
+  if (!next) {
+    ensureTabLoaded();
+  }
+}
+
+function ensureTabLoaded() {
+  if (shellTab.value === "audience" && !listLoadedOnce.value) {
     listLoadedOnce.value = true;
     void fetchList();
+  }
+  if (shellTab.value === "commerce" && !commerceLoadedOnce.value) {
+    commerceLoadedOnce.value = true;
+    commerceRefreshToken.value += 1;
+  }
+  if (shellTab.value === "staff" && !staffLoadedOnce.value) {
+    staffLoadedOnce.value = true;
+    staffRefreshToken.value += 1;
   }
 }
 
@@ -159,6 +206,8 @@ function onShellTab(tab: ShellTab) {
   shellTab.value = tab;
   if (collapsed.value) {
     setCollapsed(false);
+  } else {
+    ensureTabLoaded();
   }
 }
 
@@ -167,11 +216,15 @@ async function onExport() {
   if (!id) return;
   exporting.value = true;
   try {
+    const followerId =
+      applied.followerEmployeeId === "" || applied.followerEmployeeId == null
+        ? undefined
+        : Number(applied.followerEmployeeId);
     await exportConsoleAudienceDetails(id, {
       keywordType: applied.keywordType,
       keyword: applied.keyword.trim() || undefined,
       onlineStatus: applied.onlineStatus,
-      followerKeyword: applied.followerKeyword.trim() || undefined,
+      followerEmployeeId: followerId && followerId > 0 ? followerId : undefined,
       sort: sort.value,
       order: order.value,
     });
@@ -284,10 +337,11 @@ watch(
     page.value = 1;
     selected.value = [];
     listLoadedOnce.value = false;
+    commerceLoadedOnce.value = false;
     Object.keys(revealedPhones).forEach((k) => delete revealedPhones[k]);
+    void loadInviters();
     if (!collapsed.value) {
-      listLoadedOnce.value = true;
-      void fetchList();
+      ensureTabLoaded();
     }
   },
   { immediate: true },
@@ -346,53 +400,39 @@ defineExpose({ collapsed, setCollapsed, toggleCollapsed });
         type="button"
         class="refresh"
         title="刷新"
-        :disabled="loading || shellTab !== 'audience'"
+        :disabled="loading || (shellTab !== 'audience' && shellTab !== 'commerce' && shellTab !== 'staff')"
         @click="onRefresh"
       >
         <el-icon :size="16"><Refresh /></el-icon>
       </button>
     </header>
 
-    <div
-      v-if="!collapsed && shellTab !== 'audience'"
-      class="empty-shell"
-    >
-      暂未开放
-    </div>
+    <StaffDetailsPanel
+      v-if="!collapsed && shellTab === 'staff'"
+      :activity-id="activityId"
+      :inviters="inviters"
+      :refresh-token="staffRefreshToken"
+    />
+
+    <CommerceDetailsPanel
+      v-else-if="!collapsed && shellTab === 'commerce'"
+      :activity-id="activityId"
+      :inviters="inviters"
+      :refresh-token="commerceRefreshToken"
+    />
 
     <div
       v-else-if="!collapsed"
       class="body"
     >
       <div class="filters">
-        <ElInput
-          v-model="draft.keyword"
-          class="keyword-combo"
-          clearable
-          :placeholder="keywordPlaceholder"
-          @keyup.enter="onQuery"
-        >
-          <template #prepend>
-            <ElSelect
-              v-model="draft.keywordType"
-              class="keyword-type"
-              placeholder="类型"
-            >
-              <ElOption
-                label="用户昵称"
-                value="nickname"
-              />
-              <ElOption
-                label="用户ID"
-                value="username"
-              />
-              <ElOption
-                label="手机号"
-                value="phone"
-              />
-            </ElSelect>
-          </template>
-        </ElInput>
+        <UserKeywordCombo
+          v-model:keyword-type="draft.keywordType"
+          v-model:keyword="draft.keyword"
+          width="290px"
+          type-width="110px"
+          @enter="onQuery"
+        />
         <span class="filter-label">状态</span>
         <ElSelect
           v-model="draft.onlineStatus"
@@ -412,13 +452,24 @@ defineExpose({ collapsed, setCollapsed, toggleCollapsed });
           />
         </ElSelect>
         <span class="filter-label">跟进人</span>
-        <ElInput
-          v-model="draft.followerKeyword"
+        <ElSelect
+          v-model="draft.followerEmployeeId"
           clearable
-          placeholder="请输入跟进人名称"
+          filterable
+          placeholder="全部跟进人"
           style="width: 160px"
-          @keyup.enter="onQuery"
-        />
+        >
+          <ElOption
+            label="全部跟进人"
+            value=""
+          />
+          <ElOption
+            v-for="item in inviters"
+            :key="item.employeeId"
+            :label="item.name"
+            :value="item.employeeId"
+          />
+        </ElSelect>
         <ElButton
           type="primary"
           @click="onQuery"
@@ -526,10 +577,21 @@ defineExpose({ collapsed, setCollapsed, toggleCollapsed });
             </template>
           </ElTableColumn>
           <ElTableColumn
-            label="跟进人"
             width="100"
             show-overflow-tooltip
           >
+            <template #header>
+              <span class="th-with-tip">
+                跟进人
+                <ElTooltip
+                  content="用户通过该角色邀请链接进入直播间并绑定"
+                  placement="top"
+                  :show-after="200"
+                >
+                  <ElIcon class="info-icon"><InfoFilled /></ElIcon>
+                </ElTooltip>
+              </span>
+            </template>
             <template #default="{ row }">
               {{ row.followerName || "—" }}
             </template>
@@ -628,16 +690,39 @@ defineExpose({ collapsed, setCollapsed, toggleCollapsed });
           />
           <ElTableColumn
             prop="totalPurchaseCount"
-            label="累计购买次数"
-            min-width="148"
-            sortable="custom"
-          />
-          <ElTableColumn
-            prop="totalPurchaseAmount"
-            label="累计购买金额"
             min-width="148"
             sortable="custom"
           >
+            <template #header>
+              <span class="th-with-tip">
+                累计购买次数
+                <ElTooltip
+                  content="直播间带货商品，在店铺内累计支付订单数，包含退款"
+                  placement="top"
+                  :show-after="200"
+                >
+                  <ElIcon class="info-icon"><InfoFilled /></ElIcon>
+                </ElTooltip>
+              </span>
+            </template>
+          </ElTableColumn>
+          <ElTableColumn
+            prop="totalPurchaseAmount"
+            min-width="148"
+            sortable="custom"
+          >
+            <template #header>
+              <span class="th-with-tip">
+                累计购买金额
+                <ElTooltip
+                  content="直播间带货商品，在店铺内累计购买金额，包含退款"
+                  placement="top"
+                  :show-after="200"
+                >
+                  <ElIcon class="info-icon"><InfoFilled /></ElIcon>
+                </ElTooltip>
+              </span>
+            </template>
             <template #default="{ row }">
               {{ row.totalPurchaseAmount }}元
             </template>
@@ -831,16 +916,6 @@ defineExpose({ collapsed, setCollapsed, toggleCollapsed });
   cursor: not-allowed;
 }
 
-.empty-shell {
-  display: flex;
-  min-height: 0;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  color: #999;
-  font-size: 14px;
-}
-
 .body {
   display: flex;
   flex: none;
@@ -856,26 +931,6 @@ defineExpose({ collapsed, setCollapsed, toggleCollapsed });
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
-}
-
-/* 左筛：类型下拉 + 关键字输入拼成一组（对齐产品） */
-.keyword-combo {
-  width: 290px;
-}
-
-.keyword-combo :deep(.el-input-group__prepend) {
-  padding: 0;
-  background: #fff;
-}
-
-.keyword-combo :deep(.keyword-type) {
-  width: 110px;
-  margin: -1px 0;
-}
-
-.keyword-combo :deep(.keyword-type .el-select__wrapper) {
-  box-shadow: none !important;
-  background: transparent;
 }
 
 .filter-label {
@@ -1032,5 +1087,17 @@ defineExpose({ collapsed, setCollapsed, toggleCollapsed });
   margin: 0 0 12px;
   color: #666;
   font-size: 13px;
+}
+
+.th-with-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.info-icon {
+  font-size: 14px;
+  color: #c0c4cc;
+  cursor: help;
 }
 </style>

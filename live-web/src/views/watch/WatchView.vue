@@ -388,20 +388,23 @@ onMounted(() => {
 
 <template>
   <div
-    class="lw-theme flex h-dvh flex-col bg-[var(--lw-bg-canvas)] text-[var(--lw-text-primary)]"
+    class="lw-theme pc-watch-page flex h-dvh flex-col md:overflow-hidden bg-[var(--lw-bg-canvas)] text-[var(--lw-text-primary)]"
     :data-lw-theme="theme"
   >
     <UiPageHeader
       v-if="!inMiniProgram"
-      class="md:hidden"
+      class="md:hidden watch-mobile-header"
       :title="data?.title || '直播'"
       @back="goBackFromWatch"
     />
 
+    <div class="pc-watch-body flex min-h-0 flex-1 flex-col">
+    <div class="pc-watch-frame flex min-h-0 flex-1 flex-col">
     <header
       v-if="!inMiniProgram"
       class="pc-watch-topbar hidden flex-none items-center border-b border-[var(--lw-border)] bg-[var(--lw-bg-chrome)] md:flex"
     >
+      <div class="pc-watch-topbar-inner">
       <button
         type="button"
         class="pc-watch-back"
@@ -455,6 +458,7 @@ onMounted(() => {
         </span>
         {{ displayNickname }}
       </button>
+      </div>
     </header>
 
     <div class="flex min-h-0 flex-1 flex-col">
@@ -577,6 +581,8 @@ onMounted(() => {
         </template>
       </template>
     </div>
+    </div>
+    </div>
 
     <AccessPasswordDialog
       :open="passwordOpen"
@@ -636,8 +642,24 @@ onMounted(() => {
 <style scoped>
 .pc-watch-topbar {
   height: 56px;
-  padding: 0 16px 0 8px;
+  padding: 0;
+}
+.pc-watch-topbar-inner {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 0 16px 0 8px;
+}
+@media (min-width: 1601px) {
+  .pc-watch-frame {
+    width: 100%;
+    max-width: 1600px;
+    margin: 0 auto;
+    overflow: visible;
+    box-shadow: var(--lw-block-outline);
+  }
 }
 .pc-watch-back {
   flex: none;
@@ -656,5 +678,9 @@ onMounted(() => {
 .pc-watch-back svg {
   width: 18px;
   height: 18px;
+}
+/* 小屏直播间顶栏与聊天 Tab 同色，浅色/暗色都走 --lw-bg-chrome */
+:deep(.watch-mobile-header) {
+  background-color: var(--lw-bg-chrome);
 }
 </style>

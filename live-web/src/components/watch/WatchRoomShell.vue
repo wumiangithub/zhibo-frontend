@@ -15,7 +15,7 @@ defineSlots<{
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 flex-col md:flex-row">
+  <div class="room-shell flex min-h-0 flex-1 flex-col md:flex-row">
     <div class="media-well">
       <slot name="media" />
     </div>
@@ -24,6 +24,11 @@ defineSlots<{
 </template>
 
 <style scoped>
+/* 舞台外父级跟聊天 Tab 同色，漏缝时不露第三种底；黑底井 / letterbox 仍走 --lw-bg-player */
+.room-shell {
+  background: var(--lw-bg-chrome);
+}
+
 .media-well {
   display: flex;
   flex-direction: column;

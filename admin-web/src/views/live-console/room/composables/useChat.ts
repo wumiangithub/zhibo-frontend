@@ -9,6 +9,7 @@ import {
 } from "../api/comments";
 import { createChatQuestions } from "./chatQuestions";
 import { createChatCoupons } from "./chatCoupons";
+import { createChatSystemMessages } from "./chatSystemMessages";
 import { normalizeEmojiText } from "../constants/emoji";
 import { chatViewerIdFromRaw } from "../utils/chatViewerId";
 import { collectVhallChatImageUrls } from "../utils/vhallChatImage";
@@ -449,10 +450,32 @@ export function useChat(options: ChatOptions) {
     getActivityId: options.getActivityId,
   });
 
-  function sendChat() {
-    const msg = chat.chatInput.trim();
+  const systemMessages = createChatSystemMessages({
+    chat,
+    getSdk,
+    getSender,
+    trimList,
+    scrollChatToBottom,
+    getActivityId: options.getActivityId,
+  });
+
+  function handleCustomEvent(raw: unknown) {
+    if (systemMessages.handleCustomEvent(raw)) return;
+    coupons.handleCustomEvent(raw);
+  }
+
+  /**
+   * 发普通聊天到直播间（微吼 chat.sendChat）。
+   * 讨论区输入框与快捷发送共用；成功时乐观上屏并清空输入框（若 msg 与当前输入一致）。
+   * @returns ok / muted / too_long / no_sdk / empty / fail
+   */
+  function sendChatText(raw: string): "ok" | "muted" | "too_long" | "no_sdk" | "empty" | "fail" {
+    const msg = raw.trim();
+    if (!msg) return "empty";
+    if (msg.length > MAX_LEN) return "too_long";
+    if (chat.isChatMuted) return "muted";
     const sdk = getSdk();
-    if (!msg || !sdk || chat.isChatMuted || msg.length > MAX_LEN) return;
+    if (!sdk?.chat?.sendChat) return "no_sdk";
     try {
       const result = sdk.chat.sendChat(msg) as unknown;
       console.log("[vhall-sdk] sendChat result", result);
@@ -474,12 +497,22 @@ export function useChat(options: ChatOptions) {
         timestamp: Date.now(),
       });
       trimList();
-      chat.chatInput = "";
+      if (chat.chatInput.trim() === msg) {
+        chat.chatInput = "";
+      }
       scrollChatToBottom();
       reportSentMessage(msg);
+      return "ok";
     } catch (e) {
       console.error("发送聊天失败", e);
+      return "fail";
     }
+  }
+
+  function sendChat() {
+    const result = sendChatText(chat.chatInput);
+    if (result === "ok") return;
+    if (result === "fail") return;
   }
 
   function sameChatBody(a: ChatMessage, b: ChatMessage): boolean {
@@ -606,6 +639,7 @@ export function useChat(options: ChatOptions) {
       if (!historyDisposed) {
         await questions.loadHistory();
         if (!historyDisposed) await coupons.loadHistory();
+        if (!historyDisposed) await systemMessages.loadHistory();
       }
     }
   }
@@ -665,13 +699,18 @@ export function useChat(options: ChatOptions) {
     scrollChatToBottom,
     requestChatFocus,
     sendChat,
+    sendChatText,
     sendQuestion: questions.sendQuestion,
     reportSentMessage,
     handleChatMessage,
     handleQuestion: questions.handleQuestion,
     handleQuestionBackout: questions.handleQuestionBackout,
-    handleCustomEvent: coupons.handleCustomEvent,
+    handleCustomEvent,
     broadcastCoupon: coupons.broadcastAfterSend,
+    systemPinned: systemMessages.pinned,
+    sendSystemMessage: systemMessages.sendAndBroadcast,
+    unpinSystemMessage: systemMessages.unpinAndBroadcast,
+    dismissSystemPin: systemMessages.dismissPinnedLocally,
     handleChatDelete,
     loadChatHistory,
     scheduleLoadHistory,

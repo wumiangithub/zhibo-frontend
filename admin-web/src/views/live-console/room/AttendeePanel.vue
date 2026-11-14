@@ -6,6 +6,7 @@ import { useToast } from "@/composables/useToast";
 import { useAttendeeList } from "./useAttendeeList";
 import { useDiscussFollowers } from "./composables/useDiscussFollowers";
 import { nicknameInitial } from "./utils/nicknameInitial";
+import UserKeywordCombo from "@/components/UserKeywordCombo.vue";
 
 const props = defineProps<{
   activityId: string;
@@ -44,7 +45,6 @@ const {
   tab,
   keywordType,
   keyword,
-  keywordPlaceholder,
   followerFilter,
   behavior,
   list,
@@ -141,37 +141,16 @@ function tabCount(key: AttendeeTab): number {
       class="student-tools"
     >
       <div class="search">
-        <ElInput
-          v-model="keyword"
-          class="keyword-combo"
-          clearable
-          :placeholder="keywordPlaceholder"
+        <UserKeywordCombo
+          v-model:keyword-type="keywordType"
+          v-model:keyword="keyword"
+          width=""
+          type-width="100px"
           @input="scheduleSearch"
           @clear="searchNow"
-          @keyup.enter="searchNow"
-        >
-          <template #prepend>
-            <ElSelect
-              v-model="keywordType"
-              class="keyword-type"
-              placeholder="类型"
-              @change="searchNow"
-            >
-              <ElOption
-                label="用户昵称"
-                value="nickname"
-              />
-              <ElOption
-                label="用户ID"
-                value="username"
-              />
-              <ElOption
-                label="手机号"
-                value="phone"
-              />
-            </ElSelect>
-          </template>
-        </ElInput>
+          @enter="searchNow"
+          @type-change="searchNow"
+        />
         <button
           type="button"
           class="refresh"
@@ -403,14 +382,6 @@ function tabCount(key: AttendeeTab): number {
   column-gap: 8px;
 }
 
-.keyword-combo {
-  min-width: 0;
-}
-
-.keyword-combo :deep(.el-input__wrapper) {
-  min-height: 32px;
-}
-
 .refresh {
   display: inline-flex;
   align-items: center;
@@ -432,21 +403,6 @@ function tabCount(key: AttendeeTab): number {
 .refresh:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.keyword-combo :deep(.el-input-group__prepend) {
-  padding: 0;
-  background: #fff;
-}
-
-.keyword-combo :deep(.keyword-type) {
-  width: 100px;
-  margin: -1px 0;
-}
-
-.keyword-combo :deep(.keyword-type .el-select__wrapper) {
-  box-shadow: none !important;
-  background: transparent;
 }
 
 .filter-selects {

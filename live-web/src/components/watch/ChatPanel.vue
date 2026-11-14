@@ -93,12 +93,12 @@ function nameClass(_msg: ChatMessage): string {
 
 function badgeClass(msg: ChatMessage): string {
   if (msg.role_name === 3) {
-    return "rounded px-1.5 py-0.5 bg-[var(--lw-color-assistant-muted)] text-[var(--lw-color-assistant)]";
+    return "rounded bg-[var(--lw-color-assistant-muted)] text-[var(--lw-color-assistant)]";
   }
   if (msg.role_name === 4) {
-    return "rounded px-1.5 py-0.5 bg-[var(--lw-color-guest-muted)] text-[var(--lw-color-guest)]";
+    return "rounded bg-[var(--lw-color-guest-muted)] text-[var(--lw-color-guest)]";
   }
-  return "rounded-full bg-[var(--lw-color-host-badge)] px-1.5 py-0.5 text-[var(--lw-text-on-brand)]";
+  return "rounded-full bg-[var(--lw-color-host-badge)] text-[var(--lw-text-on-brand)]";
 }
 
 /** 对齐 demo：相对上一条同日同小时不显示；首条/跨小时显示 HH:mm */
@@ -260,6 +260,26 @@ function onChatInputUpdate(value: string) {
       <span>主持人已禁言</span>
     </div>
 
+    <!-- 系统消息置顶（观众关闭仅本地；条底固定浅色，文案/× 用深色以免暗色主题字色被洗掉） -->
+    <div
+      v-if="chat.systemPinned"
+      class="system-pin-bar mx-3 mb-1 flex flex-none items-start gap-2 rounded-md border border-[#ffe58f] bg-[#fffbe6] px-2.5 py-2 md:mx-4"
+      role="status"
+    >
+      <span class="shrink-0 rounded bg-[#faad14] px-1.5 text-[11px] leading-[18px] text-white">置顶</span>
+      <p class="system-pin-text min-w-0 flex-1 m-0 break-words text-[13px] leading-[1.45] text-[#595959]">
+        {{ chat.systemPinned.text }}
+      </p>
+      <button
+        type="button"
+        class="system-pin-close shrink-0 flex h-5 w-5 items-center justify-center rounded text-[16px] leading-none text-[#595959] hover:bg-black/10"
+        aria-label="关闭置顶"
+        @click="chat.dismissSystemPin?.()"
+      >
+        ×
+      </button>
+    </div>
+
     <!-- 消息列表 -->
     <div class="relative flex min-h-0 flex-1 flex-col">
       <div
@@ -286,6 +306,7 @@ function onChatInputUpdate(value: string) {
         <div class="mb-3.5 flex gap-2.5 md:mb-4">
           <div
             class="chat-avatar flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full text-[13px] font-semibold md:h-7 md:w-7"
+            :class="{ 'chat-avatar--letter': !avatarSrc(msg) }"
           >
             <img
               v-if="avatarSrc(msg)"
@@ -298,7 +319,7 @@ function onChatInputUpdate(value: string) {
           </div>
           <div class="min-w-0 flex-1">
             <!-- 昵称在前，角色角标紧跟其后 -->
-            <div class="flex items-baseline gap-1.5 md:mb-1.5 md:gap-2">
+            <div class="flex items-center gap-1.5 md:mb-1.5 md:gap-2">
               <span
                 class="min-w-0 truncate text-xs leading-4"
                 :class="nameClass(msg)"
@@ -307,16 +328,22 @@ function onChatInputUpdate(value: string) {
               </span>
               <span
                 v-if="roleBadge(msg)"
-                class="flex-none self-center text-[10px] leading-4"
+                class="role-chip flex-none"
                 :class="badgeClass(msg)"
               >
                 {{ roleBadge(msg) }}
               </span>
               <span
                 v-if="msg.kind === 'question'"
-                class="ask-chip self-center"
+                class="ask-chip"
               >
                 问
+              </span>
+              <span
+                v-if="msg.kind === 'system'"
+                class="system-chip"
+              >
+                系统
               </span>
               <span
                 v-if="formatMessageClock(msg.timestamp)"
@@ -372,12 +399,16 @@ function onChatInputUpdate(value: string) {
               <div
                 v-if="msg.msg?.trim()"
                 class="chat-msg-body break-words text-[14px] leading-5 md:leading-[22px]"
-                :class="msg.kind === 'question' ? 'chat-msg-ask' : 'chat-msg-normal'"
+                :class="msg.kind === 'question' ? 'chat-msg-ask' : msg.kind === 'system' ? 'chat-msg-system' : 'chat-msg-normal'"
               >
                 <span
                   v-if="msg.kind === 'question'"
                   class="ask-tag"
                 >提问</span>
+                <span
+                  v-if="msg.kind === 'system'"
+                  class="system-tag"
+                >系统</span>
                 <span class="chat-msg-text">
                   <template v-for="(seg, segIdx) in splitEmojiText(msg.msg)" :key="segIdx">
                     <img
@@ -430,7 +461,7 @@ function onChatInputUpdate(value: string) {
     </div>
 
     <!-- PC 输入栏（回放展示禁用态） -->
-    <div class="hidden flex-none border-t border-[var(--lw-border)] bg-[var(--lw-bg-chrome)] p-3 md:block">
+    <div class="hidden flex-none border-t border-[var(--lw-border)] bg-[var(--lw-bg-composer)] p-3 md:block">
       <ChatComposerBar
         ref="pcComposerRef"
         variant="pc"
@@ -450,7 +481,7 @@ function onChatInputUpdate(value: string) {
     </div>
 
     <!-- 小屏底栏（表情 sheet 走文档流，在输入行上方把列表往上挤；安全区沿用父级） -->
-    <div class="relative z-50 flex flex-none flex-col border-t border-[var(--lw-border)] bg-[var(--lw-bg-chrome)] md:hidden">
+    <div class="relative z-50 flex flex-none flex-col border-t border-[var(--lw-border)] bg-[var(--lw-bg-composer)] md:hidden">
       <EmojiPanel
         v-if="showEmoji && !isReadonly"
         variant="sheet"
@@ -528,6 +559,22 @@ function onChatInputUpdate(value: string) {
   color: var(--lw-text-secondary);
 }
 
+/* 小屏字母头像与信息区（elevated）区分；有图头像和 PC 不改。 */
+@media (max-width: 767px) {
+  .chat-avatar--letter {
+    box-sizing: border-box;
+    background: #ffffff;
+    border: 1px solid var(--lw-bubble-border);
+  }
+}
+
+@media (max-width: 767px) {
+  :global(.lw-theme[data-lw-theme="dark"]) .chat-avatar--letter {
+    background: #323338;
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
 .chat-bubble {
   border: 1px solid var(--lw-bubble-border);
   box-shadow: var(--lw-bubble-shadow);
@@ -551,35 +598,51 @@ function onChatInputUpdate(value: string) {
   font-weight: 400;
 }
 
-.chat-msg-ask {
+.chat-msg-ask,
+.chat-msg-system {
   /* 比普通消息略重即可，勿纯黑加粗抢戏 */
   color: var(--lw-text-primary);
   font-weight: 500;
 }
 
-.ask-chip {
+.role-chip,
+.ask-chip,
+.system-chip {
   flex: none;
-  border-radius: 4px;
-  padding: 1px 6px;
-  background: var(--lw-color-ask-muted);
-  color: var(--lw-color-ask);
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 16px;
+  padding: 0 6px;
   font-size: 10px;
   font-weight: 600;
-  line-height: 16px;
+  line-height: 1;
 }
 
-.ask-tag {
+.ask-chip,
+.system-chip {
+  border-radius: 4px;
+  background: var(--lw-color-ask-muted);
+  color: var(--lw-color-ask);
+}
+
+.ask-tag,
+.system-tag {
   flex: none;
   display: inline-flex;
   align-items: center;
   height: 20px;
   padding: 0 6px;
   border-radius: 4px;
-  background: var(--lw-color-ask-muted);
-  color: var(--lw-color-ask);
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
+}
+
+.ask-tag,
+.system-tag {
+  background: var(--lw-color-ask-muted);
+  color: var(--lw-color-ask);
 }
 
 .msg-coupon {
