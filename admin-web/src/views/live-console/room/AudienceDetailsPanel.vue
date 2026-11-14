@@ -18,10 +18,21 @@ const props = defineProps<{
   activityId: string;
 }>();
 
+const emit = defineEmits<{
+  /** 底栏展开/收起，供父级改 grid 行高 */
+  "update:collapsed": [value: boolean];
+}>();
+
 type ShellTab = "audience" | "commerce" | "staff";
 
+/** 默认展开：挂载筛选+表格；可点折叠把手只留表头 */
+const collapsed = ref(false);
+/** 表格区固定高度：表头约 40px + 10 行 × 48px（空数据也占位） */
+const TABLE_FIXED_HEIGHT = 40 + 10 * 48;
 const shellTab = ref<ShellTab>("audience");
 const loading = ref(false);
+/** 展开过才拉列表，避免收起态空打接口 */
+const listLoadedOnce = ref(false);
 const exporting = ref(false);
 const error = ref("");
 const list = ref<ConsoleAudienceDetailItem[]>([]);
@@ -123,7 +134,32 @@ function onReset() {
 }
 
 function onRefresh() {
+  if (collapsed.value) {
+    setCollapsed(false);
+    return;
+  }
   void fetchList();
+}
+
+function setCollapsed(next: boolean) {
+  if (collapsed.value === next) return;
+  collapsed.value = next;
+  emit("update:collapsed", next);
+  if (!next && !listLoadedOnce.value && shellTab.value === "audience") {
+    listLoadedOnce.value = true;
+    void fetchList();
+  }
+}
+
+function toggleCollapsed() {
+  setCollapsed(!collapsed.value);
+}
+
+function onShellTab(tab: ShellTab) {
+  shellTab.value = tab;
+  if (collapsed.value) {
+    setCollapsed(false);
+  }
 }
 
 async function onExport() {
@@ -247,25 +283,44 @@ watch(
   () => {
     page.value = 1;
     selected.value = [];
+    listLoadedOnce.value = false;
     Object.keys(revealedPhones).forEach((k) => delete revealedPhones[k]);
-    void fetchList();
+    if (!collapsed.value) {
+      listLoadedOnce.value = true;
+      void fetchList();
+    }
   },
   { immediate: true },
 );
+
+defineExpose({ collapsed, setCollapsed, toggleCollapsed });
 </script>
 
 <template>
   <section
     class="audience-details"
+    :class="{ 'is-collapsed': collapsed }"
     aria-label="观众明细"
   >
+    <button
+      type="button"
+      class="fold-handle"
+      :title="collapsed ? '展开' : '收起'"
+      :aria-label="collapsed ? '展开观众明细' : '收起观众明细'"
+      @click="toggleCollapsed"
+    >
+      <span
+        class="fold-chevron"
+        :class="{ 'is-up': collapsed }"
+      />
+    </button>
     <header class="head">
       <div class="tabs">
         <button
           type="button"
           class="tab"
           :class="{ 'is-active': shellTab === 'audience' }"
-          @click="shellTab = 'audience'"
+          @click="onShellTab('audience')"
         >
           观众明细
         </button>
@@ -273,7 +328,7 @@ watch(
           type="button"
           class="tab"
           :class="{ 'is-active': shellTab === 'commerce' }"
-          @click="shellTab = 'commerce'"
+          @click="onShellTab('commerce')"
         >
           带货明细
         </button>
@@ -281,7 +336,7 @@ watch(
           type="button"
           class="tab"
           :class="{ 'is-active': shellTab === 'staff' }"
-          @click="shellTab = 'staff'"
+          @click="onShellTab('staff')"
         >
           员工数据
         </button>
@@ -299,41 +354,45 @@ watch(
     </header>
 
     <div
-      v-if="shellTab !== 'audience'"
+      v-if="!collapsed && shellTab !== 'audience'"
       class="empty-shell"
     >
       暂未开放
     </div>
 
     <div
-      v-else
+      v-else-if="!collapsed"
       class="body"
     >
       <div class="filters">
-        <ElSelect
-          v-model="draft.keywordType"
-          style="width: 110px"
-        >
-          <ElOption
-            label="用户昵称"
-            value="nickname"
-          />
-          <ElOption
-            label="用户ID"
-            value="username"
-          />
-          <ElOption
-            label="手机号"
-            value="phone"
-          />
-        </ElSelect>
         <ElInput
           v-model="draft.keyword"
+          class="keyword-combo"
           clearable
           :placeholder="keywordPlaceholder"
-          style="width: 180px"
           @keyup.enter="onQuery"
-        />
+        >
+          <template #prepend>
+            <ElSelect
+              v-model="draft.keywordType"
+              class="keyword-type"
+              placeholder="类型"
+            >
+              <ElOption
+                label="用户昵称"
+                value="nickname"
+              />
+              <ElOption
+                label="用户ID"
+                value="username"
+              />
+              <ElOption
+                label="手机号"
+                value="phone"
+              />
+            </ElSelect>
+          </template>
+        </ElInput>
         <span class="filter-label">状态</span>
         <ElSelect
           v-model="draft.onlineStatus"
@@ -398,7 +457,10 @@ watch(
         {{ error }}
       </p>
 
-      <div class="table-wrap hover-scrollbar">
+      <div
+        class="table-wrap hover-scrollbar"
+        :style="{ height: `${TABLE_FIXED_HEIGHT}px` }"
+      >
         <ElTable
           v-loading="loading"
           :data="list"
@@ -487,7 +549,7 @@ watch(
           <ElTableColumn
             prop="liveWatchDurationSec"
             label="直播观看时长"
-            width="130"
+            min-width="148"
             sortable="custom"
           >
             <template #default="{ row }">
@@ -497,7 +559,7 @@ watch(
           <ElTableColumn
             prop="replayWatchDurationSec"
             label="回放观看时长"
-            width="130"
+            min-width="148"
             sortable="custom"
           >
             <template #default="{ row }">
@@ -507,7 +569,7 @@ watch(
           <ElTableColumn
             prop="totalWatchDurationSec"
             label="累计观看时长"
-            width="130"
+            min-width="148"
             sortable="custom"
           >
             <template #default="{ row }">
@@ -527,13 +589,13 @@ watch(
           <ElTableColumn
             prop="enterCount"
             label="进出次数"
-            width="100"
+            min-width="112"
             sortable="custom"
           />
           <ElTableColumn
             prop="online"
             label="状态"
-            width="90"
+            min-width="96"
             sortable="custom"
           >
             <template #default="{ row }">
@@ -549,31 +611,31 @@ watch(
           <ElTableColumn
             prop="productClickCount"
             label="点击商品次数"
-            width="120"
+            min-width="148"
             sortable="custom"
           />
           <ElTableColumn
             prop="pendingPayCount"
             label="待支付次数"
-            width="110"
+            min-width="124"
             sortable="custom"
           />
           <ElTableColumn
             prop="purchaseCount"
             label="购买次数"
-            width="100"
+            min-width="112"
             sortable="custom"
           />
           <ElTableColumn
             prop="totalPurchaseCount"
             label="累计购买次数"
-            width="120"
+            min-width="148"
             sortable="custom"
           />
           <ElTableColumn
             prop="totalPurchaseAmount"
             label="累计购买金额"
-            width="120"
+            min-width="148"
             sortable="custom"
           >
             <template #default="{ row }">
@@ -583,13 +645,13 @@ watch(
           <ElTableColumn
             prop="commentCount"
             label="评论次数"
-            width="100"
+            min-width="112"
             sortable="custom"
           />
           <ElTableColumn
             prop="couponReceiveCount"
             label="领券次数"
-            width="100"
+            min-width="112"
             sortable="custom"
           />
         </ElTable>
@@ -652,14 +714,56 @@ watch(
 
 <style scoped>
 .audience-details {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  overflow: hidden;
+  /* 内容撑高，由中控台 .console 整页上下滚 */
+  overflow: visible;
   border: 1px solid #e8e8e8;
   border-radius: 8px;
   background: #fff;
+}
+
+.audience-details.is-collapsed {
+  border-radius: 8px 8px 0 0;
+}
+
+.fold-handle {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 14px;
+  padding: 0;
+  border: 1px solid #e8e8e8;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: #fff;
+  transform: translateX(-50%);
+  cursor: pointer;
+}
+
+.fold-handle:hover {
+  background: #f7f8fa;
+}
+
+.fold-chevron {
+  width: 0;
+  height: 0;
+  border-right: 5px solid transparent;
+  border-left: 5px solid transparent;
+  border-top: 5px solid #bbb;
+}
+
+.fold-chevron.is-up {
+  border-top: 0;
+  border-bottom: 5px solid #bbb;
 }
 
 .head {
@@ -669,6 +773,10 @@ watch(
   gap: 16px;
   padding: 0 16px;
   border-bottom: 1px solid #f0f0f0;
+}
+
+.audience-details.is-collapsed .head {
+  border-bottom: 0;
 }
 
 .tabs {
@@ -725,6 +833,7 @@ watch(
 
 .empty-shell {
   display: flex;
+  min-height: 0;
   flex: 1;
   align-items: center;
   justify-content: center;
@@ -734,10 +843,10 @@ watch(
 
 .body {
   display: flex;
-  min-height: 0;
-  flex: 1;
+  flex: none;
   flex-direction: column;
   padding: 12px 16px 8px;
+  overflow: visible;
 }
 
 .filters {
@@ -747,6 +856,26 @@ watch(
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+/* 左筛：类型下拉 + 关键字输入拼成一组（对齐产品） */
+.keyword-combo {
+  width: 290px;
+}
+
+.keyword-combo :deep(.el-input-group__prepend) {
+  padding: 0;
+  background: #fff;
+}
+
+.keyword-combo :deep(.keyword-type) {
+  width: 110px;
+  margin: -1px 0;
+}
+
+.keyword-combo :deep(.keyword-type .el-select__wrapper) {
+  box-shadow: none !important;
+  background: transparent;
 }
 
 .filter-label {
@@ -780,9 +909,35 @@ watch(
 }
 
 .table-wrap {
-  min-height: 0;
-  flex: 1;
-  overflow: auto;
+  box-sizing: border-box;
+  min-width: 0;
+  flex: none;
+  /* 高度由 TABLE_FIXED_HEIGHT（约 10 行）；纵滚在表体内，横滚看列 */
+  overflow: hidden;
+}
+
+.table-wrap :deep(.el-table) {
+  height: 100%;
+}
+
+.table-wrap :deep(.el-table__row) {
+  height: 48px;
+}
+
+.table-wrap :deep(.el-table__row td.el-table__cell) {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* 表头文案与排序箭头同一行，不换行 */
+.table-wrap :deep(th.el-table__cell > .cell) {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.table-wrap :deep(th.el-table__cell .caret-wrapper) {
+  flex: none;
 }
 
 .user-cell {

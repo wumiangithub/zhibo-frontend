@@ -18,6 +18,7 @@ import AudienceDetailsPanel from "./AudienceDetailsPanel.vue";
 import ChatFilterPanel from "./ChatFilterPanel.vue";
 import CouponPanel from "./CouponPanel.vue";
 import DiscussPanel from "./DiscussPanel.vue";
+import ProductPanel from "./ProductPanel.vue";
 import WatchDataPanel from "./WatchDataPanel.vue";
 import type { ConsoleSendCouponResult } from "./api/console";
 
@@ -49,8 +50,31 @@ const watchDataOpen = ref(true);
 /** 首次打开后保持挂载，关闭只隐藏以复用走势图 */
 const watchDataKept = ref(true);
 
+/** 左右栏折叠（对齐产品中控台侧边把手） */
+const leftCollapsed = ref(false);
+const rightCollapsed = ref(false);
+/** 底栏默认展开（内容撑高）；可收起只留表头。整页在 .console 内上下滚看全表 */
+const bottomCollapsed = ref(false);
+/** 底栏表头高度（Tab 行），首屏 main-row = 视口 − padding − gap − 表头 */
+const BOTTOM_HEAD_HEIGHT = "44px";
+
+/** 上区三栏列宽 + 高度（与底栏隔离） */
+const mainRowStyle = computed(() => ({
+  gridTemplateColumns: [
+    leftCollapsed.value ? "0px" : "300px",
+    "minmax(300px, 1fr)",
+    rightCollapsed.value ? "0px" : "300px",
+  ].join(" "),
+  /* 12+12 padding + 12 gap + 44 表头 */
+  height: `calc(100dvh - 36px - ${BOTTOM_HEAD_HEIGHT})`,
+}));
+
 const couponOpen = ref(false);
 const couponKept = ref(false);
+
+/** 商品面板（中间操作条；与数据同区） */
+const productOpen = ref(false);
+const productKept = ref(false);
 
 function presenceTime(raw: string | undefined): string | undefined {
   const text = raw?.trim() ?? "";
@@ -139,6 +163,20 @@ function openCoupon() {
   couponOpen.value = true;
 }
 
+function hideProduct() {
+  productOpen.value = false;
+}
+
+function resetProduct() {
+  productOpen.value = false;
+  productKept.value = false;
+}
+
+function openProduct() {
+  productKept.value = true;
+  productOpen.value = true;
+}
+
 async function onCouponSent(res: ConsoleSendCouponResult) {
   try {
     await chat.broadcastCoupon(res);
@@ -149,6 +187,7 @@ async function onCouponSent(res: ConsoleSendCouponResult) {
 }
 
 function openWatchData() {
+  hideProduct();
   watchDataKept.value = true;
   watchDataOpen.value = true;
 }
@@ -198,6 +237,7 @@ function onAction(label: string) {
       void watchDataRef.value?.refreshAndResetRange?.();
       return;
     }
+    hideProduct();
     openWatchData();
     return;
   }
@@ -207,6 +247,15 @@ function onAction(label: string) {
       return;
     }
     void openChatFilter();
+    return;
+  }
+  if (label === "商品") {
+    if (productOpen.value) {
+      hideProduct();
+      return;
+    }
+    watchDataOpen.value = false;
+    openProduct();
     return;
   }
   if (label === "优惠券") {
@@ -224,6 +273,7 @@ async function boot() {
   resetChatFilter();
   resetWatchData();
   resetCoupon();
+  resetProduct();
   await load();
 }
 
@@ -237,14 +287,50 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="console">
+  <div
+    class="console hover-scrollbar"
+    :class="{ 'is-bottom-collapsed': bottomCollapsed }"
+  >
+    <div
+      class="main-row"
+      :class="{
+        'is-left-collapsed': leftCollapsed,
+        'is-right-collapsed': rightCollapsed,
+      }"
+      :style="mainRowStyle"
+    >
     <AttendeePanel
+      v-show="!leftCollapsed"
       ref="panelRef"
       :activity-id="id"
       :activity-ended="activityEnded"
     />
 
     <section class="col stage">
+      <button
+        type="button"
+        class="side-fold is-left"
+        :title="leftCollapsed ? '展开左侧名单' : '收起左侧名单'"
+        :aria-label="leftCollapsed ? '展开左侧名单' : '收起左侧名单'"
+        @click="leftCollapsed = !leftCollapsed"
+      >
+        <span
+          class="side-chevron"
+          :class="leftCollapsed ? 'is-right' : 'is-left'"
+        />
+      </button>
+      <button
+        type="button"
+        class="side-fold is-right"
+        :title="rightCollapsed ? '展开右侧讨论区' : '收起右侧讨论区'"
+        :aria-label="rightCollapsed ? '展开右侧讨论区' : '收起右侧讨论区'"
+        @click="rightCollapsed = !rightCollapsed"
+      >
+        <span
+          class="side-chevron"
+          :class="rightCollapsed ? 'is-left' : 'is-right'"
+        />
+      </button>
       <header class="stage-head">
         <h1>{{ displayTitle }}</h1>
         <span
@@ -301,14 +387,20 @@ onMounted(() => {
         </button>
       </div>
 
-      <!-- 黑井高 300px、宽铺满；画面仍在 .player-area 内 16:9 居中 -->
+      <!-- 黑井高 300px、宽铺满；直播画面仍在 .player-area 内 16:9 居中；预告横铺满井 -->
       <div
         class="player-well"
-        :class="{ 'is-shell': isPreview || isEnded || isReplay }"
+        :class="{
+          'is-shell': isPreview || isEnded || isReplay,
+          'is-preview': isPreview,
+        }"
       >
         <div
           class="player-area"
-          :class="{ 'is-shell': isPreview || isEnded || isReplay }"
+          :class="{
+            'is-shell': isPreview || isEnded || isReplay,
+            'is-preview': isPreview,
+          }"
         >
           <div
             v-if="loading"
@@ -336,9 +428,10 @@ onMounted(() => {
             :class="{ 'lw-theme': isLive }"
             :data-lw-theme="isLive ? 'dark' : undefined"
           >
+            <!-- 预告：左封面右文案，高度封顶同直播井；不额外撑高 -->
             <PreviewScreen
               v-if="isPreview"
-              class="absolute inset-0 z-[100]"
+              class="z-[100]"
               :data="data"
               :countdown="countdown"
               :host-player="false"
@@ -351,7 +444,10 @@ onMounted(() => {
               :show-replay-entry="false"
               :host-player="false"
             />
+            <!-- 预告/结束壳：舞台仍挂 #player 保 SDK，视觉隐藏对齐观看页 opacity-0 -->
             <PlayerStage
+              class="transition-opacity"
+              :class="{ 'opacity-0': isPreview || isEnded || isReplay }"
               :player="player"
               :barrage="barrage"
               :stats="stats"
@@ -379,6 +475,7 @@ onMounted(() => {
             'is-active':
               (label === '评论审核' && chatFilterOpen) ||
               (label === '数据' && watchDataOpen) ||
+              (label === '商品' && productOpen) ||
               (label === '优惠券' && couponOpen),
           }"
           @click="onAction(label)"
@@ -399,18 +496,30 @@ onMounted(() => {
         :chat="chat"
         @refresh="stats.scheduleRoomId"
       />
+
+      <ProductPanel
+        v-show="productOpen"
+        v-if="productKept"
+        :activity-id="id"
+        @toast="(msg) => toast(msg)"
+      />
     </section>
 
     <!-- active=可发聊（仅直播）；shellReady=页壳在则展示 SDK 拉到的历史（含结束） -->
     <DiscussPanel
+      v-show="!rightCollapsed"
       :chat="chat"
       :activity-id="id"
       :active="!!data && isLive"
       :shell-ready="!!data"
     />
+    </div>
 
     <div class="bottom-bar">
-      <AudienceDetailsPanel :activity-id="id" />
+      <AudienceDetailsPanel
+        :activity-id="id"
+        @update:collapsed="bottomCollapsed = $event"
+      />
     </div>
 
     <ChatFilterPanel
@@ -447,29 +556,56 @@ onMounted(() => {
 
 <style scoped>
 .console {
-  display: grid;
-  grid-template-columns: 300px minmax(300px, 1fr) 300px;
-  grid-template-rows: minmax(0, 1fr) minmax(260px, 36vh);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   box-sizing: border-box;
+  /* 固定视口高，自身上下滚：首屏见上三栏+底表头，下滚见全表 */
   height: 100dvh;
   min-height: 0;
   padding: 12px;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: #f5f6f8;
   color: #333;
 }
 
+.main-row {
+  display: grid;
+  flex: none;
+  min-width: 0;
+  /* 高度由 mainRowStyle：100dvh − padding − gap − 底表头 */
+  grid-template-columns: 300px minmax(300px, 1fr) 300px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.main-row.is-left-collapsed {
+  column-gap: 0;
+}
+
+.main-row.is-right-collapsed {
+  column-gap: 0;
+}
+
+.main-row.is-left-collapsed.is-right-collapsed {
+  column-gap: 0;
+}
+
 .bottom-bar {
   display: flex;
-  grid-column: 1 / -1;
+  flex: none;
   min-width: 0;
-  min-height: 0;
+  /* 按观众明细内容撑高，不锁死在视口剩余高度里 */
+  height: auto;
   flex-direction: column;
+  overflow: visible;
 }
 
 .bottom-bar :deep(.audience-details) {
-  flex: 1;
-  min-height: 0;
+  flex: none;
+  height: auto;
+  min-height: 44px;
 }
 
 .col {
@@ -481,6 +617,60 @@ onMounted(() => {
   border: 1px solid #e8e8e8;
   border-radius: 8px;
   background: #fff;
+}
+
+.stage {
+  position: relative;
+  /* 侧边折叠把手探出到缝隙里，不能裁切 */
+  overflow: visible;
+}
+
+.side-fold {
+  position: absolute;
+  top: 50%;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #e8e8e8;
+  background: #fff;
+  cursor: pointer;
+}
+
+.side-fold.is-left {
+  left: 0;
+  border-right: 0;
+  border-radius: 6px 0 0 6px;
+  transform: translate(-100%, -50%);
+}
+
+.side-fold.is-right {
+  right: 0;
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+  transform: translate(100%, -50%);
+}
+
+.side-fold:hover {
+  background: #f7f8fa;
+}
+
+.side-chevron {
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+
+.side-chevron.is-left {
+  border-right: 5px solid #bbb;
+}
+
+.side-chevron.is-right {
+  border-left: 5px solid #bbb;
 }
 
 .stage-head,
@@ -599,15 +789,21 @@ onMounted(() => {
 }
 
 .player-well.is-shell {
-  border-color: transparent;
+  border-color: var(--color-border, #e4e7ed);
   background: var(--color-bg-muted, #fafafa);
+}
+
+/* 预告：井内横铺满，不再居中缩成窄 16:9 */
+.player-well.is-preview {
+  align-items: stretch;
+  justify-content: flex-start;
 }
 
 .player-area {
   display: flex;
   flex: none;
   flex-direction: column;
-  /* 16:9；高封顶 300px 时宽同步收窄，避免只压高破比例 */
+  /* 直播：16:9 居中；高封顶 300px 时宽同步收窄 */
   aspect-ratio: 16 / 9;
   width: min(100%, calc(300px * 16 / 9));
   max-height: 300px;
@@ -625,9 +821,19 @@ onMounted(() => {
   border-radius: 0;
 }
 
-/** 预告 / 结束壳：跟管理端浅色一致，不要黑底 */
+/** 预告 / 结束壳：跟管理端浅色一致 */
 .player-area.is-shell {
+  overflow: hidden;
   background: var(--color-bg-muted, #fafafa);
+}
+
+/* 预告：取消 16:9 居中框，铺满 300px 井，左封面右文案 */
+.player-area.is-preview {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: 300px;
+  aspect-ratio: auto;
 }
 
 .player-area :deep(.relative) {

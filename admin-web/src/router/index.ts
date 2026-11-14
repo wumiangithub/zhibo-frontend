@@ -107,6 +107,11 @@ const router = createRouter({
           component: () => import("@/views/live/LiveManageView.vue"),
         },
         {
+          path: "live/dev-presence",
+          name: "live-dev-presence",
+          component: () => import("@/views/live/DevPresenceSimView.vue"),
+        },
+        {
           path: "live/:id/audit",
           name: "live-audit",
           component: () => import("@/views/live/LiveAuditView.vue"),

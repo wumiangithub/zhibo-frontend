@@ -24,6 +24,7 @@ declare module 'vue' {
     ElSelect: typeof import('element-plus/es')['ElSelect']
     ElTable: typeof import('element-plus/es')['ElTable']
     ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
+    ElTooltip: typeof import('element-plus/es')['ElTooltip']
     ImagePreview: typeof import('./src/components/ImagePreview.vue')['default']
     InviteHostDialog: typeof import('./src/components/live/InviteHostDialog.vue')['default']
     LessonShareDialog: typeof import('./src/components/share/LessonShareDialog.vue')['default']

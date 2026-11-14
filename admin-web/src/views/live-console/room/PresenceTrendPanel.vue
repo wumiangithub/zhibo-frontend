@@ -18,7 +18,7 @@ const props = defineProps<{
 const loading = ref(false);
 const error = ref("");
 const points = ref<PresenceTrendPoint[]>([]);
-/** ElDatePicker datetimerange：`yyyy-MM-dd HH:mm:ss` */
+/** ElDatePicker：展示 `MM-DD HH:mm`，value 仍为 `yyyy-MM-dd HH:mm:ss` */
 const rangeModel = ref<[string, string] | null>(null);
 const hoverIndex = ref<number | null>(null);
 
@@ -77,7 +77,7 @@ const innerW = chartWidth - pad.left - pad.right;
 const innerH = chartHeight - pad.top - pad.bottom;
 
 const SERIES = [
-  { key: "online" as const, label: "在线", color: "var(--color-primary)" },
+  { key: "online" as const, label: "在线", color: "#2563EB" },
   { key: "enter" as const, label: "进场", color: "#52c41a" },
   { key: "leave" as const, label: "离场", color: "#eb2f96" },
 ];
@@ -103,33 +103,81 @@ function yAt(val: number): number {
   return pad.top + innerH - (val / maxY.value) * innerH;
 }
 
-/** 普通线性折线：相邻桶用直线相连（非 step / 非针） */
-function seriesPath(key: "online" | "enter" | "leave"): string {
+/** 在线：按自己的 online 全程打点连折线 */
+const onlinePath = computed(() => {
   const list = points.value;
   if (!list.length) return "";
   const n = list.length;
-  let d = `M ${xAt(0, n)} ${yAt(list[0][key])}`;
+  let d = `M ${xAt(0, n)} ${yAt(list[0].online)}`;
   for (let i = 1; i < n; i++) {
-    d += ` L ${xAt(i, n)} ${yAt(list[i][key])}`;
+    d += ` L ${xAt(i, n)} ${yAt(list[i].online)}`;
+  }
+  return d;
+});
+
+/**
+ * 进场 / 离场：桶内事件数，各自独立画竖针（底→该点值），颜色不串线。
+ * 同一分钟既有进又有离时，进场略左、离场略右，避免叠成一根。
+ */
+function eventStemPath(key: "enter" | "leave"): string {
+  const list = points.value;
+  if (!list.length) return "";
+  const n = list.length;
+  const dx = key === "enter" ? -3 : 3;
+  let d = "";
+  for (let i = 0; i < n; i++) {
+    const v = list[i][key];
+    if (v <= 0) continue;
+    const x = xAt(i, n) + dx;
+    d += `M ${x} ${yAt(0)} L ${x} ${yAt(v)} `;
   }
   return d;
 }
 
-/** 非零采样点轻量标记（不喧宾夺主） */
+const enterPath = computed(() => eventStemPath("enter"));
+const leavePath = computed(() => eventStemPath("leave"));
+
+/** 在线折点 + 进/离针顶打点 */
 const seriesMarkers = computed(() => {
   const list = points.value;
   const n = list.length;
   if (!n) return [] as { key: string; x: number; y: number; color: string }[];
   const out: { key: string; x: number; y: number; color: string }[] = [];
-  for (const s of SERIES) {
-    for (let i = 0; i < n; i++) {
-      const val = list[i][s.key];
-      if (val <= 0) continue;
+
+  for (let i = 0; i < n; i++) {
+    const online = list[i].online;
+    const prev = i > 0 ? list[i - 1].online : null;
+    const next = i < n - 1 ? list[i + 1].online : null;
+    const corner =
+      (prev != null && prev !== online) ||
+      (next != null && next !== online) ||
+      i === 0 ||
+      i === n - 1;
+    if (online > 0 && corner) {
       out.push({
-        key: `${s.key}-${i}`,
+        key: `online-${i}`,
         x: xAt(i, n),
-        y: yAt(val),
-        color: s.color,
+        y: yAt(online),
+        color: SERIES[0].color,
+      });
+    }
+
+    const enter = list[i].enter;
+    if (enter > 0) {
+      out.push({
+        key: `enter-${i}`,
+        x: xAt(i, n) - 3,
+        y: yAt(enter),
+        color: SERIES[1].color,
+      });
+    }
+    const leave = list[i].leave;
+    if (leave > 0) {
+      out.push({
+        key: `leave-${i}`,
+        x: xAt(i, n) + 3,
+        y: yAt(leave),
+        color: SERIES[2].color,
       });
     }
   }
@@ -288,36 +336,39 @@ defineExpose({ reload, resetAndReload });
 <template>
   <section class="chart-card">
     <header class="card-head">
-      <h4>在线人数</h4>
+      <div class="card-head-main">
+        <h4>在线人数</h4>
+        <div class="legend">
+          <span
+            v-for="s in SERIES"
+            :key="s.key"
+            class="legend-item"
+          >
+            <i
+              class="legend-dot"
+              :style="{ background: s.color }"
+            />
+            {{ s.label }}
+          </span>
+        </div>
+      </div>
       <div class="range-picker-wrap">
         <ElDatePicker
           v-model="rangeModel"
           type="datetimerange"
           range-separator="至"
-          start-placeholder="开始时间"
-          end-placeholder="结束时间"
-          format="YYYY-MM-DD HH:mm:ss"
+          start-placeholder="开始"
+          end-placeholder="结束"
+          format="MM-DD HH:mm"
           value-format="YYYY-MM-DD HH:mm:ss"
+          size="small"
           :clearable="false"
           :disabled="loading"
+          style="width: 100%"
           @change="onRangeChange"
         />
       </div>
     </header>
-
-    <div class="legend">
-      <span
-        v-for="s in SERIES"
-        :key="s.key"
-        class="legend-item"
-      >
-        <i
-          class="legend-dot"
-          :style="{ background: s.color }"
-        />
-        {{ s.label }}
-      </span>
-    </div>
 
     <div
       v-if="loading && !points.length"
@@ -393,13 +444,25 @@ defineExpose({ reload, resetAndReload });
           </text>
         </g>
         <path
-          v-for="s in SERIES"
-          :key="s.key"
           class="line"
           fill="none"
-          :stroke="s.color"
+          stroke="#2563EB"
           stroke-width="2"
-          :d="seriesPath(s.key)"
+          :d="onlinePath"
+        />
+        <path
+          class="line"
+          fill="none"
+          stroke="#52c41a"
+          stroke-width="2"
+          :d="enterPath"
+        />
+        <path
+          class="line"
+          fill="none"
+          stroke="#eb2f96"
+          stroke-width="2"
+          :d="leavePath"
         />
         <circle
           v-for="m in seriesMarkers"
@@ -407,8 +470,10 @@ defineExpose({ reload, resetAndReload });
           class="marker"
           :cx="m.x"
           :cy="m.y"
-          r="2.5"
+          r="3"
           :fill="m.color"
+          stroke="#fff"
+          stroke-width="1"
         />
         <line
           v-if="hoverIndex != null"
@@ -423,16 +488,18 @@ defineExpose({ reload, resetAndReload });
             :cx="xAt(hoverIndex, points.length)"
             :cy="yAt(hoverPoint.online)"
             r="4"
-            fill="var(--color-primary)"
+            fill="#2563EB"
           />
           <circle
-            :cx="xAt(hoverIndex, points.length)"
+            v-if="hoverPoint.enter > 0"
+            :cx="xAt(hoverIndex, points.length) - 3"
             :cy="yAt(hoverPoint.enter)"
             r="4"
             fill="#52c41a"
           />
           <circle
-            :cx="xAt(hoverIndex, points.length)"
+            v-if="hoverPoint.leave > 0"
+            :cx="xAt(hoverIndex, points.length) + 3"
             :cy="yAt(hoverPoint.leave)"
             r="4"
             fill="#eb2f96"
@@ -455,7 +522,7 @@ defineExpose({ reload, resetAndReload });
         :style="hoverTipStyle"
       >
         <div class="tip-time">{{ hoverPoint.time }}</div>
-        <div><i style="background:var(--color-primary)" />在线 {{ hoverPoint.online }}</div>
+        <div><i style="background:#2563EB" />在线 {{ hoverPoint.online }}</div>
         <div><i style="background:#52c41a" />进场 {{ hoverPoint.enter }}</div>
         <div><i style="background:#eb2f96" />离场 {{ hoverPoint.leave }}</div>
       </div>
@@ -472,16 +539,31 @@ defineExpose({ reload, resetAndReload });
   flex-direction: column;
   gap: 10px;
   padding: 16px;
+  overflow-x: clip;
   border: 1px solid #f0f0f0;
   border-radius: 4px;
   background: #fff;
+  container-type: inline-size;
+  container-name: presence-trend;
 }
 
 .card-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 8px 12px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.card-head-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
 }
 
 .card-head h4 {
@@ -489,17 +571,43 @@ defineExpose({ reload, resetAndReload });
   color: #333;
   font-size: 14px;
   font-weight: 600;
+  flex: none;
 }
 
 .range-picker-wrap {
-  flex: 0 0 auto;
-  width: 400px;
+  flex: 1 1 100%;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+/* 宽卡：标题+图例左侧，选择器靠右且可收缩 */
+@container presence-trend (min-width: 480px) {
+  .range-picker-wrap {
+    flex: 1 1 240px;
+    width: auto;
+    max-width: min(340px, 100%);
+    margin-left: auto;
+  }
 }
 
 .range-picker-wrap :deep(.el-date-editor) {
-  width: 400px !important;
-  max-width: 400px;
-  font-size: 12px;
+  width: 100% !important;
+  max-width: 100%;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+
+.range-picker-wrap :deep(.el-range-input) {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto !important;
+}
+
+.range-picker-wrap :deep(.el-range-separator) {
+  flex: none;
+  padding: 0 2px;
+  margin: 0;
 }
 
 .legend {

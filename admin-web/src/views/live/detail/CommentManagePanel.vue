@@ -18,6 +18,7 @@ async function loadPageUrl() {
   errorMsg.value = "";
   pageUrl.value = "";
   try {
+    // 勿传 email：服务端默认 e{员工id}@qkzb.com；中控台 sdk 的 z{id} 无 chat-filter 权限
     const res = await fetchActivityChatFilterPageUrl(props.activityId, {
       name: auth.displayName,
     });

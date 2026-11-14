@@ -2,7 +2,6 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { attributeAudience } from "@/api/audienceAttribute";
-import { getOrCreateDevSocketId, simulateDevPresence } from "@/api/devPresence";
 import {
   getStoredNickname,
   storeNickname,
@@ -348,36 +347,6 @@ function onPickRecord(row: WatchRecordItem) {
   goReplay(Number(row.id));
 }
 
-/** Vite 开发构建才显示。生产包里这两个按钮不存在。 */
-const showDevPresence = import.meta.env.DEV;
-const devPresenceBusy = ref(false);
-/** 点过上线后才露出离线；离线成功后回到上线。 */
-const devPresenceOnline = ref(false);
-
-async function simulatePresence(type: "Join" | "Leave") {
-  const email = (sign.value?.sdk?.email || "").trim();
-  if (!email) {
-    toast("还没有观众身份，请先进入直播间");
-    return;
-  }
-  const socketId = getOrCreateDevSocketId(id);
-  devPresenceBusy.value = true;
-  try {
-    await simulateDevPresence(id, {
-      type,
-      email,
-      socketId,
-      nickname: displayNickname.value,
-    });
-    devPresenceOnline.value = type === "Join";
-    toast(type === "Join" ? "已模拟上线回调" : "已模拟离线回调");
-  } catch (e) {
-    toast(e instanceof Error ? e.message : "模拟回调失败");
-  } finally {
-    devPresenceBusy.value = false;
-  }
-}
-
 async function saveNickname(name: string) {
   if (!name) return;
   nicknameSaving.value = true;
@@ -451,34 +420,6 @@ onMounted(() => {
         </div>
 
         <template v-else>
-        <div
-          v-if="showDevPresence"
-          class="flex flex-none items-center gap-2 border-b border-amber-800 bg-amber-950 px-3 py-1.5 text-xs text-amber-100"
-        >
-          <span class="flex-none font-medium text-amber-300">本地开发</span>
-          <span class="hidden min-w-0 flex-1 truncate text-amber-200/80 sm:inline">
-            模拟微吼上下线回调
-          </span>
-          <button
-            v-if="!devPresenceOnline"
-            type="button"
-            class="rounded bg-emerald-700 px-2.5 py-1 text-white hover:bg-emerald-600 disabled:opacity-50"
-            :disabled="devPresenceBusy"
-            @click="simulatePresence('Join')"
-          >
-            上线
-          </button>
-          <button
-            v-else
-            type="button"
-            class="rounded bg-[var(--lw-bg-elevated)] px-2.5 py-1 text-[var(--lw-text-primary)] hover:opacity-90 disabled:opacity-50"
-            :disabled="devPresenceBusy"
-            @click="simulatePresence('Leave')"
-          >
-            离线
-          </button>
-        </div>
-
         <!-- PC 顶栏 -->
         <div class="hidden flex-none items-center justify-between gap-4 border-b border-[var(--lw-border)] px-4 py-2 md:flex">
           <div class="flex min-w-0 items-center gap-2">

@@ -185,7 +185,7 @@ function goHome() {
  * 默认暗色；.lw-theme[data-lw-theme="light"] 切白天
  */
 .ended-root {
-  /* 盖住 PlayerStage / 微吼 video 层；仍挂在内容区内，不挡 UiPageHeader / 本地开发条 */
+  /* 盖住 PlayerStage / 微吼 video 层；仍挂在内容区内，不挡 UiPageHeader */
   position: absolute;
   inset: 0;
   z-index: 40;

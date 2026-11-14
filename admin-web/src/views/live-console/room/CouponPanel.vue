@@ -72,7 +72,12 @@ async function load(resetPage = false) {
   } catch (e) {
     list.value = [];
     total.value = 0;
-    error.value = e instanceof Error ? e.message : "加载优惠券失败";
+    error.value =
+      e instanceof ApiError
+        ? e.message
+        : e instanceof Error
+          ? e.message
+          : "加载优惠券失败";
   } finally {
     loading.value = false;
   }

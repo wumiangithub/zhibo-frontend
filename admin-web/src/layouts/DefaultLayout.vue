@@ -95,6 +95,7 @@ const workbenchSideNav = [
 const liveSideNav = [
   { key: "report", label: "直播报备", icon: "clipboard", to: "/live-reports" },
   { key: "manage", label: "直播管理", icon: "video", to: "/live" },
+  { key: "dev-presence", label: "模拟上下线", icon: "people", to: "/live/dev-presence" },
   { key: "data", label: "直播数据", icon: "chart" },
   { key: "console", label: "直播中控台", icon: "monitor" },
   { key: "sep-tools", label: "", divider: true },
@@ -219,6 +220,9 @@ const activeSide = computed(() => {
     // 新建报备 / 报备列表均高亮「直播报备」
     if (route.path.startsWith("/live-reports")) return "report";
     if (route.path.startsWith("/live/console")) return activeConsoleSide.value;
+    if (route.name === "live-dev-presence" || route.path === "/live/dev-presence") {
+      return "dev-presence";
+    }
     // 新建直播 / 列表 / 详情 / 去审核均高亮「直播管理」
     if (
       route.name === "live-create" ||

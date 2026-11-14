@@ -65,6 +65,10 @@ export interface OrderCenterProduct {
   /** 归属部门 ID（0=未配置） */
   bmid?: string;
   updateTime?: string;
+  /** 展示价文案（批量详情从 SKU 取最低活动/标准价；中控台商品表用） */
+  priceText?: string;
+  /** 服务期/有效期展示（如「3个月」「180天」；无则省略） */
+  servicePeriodText?: string;
 }
 
 export interface SalerProductListQuery {
@@ -170,6 +174,71 @@ function countSkus(skuList: unknown): { validSku: number; validActivity: number 
   return { validSku, validActivity };
 }
 
+function formatPriceText(n: number): string {
+  return `¥ ${n.toFixed(2)}`;
+}
+
+/** 从上架 SKU 取最低正价，供中控台商品表展示 */
+function pickPriceText(o: Record<string, unknown>): string | undefined {
+  const candidates = [o.price, o.salePrice, o.standardPrice, o.minPrice, o.activityStandardPrice];
+  for (const p of candidates) {
+    if (typeof p === "number" && Number.isFinite(p) && p > 0) return formatPriceText(p);
+    if (typeof p === "string" && p.trim()) {
+      const t = p.trim();
+      return t.startsWith("¥") ? t : `¥ ${t}`;
+    }
+  }
+  const skuList = o.skuList;
+  if (!Array.isArray(skuList) || !skuList.length) return undefined;
+  let best: number | undefined;
+  for (const row of skuList) {
+    if (!row || typeof row !== "object") continue;
+    const s = row as Record<string, unknown>;
+    const hasSpec = Object.prototype.hasOwnProperty.call(s, "specStatus");
+    const onShelf = !hasSpec || s.specStatus === 1 || s.specStatus === "1";
+    if (!onShelf) continue;
+    for (const key of ["activityStandardPrice", "standardPrice", "activityUpgradePrice", "upgradePrice"] as const) {
+      const n = typeof s[key] === "number" ? s[key] : Number(s[key]);
+      if (Number.isFinite(n) && (n as number) > 0 && (best == null || (n as number) < best)) {
+        best = n as number;
+      }
+    }
+  }
+  return best != null ? formatPriceText(best) : undefined;
+}
+
+/** 服务期文案：优先对方 label，否则天数 →「N天」/「N个月」 */
+function pickServicePeriodText(o: Record<string, unknown>): string | undefined {
+  for (const key of ["validityLabel", "serviceLabel", "servicePeriod", "servicePeriodText"] as const) {
+    const v = o[key];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  const dayKeys = ["buyDays", "serviceDay", "validDays", "validityDays"] as const;
+  const fromDays = (raw: unknown): string | undefined => {
+    if (raw == null || raw === "") return undefined;
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return undefined;
+    const days = Math.floor(n);
+    if (days % 30 === 0) return `${days / 30}个月`;
+    return `${days}天`;
+  };
+  for (const key of dayKeys) {
+    const t = fromDays(o[key]);
+    if (t) return t;
+  }
+  const skuList = o.skuList;
+  if (!Array.isArray(skuList)) return undefined;
+  for (const row of skuList) {
+    if (!row || typeof row !== "object") continue;
+    const s = row as Record<string, unknown>;
+    for (const key of dayKeys) {
+      const t = fromDays(s[key]);
+      if (t) return t;
+    }
+  }
+  return undefined;
+}
+
 function mapProduct(row: unknown): OrderCenterProduct | null {
   if (!row || typeof row !== "object") return null;
   const o = row as Record<string, unknown>;
@@ -229,6 +298,8 @@ function mapProduct(row: unknown): OrderCenterProduct | null {
     sellDepartments,
     bmid,
     updateTime: asOptionalString(o.updateTime) ?? asOptionalString(o.updatedTime),
+    priceText: pickPriceText(o),
+    servicePeriodText: pickServicePeriodText(o),
   };
 }
 

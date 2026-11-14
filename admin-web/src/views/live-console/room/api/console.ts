@@ -4,7 +4,7 @@
  */
 import type { LiveProvider } from "../live/types";
 import { apiV1 } from "@/api/apiBase";
-import { get, post } from "@/api/http";
+import { get, post, put } from "@/api/http";
 import { getAccessToken } from "@/utils/authSession";
 import axios from "axios";
 
@@ -28,6 +28,8 @@ export interface SdkInitPayload {
 export interface ConsoleSummaryData {
   id: string;
   title: string;
+  /** 活动详情封面；无则省略（对齐观看 summary / ConsoleSummaryResponse） */
+  coverUrl?: string;
   state: number;
   type: number;
   startTime?: string;
@@ -64,6 +66,9 @@ export interface ConsoleSdkSignParams {
 
 export type AttendeeTab = "all" | "online" | "offline";
 
+/** 左侧名单：学员 / 助教 */
+export type AttendeeKind = "student" | "assistant";
+
 export interface AttendeeItem {
   /** 邮箱本地部分：观众 username / e{员工id} / z{员工id} */
   username: string;
@@ -72,11 +77,22 @@ export interface AttendeeItem {
   enterTime: string;
   leaveTime?: string;
   online: boolean;
+  /** 助教侧角标：讲师 / 嘉宾 / 助教 / 中控 */
+  roleLabel?: string;
+  /** 学员跟进人（仅邀请人）；无则省略，UI 展示「暂未分配」 */
+  followerName?: string;
+  /** 本场聊天+提问条数；学员侧有 */
+  commentCount?: number;
 }
 
 export interface AttendeeListData {
   activityState: number;
   total: number;
+  studentTotal: number;
+  assistantTotal: number;
+  allTotal: number;
+  onlineTotal: number;
+  offlineTotal: number;
   page: number;
   pageSize: number;
   list: AttendeeItem[];
@@ -112,15 +128,44 @@ export function getConsoleSdkSign(id: string, params: ConsoleSdkSignParams = {})
   return get<ConsoleSdkSignData>("/activities/console/sdk-sign", { params: query });
 }
 
+/** 左侧名单关键字类型（与观众明细一致） */
+export type AttendeeKeywordType = "nickname" | "username" | "phone";
+
+/** 学员跟进人：all / none / 员工 id 字符串 */
+export type AttendeeFollowerFilter = "all" | "none" | string;
+
+/** 学员行为筛选 */
+export type AttendeeBehavior =
+  | "all"
+  | "comment"
+  | "coupon"
+  | "productClick"
+  | "pendingPay"
+  | "purchase";
+
 export function listAttendees(
   id: string,
-  query: { tab: AttendeeTab; page: number; pageSize?: number; keyword?: string },
+  query: {
+    tab: AttendeeTab;
+    page: number;
+    pageSize?: number;
+    keywordType?: AttendeeKeywordType;
+    keyword?: string;
+    kind?: AttendeeKind;
+    followerFilter?: AttendeeFollowerFilter;
+    behavior?: AttendeeBehavior;
+  },
 ) {
   const params: Record<string, string | number> = {
     tab: query.tab,
     page: query.page,
     pageSize: query.pageSize ?? 20,
+    kind: query.kind ?? "student",
+    followerFilter: query.followerFilter ?? "all",
+    behavior: query.behavior ?? "all",
   };
+  const keywordType = query.keywordType?.trim();
+  if (keywordType) params.keywordType = keywordType;
   const keyword = query.keyword?.trim();
   if (keyword) params.keyword = keyword;
   return get<AttendeeListData>(`/activities/attendees/${encodeURIComponent(id)}`, { params });
@@ -139,7 +184,7 @@ export function fetchPresenceTrend(
   });
 }
 
-/** 省略 email/name → 服务端用当前员工 e{id}@qkzb.com / 姓名 */
+/** 省略 email/name → 服务端用当前员工 e{id}@qkzb.com / 姓名；勿传 console sdk 的 z{id} */
 export function fetchChatFilterPageUrl(
   id: string,
   query?: { email?: string; name?: string },
@@ -263,6 +308,102 @@ export function listConsoleAudienceDetails(activityId: string, query: ConsoleAud
   return get<ConsoleAudienceDetailListData>(
     `/activities/console/audience-details/${encodeURIComponent(activityId)}`,
     { params: query },
+  );
+}
+
+/** 中控台「观看数据」成交三项汇总 */
+export interface ConsoleWatchTradeData {
+  id: string;
+  /** 两位小数字符串，如 "26800.00" */
+  dealAmount: string;
+  dealUserCount: number;
+  dealProductCount: number;
+}
+
+export function getConsoleWatchTrade(activityId: string) {
+  return get<ConsoleWatchTradeData>(
+    `/activities/console/watch-trade/${encodeURIComponent(activityId)}`,
+  );
+}
+
+/** 中控台「交易数据」左侧 KPI */
+export interface ConsoleTradeStatsData {
+  id: string;
+  dealUserCount: number;
+  dealProductCount: number;
+  productClickUserCount: number;
+  /** 一位小数，不含 %，如 "30.0" */
+  dealConversionRate: string;
+  /** 两位小数金额字符串 */
+  avgOrderAmount: string;
+  unpaidUserCount: number;
+}
+
+export function getConsoleTradeStats(activityId: string) {
+  return get<ConsoleTradeStatsData>(
+    `/activities/console/trade-stats/${encodeURIComponent(activityId)}`,
+  );
+}
+
+export interface ConsoleTradeTrendPoint {
+  time: string;
+  dealAmount: string;
+  soldCount: number;
+}
+
+export interface ConsoleTradeTrendData {
+  id: string;
+  startTime: string;
+  endTime: string;
+  bucketSeconds: number;
+  points: ConsoleTradeTrendPoint[];
+}
+
+export function fetchTradeTrend(
+  id: string,
+  params: { startTime: string; endTime: string; bucketSeconds?: number },
+) {
+  return get<ConsoleTradeTrendData>(
+    `/activities/console/trade-trend/${encodeURIComponent(id)}`,
+    { params },
+  );
+}
+
+/** 中控台「商品」列表行（本站绑定；展示字段由订单中心批量详情补齐） */
+export interface ConsoleProductItem {
+  spuId: string;
+  productName: string;
+  visible: boolean;
+  sortOrder: number;
+  soldCount: number;
+}
+
+export interface ConsoleProductListData {
+  id: string;
+  cartEnabled: boolean;
+  list: ConsoleProductItem[];
+}
+
+export function listConsoleProducts(activityId: string) {
+  return get<ConsoleProductListData>(
+    `/activities/console/products/${encodeURIComponent(activityId)}`,
+  );
+}
+
+export function setConsoleProductVisible(
+  activityId: string,
+  body: { spuId: string; visible: boolean },
+) {
+  return put<{ id: string; spuId: string; visible: boolean }>(
+    `/activities/console/products/visible/${encodeURIComponent(activityId)}`,
+    body,
+  );
+}
+
+export function setConsoleCartEnabled(activityId: string, enabled: boolean) {
+  return put<{ id: string; cartEnabled: boolean }>(
+    `/activities/console/cart/${encodeURIComponent(activityId)}`,
+    { enabled },
   );
 }
 
