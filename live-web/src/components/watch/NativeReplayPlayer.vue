@@ -29,6 +29,8 @@ const emit = defineEmits<{
   play: [];
   pause: [];
   ended: [];
+  /** 播放进度（课程小节回放上报用） */
+  timeupdate: [payload: { currentTime: number; duration: number }];
 }>();
 
 const videoRef = ref<HTMLVideoElement | null>(null);
@@ -129,12 +131,20 @@ function onTimeUpdate() {
     if (el.currentTime > maxWatched.value + 0.35) {
       el.currentTime = maxWatched.value;
       current.value = maxWatched.value;
+      emit("timeupdate", {
+        currentTime: maxWatched.value,
+        duration: el.duration || duration.value || 0,
+      });
       return;
     }
     if (el.currentTime > maxWatched.value) {
       maxWatched.value = el.currentTime;
     }
   }
+  emit("timeupdate", {
+    currentTime: el.currentTime,
+    duration: el.duration || duration.value || 0,
+  });
 }
 
 function onLoadedMeta() {
@@ -161,6 +171,11 @@ function onPause() {
 function onEnded() {
   playing.value = false;
   revealControls(true);
+  const el = videoRef.value;
+  const dur = el?.duration || duration.value || 0;
+  if (dur > 0) {
+    emit("timeupdate", { currentTime: dur, duration: dur });
+  }
   emit("ended");
 }
 

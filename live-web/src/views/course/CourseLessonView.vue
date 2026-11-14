@@ -223,7 +223,9 @@ async function ensureEnrolled() {
   const stored = readStoredShare();
   await enrollCourse(
     courseId,
-    stored?.inviterId ? { inviterId: stored.inviterId } : undefined,
+    stored?.inviterId
+      ? { inviterId: stored.inviterId, inviterKind: "employee" }
+      : undefined,
   );
 }
 

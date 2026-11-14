@@ -45,17 +45,20 @@ export async function getAudienceSalesman(
 }
 
 /**
- * 邀请归因（D97）。被邀请观众 uid 只从 Authorization 取；Body 不传 uid。
- * `inviterKind`：`employee` 员工 / `audience` 观众；本站只落员工邀请。
+ * 直播分享登记邀请人（D97）。被邀请观众 username 只从 Authorization 取。
+ * Body 与课程 enroll 同形：`inviterId` 必传；`inviterKind`；`username` 仅 audience 时传邀请人。
+ * 本站只落员工邀请；audience 后端拒收。
  */
 export function attributeAudience(
   activityId: string,
   body: {
     inviterId: number;
     inviterKind?: "employee" | "audience";
+    /** 仅 audience：邀请人 username（不是被邀请人） */
+    username?: string;
   },
 ) {
-  return post<{ id: number; uid: number }>(
+  return post<{ id: number; username: string }>(
     `/watch/audience/attribute/${activityId}`,
     { inviterKind: "employee", ...body },
     { headers: viewerAuthHeaders() },

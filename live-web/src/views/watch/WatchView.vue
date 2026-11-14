@@ -42,6 +42,10 @@ import {
 import { ensureWxJsSdk, isLikelyMiniProgramWebView } from "@/utils/miniProgram";
 import { goViewerLogin, recoverViewerAuth } from "@/utils/viewerLogin";
 import { reportLessonProgress } from "@/api/learning";
+import {
+  hasCourseLessonContext,
+  reportCourseLessonProgress,
+} from "@/utils/courseLessonProgressReport";
 import { purgeOrphanUiSheets } from "@/utils/purgeUiSheets";
 import { backOrHome } from "@/utils/navigation";
 
@@ -52,6 +56,8 @@ const inMiniProgram = isLikelyMiniProgramWebView();
 const id = String(route.params.id);
 const courseContextId = String(route.query.courseId ?? "").trim().toLowerCase();
 const courseLessonNodeId = Number(route.query.lessonNodeId);
+/** 课程直播小节：结束页只上报一次 live_ended */
+let courseLiveEndedReported = false;
 const { toast } = useToast();
 const { theme } = useWatchTheme();
 const {
@@ -292,10 +298,23 @@ function goReplay(recordId: number) {
 function exitFullscreenOnEndedShell() {
   if (player.pseudoFullscreen) player.pseudoFullscreen = false;
 }
+
+/** D101：课程进房后进入结束壳（含云侧 4/5）→ live_ended，记小节学完 */
+function maybeReportCourseLiveEnded() {
+  if (courseLiveEndedReported) return;
+  if (!hasCourseLessonContext(courseContextId, courseLessonNodeId)) return;
+  if (!(isEnded.value || isReplay.value)) return;
+  courseLiveEndedReported = true;
+  reportCourseLessonProgress(courseContextId, courseLessonNodeId, "live_ended");
+}
+
 watch(
   () => isEnded.value || isReplay.value,
   (on) => {
-    if (on) exitFullscreenOnEndedShell();
+    if (on) {
+      exitFullscreenOnEndedShell();
+      maybeReportCourseLiveEnded();
+    }
   },
   { immediate: true },
 );
@@ -388,11 +407,7 @@ onMounted(() => {
   captureInviteFromQuery();
   tryAttributeInvite();
   pingViewerPresence("live");
-  if (
-    courseContextId &&
-    Number.isFinite(courseLessonNodeId) &&
-    courseLessonNodeId > 0
-  ) {
+  if (hasCourseLessonContext(courseContextId, courseLessonNodeId)) {
     void reportLessonProgress(courseContextId, {
       lessonNodeId: courseLessonNodeId,
       event: "open",

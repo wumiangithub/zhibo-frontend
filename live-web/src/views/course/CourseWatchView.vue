@@ -69,7 +69,9 @@ async function tryEnroll() {
   try {
     const res = await enrollCourse(
       courseId,
-      stored?.inviterId ? { inviterId: stored.inviterId } : undefined,
+      stored?.inviterId
+        ? { inviterId: stored.inviterId, inviterKind: "employee" }
+        : undefined,
     );
     title.value = res.title || "";
     enrolled.value = true;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { getWatchSummary, type WatchSummaryData } from "@/api/watch";
 import { listWatchRecords, type WatchRecordItem } from "@/api/replayWatch";
@@ -32,6 +32,10 @@ import {
   isViewerLoginRequiredError,
   recoverViewerAuth,
 } from "@/utils/viewerLogin";
+import {
+  hasCourseLessonContext,
+  reportCourseLessonProgress,
+} from "@/utils/courseLessonProgressReport";
 import { purgeOrphanUiSheets } from "@/utils/purgeUiSheets";
 
 const route = useRoute();
@@ -41,11 +45,19 @@ const inMiniProgram = isLikelyMiniProgramWebView();
 
 const { theme } = useWatchTheme();
 const activityId = computed(() => String(route.params.id ?? ""));
+/** 从课程进回放时保留；goReplay 已透传 query */
+const courseContextId = String(route.query.courseId ?? "").trim().toLowerCase();
+const courseLessonNodeId = Number(route.query.lessonNodeId);
 const recordIdParam = computed(() => {
   const raw = route.query.recordId;
   const n = Number(Array.isArray(raw) ? raw[0] : raw);
   return Number.isFinite(n) && n > 0 ? n : null;
 });
+
+/** 课程直播回放：进度条最远点上报（节流） */
+let courseReplayLastSec = 0;
+let courseReplayReportTimer: ReturnType<typeof setTimeout> | null = null;
+let courseReplayCompleted = false;
 
 const loading = ref(true);
 const error = ref("");
@@ -147,6 +159,56 @@ function goBackToWatch() {
   });
 }
 
+/** D101：直播小节回放 → progressPercent≥100 记学完 */
+function onCourseReplayTimeUpdate(payload: {
+  currentTime: number;
+  duration: number;
+}) {
+  if (!hasCourseLessonContext(courseContextId, courseLessonNodeId)) return;
+  if (!payload.duration || !Number.isFinite(payload.duration)) return;
+  const sec = Math.floor(payload.currentTime);
+  const pct = Math.min(
+    100,
+    Math.round((payload.currentTime / payload.duration) * 100),
+  );
+  const delta = Math.max(0, sec - courseReplayLastSec);
+  courseReplayLastSec = sec;
+  if (courseReplayReportTimer) return;
+  courseReplayReportTimer = setTimeout(() => {
+    courseReplayReportTimer = null;
+    reportCourseLessonProgress(
+      courseContextId,
+      courseLessonNodeId,
+      "heartbeat",
+      {
+        deltaLearnDurationSec: delta || undefined,
+        progressBarSec: sec,
+        progressPercent: pct,
+      },
+    );
+  }, 2000);
+}
+
+function onCourseReplayEnded() {
+  replayWatch.onEnded();
+  if (!hasCourseLessonContext(courseContextId, courseLessonNodeId)) return;
+  if (courseReplayCompleted) return;
+  courseReplayCompleted = true;
+  if (courseReplayReportTimer) {
+    clearTimeout(courseReplayReportTimer);
+    courseReplayReportTimer = null;
+  }
+  reportCourseLessonProgress(
+    courseContextId,
+    courseLessonNodeId,
+    "heartbeat",
+    {
+      progressBarSec: courseReplayLastSec || undefined,
+      progressPercent: 100,
+    },
+  );
+}
+
 async function loadContent() {
   loading.value = true;
   error.value = "";
@@ -218,6 +280,12 @@ async function onPasswordSubmit(password: string) {
 watch(
   () => [activityId.value, recordIdParam.value] as const,
   () => {
+    courseReplayLastSec = 0;
+    courseReplayCompleted = false;
+    if (courseReplayReportTimer) {
+      clearTimeout(courseReplayReportTimer);
+      courseReplayReportTimer = null;
+    }
     void enterReplay();
   },
 );
@@ -225,6 +293,13 @@ watch(
 onMounted(() => {
   purgeOrphanUiSheets();
   void enterReplay();
+});
+
+onBeforeUnmount(() => {
+  if (courseReplayReportTimer) {
+    clearTimeout(courseReplayReportTimer);
+    courseReplayReportTimer = null;
+  }
 });
 </script>
 
@@ -284,7 +359,8 @@ onMounted(() => {
             :fast-forward-allow="fastForwardAllow"
             @play="replayWatch.onPlay()"
             @pause="replayWatch.onPause()"
-            @ended="replayWatch.onEnded()"
+            @timeupdate="onCourseReplayTimeUpdate"
+            @ended="onCourseReplayEnded"
           />
         </template>
         <template #side>
